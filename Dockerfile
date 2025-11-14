@@ -48,7 +48,7 @@ RUN set -eux; \
     groupadd -g 99 titlecardmaker; \
     useradd -u 100 -g 99 titlecardmaker; \
     apt-get update; \
-    apt-get install -y --no-install-recommends imagemagick libmagickcore-6.q16-6-extra; \
+    apt-get install -y --no-install-recommends imagemagick libmagickcore-6.q16-7-extra; \
     rm -rf /var/lib/apt/lists/*; \
     cp modules/ref/policy.xml /etc/ImageMagick-6/policy.xml
 
