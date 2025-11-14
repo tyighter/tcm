@@ -353,6 +353,45 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
         return all_series
 
 
+    @catch_and_log('Error searching Plex', default=[])
+    def search_series(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+        """Search Plex libraries for shows matching the query."""
+
+        if not query or not query.strip():
+            return []
+
+        results: list[dict[str, Any]] = []
+        normalized = query.strip()
+
+        for library in self.__server.library.sections():
+            if library.type != 'show':
+                continue
+
+            for show in library.search(title=normalized, libtype='show'):
+                info: dict[str, Any] = {
+                    'title': show.title,
+                    'year': show.year,
+                    'library': library.title,
+                    'summary': getattr(show, 'summary', ''),
+                    'ids': {},
+                }
+
+                for guid in getattr(show, 'guids', []):
+                    guid_id = getattr(guid, 'id', '')
+                    if guid_id.startswith('imdb://'):
+                        info['ids']['imdb_id'] = guid_id.split('://', 1)[1]
+                    elif guid_id.startswith('tmdb://'):
+                        info['ids']['tmdb_id'] = guid_id.split('://', 1)[1]
+                    elif guid_id.startswith('tvdb://'):
+                        info['ids']['tvdb_id'] = guid_id.split('://', 1)[1]
+
+                results.append(info)
+                if len(results) >= limit:
+                    return results
+
+        return results
+
+
     @catch_and_log('Error getting all episodes', default=[])
     def get_all_episodes(self,
             library_name: str,
