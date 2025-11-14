@@ -15,10 +15,12 @@ FROM python:${PYVERSION}-slim as python-reqs
 # Copy requirements.txt from pipenv stage
 COPY --from=pipenv /requirements.txt requirements.txt
 
-# Install gcc for building python dependencies; install TCM dependencies
+# Install build dependencies and python packages required by TCM
 RUN apt-get update; \
-    apt-get install -y gcc; \
-    pip3 install --no-cache-dir -r requirements.txt
+    apt-get install -y --no-install-recommends gcc; \
+    pip3 install --no-cache-dir -r requirements.txt; \
+    apt-get purge -y --auto-remove gcc; \
+    rm -rf /var/lib/apt/lists/*
 
 # Set base image for running TCM
 FROM python:${PYVERSION}-slim
@@ -30,8 +32,7 @@ WORKDIR /maker
 COPY . /maker
 
 # Copy python packages from python-reqs
-# update with python version
-COPY --from=python-reqs /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=python-reqs /usr/local /usr/local
 
 # Script environment variables
 ENV TCM_PREFERENCES=/config/preferences.yml \
@@ -52,6 +53,8 @@ RUN set -eux; \
     cp modules/ref/policy.xml /etc/ImageMagick-6/policy.xml
 
 VOLUME [ "/config" ]
+
+EXPOSE 4343
 
 # Entrypoint
 CMD ["python3", "main.py", "--run", "--no-color"]

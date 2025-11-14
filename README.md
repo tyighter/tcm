@@ -37,7 +37,32 @@ All configuration/automation of the TitleCardMaker is done via YAML files, and t
 
 Read the [Getting Started](https://github.com/CollinHeist/TitleCardMaker/wiki) page on the Wiki for the traditional install, or the [Getting Started on Docker](https://github.com/CollinHeist/TitleCardMaker/wiki/Docker-Tutorial) page to install using Docker.
 
-If you're using Unraid, there is a template available for easy setup - just search `titlecardmaker` on the Unraid Community Apps store.
+### Quick start on Docker / Unraid
+
+The container now bootstraps a fresh configuration automatically, making it easy to drop the image straight into Unraid or any Docker host. A minimal `docker-compose.yml` looks like this:
+
+```yaml
+services:
+  titlecardmaker:
+    image: collinheist/titlecardmaker:latest
+    container_name: titlecardmaker
+    environment:
+      PUID: 99        # optional - defaults match Unraid's nobody user
+      PGID: 100
+      UMASK: 002
+    volumes:
+      - /path/to/config:/config
+      - /path/to/titlecardmaker/source:/config/source
+    ports:
+      - "4343:4343"   # only required for the optional Web UI
+    restart: unless-stopped
+```
+
+On first start the container seeds `/config/preferences.yml` and `/config/tv.yml` with the bundled examples so you can edit them in place. The `PUID`, `PGID`, and `UMASK` environment variables make it simple to run the container with the same permissions model used by Unraid, but you can set them to match your own environment.
+
+To launch the Web UI instead of the CLI, set `TCM_WEBUI=true` in the container's environment. The server listens on port `4343` by default, so map that port to your host (as shown above). You can change the internal listening port with `TCM_WEBUI_PORT` if you need to avoid conflicts.
+
+If you're using Unraid's Community Apps, there is also an application template available - just search `titlecardmaker` to install it directly from the UI.
 
 ## Usage and Troubleshooting
 Assuming you're using the default preference filename, invoking the Maker is as simple as:
