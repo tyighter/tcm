@@ -1,0 +1,20 @@
+services:
+  titlecardmaker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PYVERSION: ${PYVERSION:-3.11}
+    image: titlecardmaker:local
+    container_name: titlecardmaker
+    environment:
+      PUID: ${PUID:-99}
+      PGID: ${PGID:-100}
+      UMASK: ${UMASK:-002}
+      TCM_WEBUI: ${TCM_WEBUI:-}
+      TCM_WEBUI_PORT: ${TCM_WEBUI_PORT:-4343}
+    volumes:
+      - ./data/config:/config
+    ports:
+      - "${TCM_WEBUI_PORT:-4343}:4343"
+    restart: unless-stopped
