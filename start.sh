@@ -23,8 +23,8 @@ default_files=(
 )
 
 for default_file in "${default_files[@]}"; do
-  if [ ! -e "/config/${default_file}" ] && [ -e "/maker/${default_file}" ]; then
-    cp "/maker/${default_file}" "/config/${default_file}"
+  if [ ! -e "/config/${default_file}" ] && [ -e "/maker/config/${default_file}" ]; then
+    cp "/maker/config/${default_file}" "/config/${default_file}"
   fi
 done
 

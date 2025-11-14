@@ -66,7 +66,7 @@ def _resolve_preference_file(repo_root: Path) -> Path:
     pref = os.environ.get(ENV_PREFERENCE_FILE)
     if pref:
         return Path(pref)
-    return repo_root / "preferences.yml"
+    return repo_root / "config" / "preferences.yml"
 
 
 def create_app_context() -> AppContext:

@@ -41,7 +41,7 @@ ENV_UPDATE_LIST= 'TCM_TAUTULLI_UPDATE_LIST'
 ENV_UPDATE_FREQUENCY = 'TCM_TAUTULLI_UPDATE_FREQUENCY'
 
 # Default values
-DEFAULT_PREFERENCE_FILE = Path(__file__).parent / 'preferences.yml'
+DEFAULT_PREFERENCE_FILE = Path(__file__).parent / 'config' / 'preferences.yml'
 DEFAULT_MISSING_FILE = Path(__file__).parent / 'missing.yml'
 DEFAULT_FREQUENCY = '12h'
 DEFAULT_TAUTULLI_FREQUENCY = '4m'
