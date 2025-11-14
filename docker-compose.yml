@@ -14,7 +14,7 @@ services:
       TCM_WEBUI: ${TCM_WEBUI:-}
       TCM_WEBUI_PORT: ${TCM_WEBUI_PORT:-4343}
     volumes:
-      - ./data/config:/config
+      - /mnt/disks/ssd/tcm:/config
     ports:
       - "${TCM_WEBUI_PORT:-4343}:4343"
     restart: unless-stopped
