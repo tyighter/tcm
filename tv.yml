@@ -1,0 +1,1723 @@
+libraries:
+  TV Shows:
+    path: /config/TV_Shows/
+    image_source_priority: tmdb, plex
+    
+
+series:
+  "Pluribus (2025)":
+    library: TV_Shows
+    card_type: standard
+    font:
+      file: "/config/fonts/pluribus.ttf"
+      size: 125%
+      color: "#FFED29"    
+  
+  "Tales from the Crypt (1989)":
+    library: TV Shows
+    card_type: standard
+    episode_text_format: "Volume {season_number_cardinal}, Issue {episode_number_cardinal}"
+    font:
+      file: "/config/fonts/crypt.ttf"
+      size: 125%
+    seasons:
+      hide: true
+
+  "Fullmetal Alchemist: Brotherhood (2009)":
+    library: TV Shows
+    card_type: anime
+    translation:
+      - language: ja
+        key: kanji
+    episode_text_format: "Chapter {episode_number_cardinal}"
+    font:
+      file: "/config/fonts/fullmetal.otf"
+      size: 250%
+    seasons:
+      0: "specials"
+      1: ""
+
+  "Quantum Leap (1989)":
+    tmdb_id: 4018
+    library: TV Shows
+    card_type: standard
+    extras: 
+      logo: "./source/Quantum Leap (1989)/logo.png"
+    font:
+        file: "/config/fonts/csi.ttf"
+        case: title
+        color: "#49a8f1"
+        size: 170%
+        stroke_width: 125%
+
+  Twin Peaks (1990):
+    library: TV Shows
+    card_type: standard
+    episode_text_format: "Episode {episode_number_cardinal}"
+    seasons:
+      1: "The First Season"
+      2: "The Second Season"
+      3: "The Return"
+
+  "Party Down (2009)":
+    library: TV Shows
+    card_type: standard
+    watched_style: unique
+    unwatched_style: blur
+    font:
+      size: 70%
+      vertical_shift: 60
+
+  "Mr. Robot (2015)":
+    library: TV Shows
+    watched_style: unique
+    unwatched_style: blur grayscale
+    episode_text_format: "v{season_number}.{episode_number}"
+    font:
+      color: "#CE3F39"
+      file: "/config/fonts/terminal.ttf"
+      size: 140%
+      case: lower
+    seasons:
+      hide: true
+
+  "Westworld (2016)":
+    library: TV Shows
+    card_type: olivier
+    font:
+      file: "/config/fonts/ww.otf"
+      size: 175%
+     
+  "Afro Samurai (2007)":
+    library: TV Shows
+    card_type: anime
+    translation:
+    - language: ja
+      key: kanji
+    episode_text_format: "Episode {episode_number_cardinal}"
+    font:
+      file: "/config/fonts/afro.otf"
+      size: 150%
+      color: "#e7d9a8"
+    seasons:
+      hide: true
+
+  "Pokémon: Origins (2013)":
+    library: TV Shows
+    card_type: anime
+    translation:
+    - language: ja
+      key: kanji
+    episode_text_format: "File {episode_number_cardinal}"
+    font:
+      file: "/config/fonts/pokemon.ttf"
+      size: 250%
+      color: "#FFD300"
+      stroke_width: 550%
+      kerning: 30%
+      replacements:
+        delete_missing: true
+        "File 1: ": ""
+        "File 2: ": ""       
+        "File 3: ": ""
+        "File 4: ": ""
+    seasons:
+      0: "specials"
+      1: ""
+    extras:
+      stroke_color: "#004F98"
+
+  "Arrested Development (2003)":
+    library: TV Shows
+    card_type: sherlock
+    font:
+      file: /config/fonts/ad.otf
+      case: title
+  
+      
+  "Hotel Hell (2012)":
+    library: TV Shows
+    card_type: tinted frame
+    episode_text_format: "{airdate:%A %B %d, %Y}"
+    extras:
+      add_bounding_box: true
+      darken: box
+    font:
+      color: "#EE4B2B"
+      file: /config/fonts/resto.otf
+      size: 185%
+      case: title
+      kerning: 35%
+      
+  "Planet Earth (2006)":
+    library: TV Shows
+    card_type: landscape
+    extras:
+      add_bounding_box: true
+      darken: box
+    font:
+      file: "/config/fonts/pe.otf"
+      size: 170%
+      case: upper
+      
+  "Planet Earth II (2016)":
+    library: TV Shows
+    card_type: landscape
+    extras:
+      add_bounding_box: true
+      darken: box
+    font:
+      file: "/config/fonts/pe.otf"
+      size: 170%
+      case: upper
+      
+  "Blue Planet (2001)":
+    library: TV Shows
+    card_type: landscape
+    extras:
+      add_bounding_box: true
+      darken: box
+    font:
+      file: "/config/fonts/pe.otf"
+      size: 165%
+      case: upper
+      color: "#B6D0E2"
+      
+  "Blue Planet II (2017)":
+    library: TV Shows
+    card_type: landscape
+    extras:
+      add_bounding_box: true
+      darken: box
+    font:
+      file: "/config/fonts/pe.otf"
+      size: 165%
+      case: upper
+      color: "#B6D0E2"
+      
+  "The Green Planet (2022)":
+    library: TV Shows
+    card_type: landscape
+    extras:
+      add_bounding_box: true
+      darken: box
+    font:
+      file: "/config/fonts/pe.otf"
+      size: 155%
+      case: upper
+      color: "#98FB98"
+
+  "Muscles & Mayhem: An Unauthorized Story of American Gladiators (2023)":
+    library: TV Shows
+    card_type: divider
+    episode_text_format: "{episode_number}"
+    font:
+      file: /config/fonts/impact.ttf
+      case: upper
+      size: 400%
+    seasons:
+      hide: true
+
+  "Stephen Kings It (1990)":
+    library: TV Shows
+    card_type: divider
+    watched-style: unique
+    episode_text_format: Part {episode_number}
+    unwatched_style: grayscale blur
+    top_element: logo
+    image_source_priority: plex
+    episode_data_source: plex
+    bottom_element: index
+    font:
+      file: "/config/fonts/king2.otf"
+      size: 350%
+    seasons:
+      hide: true
+    extras:
+      title_text_position: right
+      text_position: lower left
+
+  "Vice Principals (2016)":
+    library: TV Shows
+    card_type: standard
+    episode_text_format: Year {season_number_cardinal}, {episode_number_ordinal} Period
+    font:
+      file: "/config/fonts/vp.ttf"    
+      size: 160%
+    seasons:
+      hide: true
+
+  "Under the Dome (2013)":
+    library: TV Shows
+    card_type: divider
+    episode_text_format: Chapter {abs_number}
+    top_element: logo
+    bottom_element: index
+    font:
+      file: "/config/fonts/king2.otf"
+      size: 200%
+    seasons:
+      hide: true
+    extras:
+      title_text_position: right
+      text_position: lower left
+
+  "The Witcher (2019)":
+    library: TV Shows
+    card_type: divider
+    seasons:
+      hide: true
+    font:
+      file: /config/fonts/witcher.ttf
+      size: 550%
+    episode_text_format: "s{season_number}e{episode_number}"
+
+  "Mystery Diners (2011)":
+    episode_data_source: plex
+    image_source_priority: plex
+    library: TV Shows
+    card_type: tinted frame
+    font:
+      file: "/config/fonts/neon.ttf"
+      size: 170%
+      color: "#ffffff"
+    extras:
+      episode_text_color: "#ffffff"
+      frame_color: "#ffffff"
+    seasons:
+      hide: true
+
+  "The Muppets Mayhem (2023)":
+    library: TV Shows
+    card_type: standard
+    episode_text_format: "Track {episode_number_cardinal}"
+    seasons:
+      hide: true
+    font:
+      file: "/config/fonts/dj.otf"
+      case: title
+      stroke_width: 0%
+      vertical_shift: 60
+      size: 90%
+      replacements:
+        delete_missing: true
+        "Track 1: ": ""
+        "Track 2: ": ""       
+        "Track 3: ": ""
+        "Track 4: ": ""
+        "Track 5: ": ""
+        "Track 6: ": ""
+        "Track 7: ": ""
+        "Track 8: ": ""
+        "Track 9: ": "" 
+        "Track 10:": "" 
+
+  "Archive 81 (2022)":
+    library: TV Shows
+    card_type: tinted frame
+    watched-style: unique
+    unwatched_style: grayscale blur
+    top_element: logo
+    bottom_element: index
+    extras:
+      logo: "/config/logos/archive 81.png"
+    font:
+      size: 150%
+
+  "Scrubs (2001)":
+    library: TV Shows
+    watched_style: unique
+    unwatched_style:  unique
+    card_type: sherlock
+    font:
+      file: /config/fonts/riverdale.ttf
+      case: lower
+      stroke_width: 110%
+      size: 145%
+
+  "Cyberpunk: Edgerunners (2022)":
+    library: TV Shows
+    card_type: anime
+    translation:
+      language: ja
+      key: kanji
+    font:
+      size: 122%
+      color: "#FFFF00"
+      file: /config/fonts/cp.ttf
+    watched_style: unique
+    unwatched_style: blur grayscale
+
+  "The Reluctant Traveler With Eugene Levy (2023)":
+    library: TV Shows
+    card_type: landscape
+    extras:
+      add_bounding_box: true
+      darken: box
+    font:
+      case: lower
+      size: 175%
+      file: "/config/fonts/dj.otf"
+
+  "Daisy Jones and the Six (2023)":
+    library: TV Shows
+    card_type: standard
+    episode_text_format: "Track {episode_number_cardinal}"
+    seasons:
+      hide: true
+    font:
+      file: "/config/fonts/dj.otf"
+      case: title
+      stroke_width: 0%
+      vertical_shift: 60
+      size: 90%
+      replacements:
+        delete_missing: true
+        "Track 1: ": ""
+        "Track 2: ": ""       
+        "Track 3: ": ""
+        "Track 4: ": ""
+        "Track 5: ": ""
+        "Track 6: ": ""
+        "Track 7: ": ""
+        "Track 8: ": ""
+        "Track 9: ": "" 
+        "Track 10:": "" 
+
+  "High Potential (2024)":
+    library: TV Shows
+    cand_type: standard
+    font:
+      file: /config/fonts/high_potential2.otf
+      size: 145%
+      color: "#ef1794"
+
+  "Alien: Earth (2025)":
+    library: TV Shows
+    card_type: olivier
+    watched_style: unique
+    unwatched_style: blur grayscale
+    font:
+      file: /config/fonts/alien.ttf
+      case: title
+      size: 175%
+
+  "Peacemaker (2022)":
+    library: TV Shows
+    card_type: standard
+    watched_style: unique
+    unwatched_style: blur grayscale
+    font:
+      file: /config/fonts/homelander.ttf
+      case: upper
+      size: 200%
+      color: "#ffd505"
+
+  "Taskmaster (2015)":
+    library: TV Shows
+    card_type: standard
+    episode_text_format: Series {season_number}, Episode {episode_number}
+    watched_style: unique
+    unwatched_style: blur grayscale
+    seasons:
+      hide: true
+    font:
+      file: /config/fonts/typewriter.otf
+      case: title
+      size: 130%
+      
+  "Gen V (2023)":
+    library: TV Shows
+    card_type: standard
+    font:
+      file: /config/fonts/boys.ttf
+      case: upper
+      size: 96%
+      color: "#dbef36"
+    watched_style: unique
+    unwatched_style: blur grayscale
+
+  "The IT Crowd (2006)":
+    library: TV Shows
+    card_type: sherlock
+    episode_text_format: "v{season_number}.{episode_number}"
+    font:
+      file: /config/fonts/terminal.ttf
+      color: "#00FF00"
+      size: 101%
+      case: lower
+      replacements:
+        " " : "_"
+        "i" : "1"
+        "I" : "1"
+        "e" : "3"
+        "E" : "3"
+        "s" : "5"
+        "S" : "5"
+        "b" : "8"
+        "B" : "8"
+        "o" : "0"
+        "O" : "0"
+        "a" : "4"
+        "A" : "4"
+
+  "Poker Face (2023)":
+    library: TV Shows
+    card_type: standard
+    watched_style: unique
+    unwatched_style: blur grayscale
+    font:
+      case: upper
+      file: "/config/fonts/pokerface.otf"
+      size: 100%
+      color: "#FFBF00"
+    
+
+  "Attack on Titan (2013)":
+    library: TV Shows
+    card_type: anime
+    translation:
+      language: ja
+      key: kanji
+    font:
+      size: 121%
+    episode_data_source: plex
+
+
+  "Dragon Ball Z Kai (2009)":
+    library: TV Shows
+    card_type: anime
+    translation:
+      language: ja
+      key: kanji
+    font:
+      size: 122%
+    episode_data_source: plex
+
+
+  "Lazarus (2025)":
+    library: TV Shows
+    card_type: standard
+    
+
+  "Abbott Elementary (2021)":
+    library: TV Shows
+    card_type: olivier
+    episode_text_format: Year {season_number}, Class {episode_number}
+    seasons:
+      hide: true
+    font:
+      case: title
+      file: "/config/fonts/abbot.ttf"
+      size: 300%
+
+  "The Midnight Club (2022)":
+    library: TV Shows
+    card_type: divider
+    episode_text_format: Chapter {episode_number}
+    seasons:
+      hide: true
+    font:
+      file: "/config/fonts/midnightclub.ttf"
+      size: 250%
+      color: "#FFDE21"   
+      
+  "The Good Place (2016)":
+    library: TV Shows
+    card_type: divider
+    episode_text_format: Chapter {abs_number}
+    seasons:
+      hide: true
+    font:
+      file: "/config/fonts/goodplace.otf"
+      case: title
+      size: 175%  
+    extras:
+      title_text_position: right
+      text_position: upper left
+
+  "Severance (2022)":
+    library: TV Shows
+    card_type: divider
+    watched_style: unique
+    unwatched_style: blur grayscale
+    episode_text_format: Episode {episode_number}
+    seasons:
+      hide: true
+    font:
+      file: "/config/fonts/severance.otf"
+      case: Title
+      size: 150%
+
+  "Star Wars: Skeleton Crew (2024)":
+    library: TV Shows
+    card_type: star wars
+    seasons:
+      hide: true
+    unwatched_style: blur grayscale
+    watched_style: unique    
+  
+  "Mr. Mercedes (2017)":
+    library: TV Shows
+    card_type: divider
+    episode_text_format: Chapter {episode_number}
+    top_element: logo
+    bottom_element: index
+    font:
+      file: "/config/fonts/king1.otf"
+      size: 200%
+    seasons:
+      hide: true
+    extras:
+      title_text_position: right
+      text_position: lower left
+
+  "The Penguin (2024)":
+    library: TV Shows
+    card_type: olivier
+    watch_style: unique
+    unwatched_style: blur grayscale
+    font:
+      file: /config/fonts/penguin.otf
+      size: 300%
+      case: title
+    extras:
+      episode_text_font_size: 1.5
+      episode_text_vertical_shift: -20 
+      
+  "Agatha All Along (2024)":
+    library: TV Shows
+    card_type: standard
+    font:
+      file: /config/fonts/agatha.ttf
+      case: lower
+      size: 120%
+      stroke_width: 75%
+    episode_text_format: "{episode_number_ordinal} incantation"
+    watched_style: unique
+    unwatched_style: grayscale blur
+    extras:
+      omit_gradient: false
+      episode_text_font_size: 1.5
+      episode_text_color: "#b6aff2"
+    seasons:
+      hide: true
+
+  "Freaks and Geeks (1999)":
+    library: TV Shows
+    card_type: frame
+    font:
+      file: /config/fonts/freaks.otf
+      case: upper
+      size: 180%
+    episode_text_format: ""
+    seasons:
+      hide: true
+
+  "Evil (2019)":
+    library: TV Shows
+    card_type: olivier
+    font:
+      case: upper
+      file: /config/fonts/evil.otf
+      size: 200%
+
+  "Parks and Recreation (2009)":
+    library: TV Shows
+    card_type: sherlock
+    font:
+      case: title
+      file: /config/fonts/parks.ttf
+      size: 100%
+      color: "#FFCC00"
+      vertical_shift: -10
+
+
+  "The Office (US) (2005)":
+    library: TV Shows
+    watched_style: unique
+    card_type: sherlock
+    font:
+      file: /config/fonts/dund.ttf
+      case: title
+      stroke_width: 110%
+      size: 144%
+      vertical_shift: -10
+
+  "The Decameron (2024)":
+    library: TV Shows
+    card_type: standard
+    font:
+      file: "/config/fonts/decameron.otf"
+
+  "MILF Manor (2023)":
+    library: TV Shows
+    card_type: landscape
+    extras:
+      add_bounding_box: true
+      darken: box
+    font:
+      file: "/config/fonts/eurostile.ttf"
+      size: 145%
+    episode_data_source: plex
+    image_source_priority: plex
+
+  "Westworld (2016)":
+    library: TV Shows
+    card_type: olivier
+    watched_style: unique
+    unwatched_style: blur grayscale
+    font:
+      file: "/config/fonts/ww.ttf"
+      size: 175%
+      
+  "Star Trek: Discovery (2017)":
+    library: TV Shows
+    font:
+      file: /config/fonts/startrek.otf
+      color: "#FF69B4"
+      size: 170%
+      kerning: 120%
+      case: title
+      stroke_width: 120%
+
+  "Star Trek: Strange New Worlds (2022)":
+    library: TV Shows
+    font:
+      file: /config/fonts/startrek.otf
+      color: "#72e9e9"
+      size: 171%
+      kerning: 120%
+      case: title
+      stroke_width: 120%
+
+  "Fallout (2024)":
+    library: TV Shows
+    card_type: olivier
+    watched_style: unique
+    unwatched_style: grayscale blur
+    font:
+      file: "/config/fonts/fallout.otf"
+      color: "#EADD48"
+      size: 200%
+
+  "The Movies That Made Us (2019)":
+    library: TV Shows
+    card_type: landscape
+    extras:
+      add_bounding_box: true
+      darken: box
+    font:
+      size: 110%
+
+  "Adam Eats the 80s (2022)":
+    library: TV Shows
+    card_type: landscape
+    extras:
+      add_bounding_box: true
+      darken: box
+      
+  "The Food That Built America (2019)":
+    library: TV Shows
+    card_type: landscape
+    extras:
+      add_bounding_box: true
+      darken: box
+
+  "How I Met Your Mother (2005)":
+    library: TV Shows
+    card_type: frame
+    episode_text_format: e{episode_number}
+    font:
+      file: "/config/fonts/himym.ttf"
+      case: lower
+      size: 150%
+    extras:
+      episode_text_position: left
+    seasons:
+      hide: true
+
+  "For All Mankind (2019)":
+    library: TV Shows
+    card_type: standard
+    watched_style: unique
+    unwatched_style: grayscale blur
+    font:
+      file: "/config/fonts/nasa.ttf"
+      case: upper
+      size: 157%
+      
+  "Percy Jackson and the Olympians (2023)":
+    library: TV Shows
+    card_type: divider
+    watched_style: unique
+    unwatched_style: blur grayscale
+    font:
+      file: "/config/fonts/greek.ttf"
+      size: 150%
+      case: title
+      
+  "Malcolm in the Middle (2000)":
+    library: TV Shows
+    card_type: sherlock
+    watched_style: unique
+    unwatched_style: blur grayscale
+    font:
+      file: "/config/fonts/funky.ttf"
+      size: 152%
+      case: title
+      
+  "Star Trek: Deep Space Nine (1993)":
+    library: TV Shows
+    font:
+      file: /config/fonts/startrek.otf
+      color: "#FFA500"
+      size: 171%
+      kerning: 120%
+      case: title
+      stroke_width: 120%
+      
+  "Star Trek: Voyager (1995)":
+    library: TV Shows
+    font:
+      file: /config/fonts/startrek.otf
+      color: "#FF4040"
+      size: 171%
+      kerning: 120%
+      case: title
+      stroke_width: 120%
+    
+
+  "Star Trek: The Next Generation (1987)":
+    library: TV Shows
+    card_type: standard
+    font:
+      file: /config/fonts/startrek.otf
+      size: 170%
+      kerning: 120%
+      case: title
+      stroke_width: 120%
+      
+  "Star Trek: Enterprise (2001)":
+    library: TV Shows
+    font:
+      file: /config/fonts/startrek.otf
+      color: "#49a8f1"
+      size: 171%
+      kerning: 120%
+      case: title
+      stroke_width: 120% 
+
+  "Lisey's Story (2021)":
+    library: TV Shows
+    card_type: divider
+    episode_text_format: Chapter {episode_number}
+    font:
+      file: "/config/fonts/king1.otf"
+      size: 200%
+      case: title
+    extras:
+      title_text_position: right
+      text_position: lower left
+    seasons:
+      hide: true
+
+
+  "Ink Master: Grudge Match (2019)":
+    library: TV Shows
+    card_type: comic book
+    image_source_priority: plex
+    font:
+      file: "/config/fonts/tattoo.ttf"
+      size: 181%
+    extras:
+      banner_fill_color: rgba(218,165,32,0.6)
+
+  "Ink Master: Redemption (2015)":
+    library: TV Shows
+    card_type: comic book
+    image_source_priority: plex
+    font:
+      file: "/config/fonts/tattoo.ttf"
+      size: 181%
+    extras:
+      banner_fill_color: rgba(10,10,135,0.6)
+
+  "Ink Master: Angels (2017)":
+    library: TV Shows
+    card_type: comic book
+    image_source_priority: plex
+    font:
+      file: "/config/fonts/tattoo.ttf"
+      size: 181%
+    extras:
+      banner_fill_color: rgba(255,105,180,0.6)
+
+  "The Curse (2023)":
+    library: TV Shows
+    card_type: white border
+    watched_style: unique
+    unwatched_style: grayscale blur
+    font:
+      file: "/config/fonts/truedet.otf"
+      case: upper
+      color: "#ffffff"
+      size: 145%
+    extras:
+      stroke_color: black
+    seasons:
+      hide: true
+
+  "Midnight Mass (2021)":
+    library: TV Shows
+    card_type: divider
+    episode_text_format: "{episode_number_ordinal} Book"
+    unwatched_style: grayscale blur
+    watched_style: unique
+    font:
+      file: "/config/fonts/midnight.ttf"
+      size: 201%
+      case: title
+      replacements:
+        "Book I: " : ""
+        "Book II: " : ""
+        "Book III: " : ""
+        "Book IV: " : ""
+        "Book V: " : ""
+        "Book VI: " : ""
+        "Book VII: " : ""
+        "1" : "I"
+        "2" : "II"
+        "3" : "III"
+        "4" : "IV"
+        "5" : "V"
+        "6" : "VI"
+        "7" : "VII"
+    extras:
+      title_text_position: right
+      text_position: lower left
+    seasons:
+      hide: true
+      
+
+  "True Detective (2014)":
+    library: TV Shows
+    card_type: white border
+    watched_style: unique
+    unwatched_style: grayscale blur
+    episode_text_format: "{episode_number_ordinal} Case File"
+    font:
+      file: "/config/fonts/truedet.otf"
+      case: upper
+      color: "#ffffff"
+      size: 146%
+    extras:
+      stroke_color: black
+    seasons:
+      1: "Louisiana"
+      2: "California"
+      3: "Ozarks"
+      4: "Alaska"
+
+  "Fargo (2014)":
+    library: TV Shows
+    card_type: tinted frame
+    watched_style: unique
+    unwatched_style: grayscale blur
+    font:
+      file: "/config/fonts/fargo.otf"
+      case: title
+      color: "#EE4B2B"
+      size: 155%
+    extras:
+      episode_text_font_size: 2.3
+      episode_text_color: "#ffffff"
+      frame_color: "#ADD8E6"
+      frame_width: 8
+    seasons:
+      1: "2006"
+      2: "1979"
+      3: "2010"
+      4: "1950"
+      5: "2019"
+
+
+  "Pluto (2023)":
+    library: TV Shows
+    card_type: anime
+    translation:
+    - language: ja
+      key: kanji
+    episode_text_format: "Chapter {episode_number_cardinal}"
+    font:
+      file: "/config/fonts/pluto.otf"
+      size: 300%
+      case: upper
+    seasons:
+      hide: true
+
+  "The Outsider (2020)":
+    library: TV Shows
+    card_type: divider
+    episode_text_format: Chapter {episode_number}
+    font:
+      file: "/config/fonts/king1.otf"
+      size: 199%
+      case: title
+    extras:
+      title_text_position: right
+      text_position: lower left
+    seasons:
+      hide: true
+
+
+  "Tattoo Fixers (2015)":
+    library: TV Shows
+    card_type: comic book
+    image_source_priority: plex
+    font:
+      file: "/config/fonts/tattoo.ttf"
+      size: 200%
+      case: title
+    extras:
+      banner_fill_color: rgba(0,100,220,0.6)
+      
+  "Tattoo Nightmares (2012)":
+    library: TV Shows
+    card_type: comic book
+    image_source_priority: plex
+    font:
+      file: "/config/fonts/tattoo.ttf"
+      size: 200%
+      case: title
+    extras:
+      banner_fill_color: rgba(135,0,120,0.6)
+
+  "Ink Master (2012)":
+    library: TV Shows
+    card_type: comic book
+    font:
+      file: "/config/fonts/tattoo.ttf"
+      size: 160%
+    extras:
+      banner_fill_color: rgba(135,10,10,0.6)
+
+  "The Fall of the House of Usher (2023)":
+    library: TV Shows
+    card_type: divider
+    episode_text_format: Chapter {abs_number}
+    font:
+      file: "/config/fonts/haunting.ttf"
+      size: 300%
+    extras:
+      title_text_position: right
+      text_position: lower left
+    seasons:
+      hide: true
+      
+  "The Haunting (2018)":
+    library: TV Shows
+    card_type: divider
+    episode_text_format: Chapter {episode_number}
+    font:
+      file: "/config/fonts/haunting.ttf"
+      size: 500%
+    extras:
+      title_text_position: right
+      text_position: lower left
+    seasons:
+      hide: true
+
+    
+  "The Shining (1997)":
+    library: TV Shows
+    card_type: divider
+    episode_text_format: Chapter {episode_number}
+    font:
+      file: "/config/fonts/king1.otf"
+      size: 200%
+      case: title
+    extras:
+      title_text_position: right
+      text_position: lower left
+    seasons:
+      hide: true
+      
+  "Halt and Catch Fire (2014)":
+    library: TV Shows
+    card_type: sherlock
+    episode_text_format: "v{season_number}.{episode_number}"
+    font:
+      file: /config/fonts/terminal.ttf
+      color: "#00FF00"
+      size: 101%
+      case: lower
+      replacements:
+        " " : "_"
+        "i" : "1"
+        "I" : "1"
+        "e" : "3"
+        "E" : "3"
+        "s" : "5"
+        "S" : "5"
+        "b" : "8"
+        "B" : "8"
+        "o" : "0"
+        "O" : "0"
+        "a" : "4"
+        "A" : "4"
+
+  "The Americans (2013)":
+    library: TV Shows
+    card_type: olivier
+    watched_style: unique
+    unwatched_style: grayscale blur
+    font:
+      file: "/config/fonts/Russian.ttf"
+      color: "#DB261D"
+      size: 200%
+      
+  "The X-Files (1993)":
+    library: TV Shows
+    watched_style: unique
+    unwatched_style:  blur
+    card_type: sherlock
+    font:
+      file: "/config/fonts/riverdale.ttf"
+      case: title
+
+  "Kitchen Nightmares (US) (2007)":
+    library: TV Shows
+    card_type: tinted frame
+    episode_text_format: "{airdate: %B %d, %Y}"
+    seasons:
+      hide: true
+    extras:
+      add_bounding_box: true
+      darken: box
+      episode_text_color: "#ffffff"
+      frame_color: "#49a8f1"
+      frame_width: 12
+      episode_text_font_size: 2
+    font:
+      color: "#ffffff" 
+      file: /config/fonts/resto.otf
+      size: 185%
+      case: title
+      kerning: 36%
+      
+  "Riverdale (2017)":
+    library: TV Shows
+    card_type: tinted frame
+    episode_text_format: "Chapter {episode_number}"
+    seasons:
+      1: "The Death of Jason Blossom"
+      2: "Terror of The Black Hood"
+      3: "Hail to The Gargoyle King"
+      4: "The Eyes of the Auteur"
+      5: "Can't Go Home Again"
+      6: "RiverVale"
+      7: "The Bad Ol' Days"
+    font:
+      file: "/config/fonts/riverdale.ttf"
+      size: 200%
+      case: title
+      replacements:
+        delete_missing: true    
+        "Chapter One: " : " "
+        "Chapter Two: " : " "
+        "Chapter Three: " : " "
+        "Chapter Four: " : " "
+        "Chapter Five: " : " "
+        "Chapter Six: " : " "
+        "Chapter Seven: " : " "
+        "Chapter Eight: " : " "
+        "Chapter Nine: " : " "
+        "Chapter Ten: " : " "
+        "Chapter Eleven: " : " "
+        "Chapter Twelve: " : " "
+        "Chapter Thirteen: " : " "
+        "Chapter Fourteen: " : " "
+        "Chapter Fifteen: " : " "
+        "Chapter Sixteen: " : " "
+        "Chapter Seventeen: " : " "
+        "Chapter Eighteen: " : " "
+        "Chapter Nineteen: " : " "
+        "Chapter Twenty: " : " "
+        "Chapter Twenty-One: " : " "
+        "Chapter Twenty-Two: " : " "
+        "Chapter Twenty-Three: " : " "
+        "Chapter Twenty-Four: " : " "
+        "Chapter Twenty-Five: " : " "
+        "Chapter Twenty-Six: " : " "
+        "Chapter Twenty-Seven: " : " "
+        "Chapter Twenty-Eight: " : " "
+        "Chapter Twenty-Nine: " : " "
+        "Chapter Thirty: " : " "
+        "Chapter Thirty-One: " : " "
+        "Chapter Thirty-Two: " : " "
+        "Chapter Thirty-Three: " : " "
+        "Chapter Thirty-Four: " : " "
+        "Chapter Thirty-Five: " : " "
+        "Chapter Thirty-Six: " : " "
+        "Chapter Thirty-Seven: " : " "
+        "Chapter Thirty-Eight: " : " "
+        "Chapter Thirty-Nine: " : " "
+        "Chapter Forty: " : " "
+        "Chapter Forty-One: " : " "
+        "Chapter Forty-Two: " : " "
+        "Chapter Forty-Three: " : " "
+        "Chapter Forty-Four: " : " "
+        "Chapter Forty-Five: " : " "
+        "Chapter Forty-Six: " : " "
+        "Chapter Forty-Seven: " : " "
+        "Chapter Forty-Eight: " : " "
+        "Chapter Forty-Nine: " : " "
+        "Chapter Fifty: " : " "
+        "Chapter Fifty-One: " : " "
+        "Chapter Fifty-Two: " : " "
+        "Chapter Fifty-Three: " : " "
+        "Chapter Fifty-Four: " : " "
+        "Chapter Fifty-Five: " : " "
+        "Chapter Fifty-Six: " : " "
+        "Chapter Fifty-Seven: " : " "
+        "Chapter Fifty-Eight: " : " "
+        "Chapter Fifty-Nine: " : " "
+        "Chapter Sixty: " : " "
+        "Chapter Sixty-One: " : " "
+        "Chapter Sixty-Two: " : " "
+        "Chapter Sixty-Three: " : " "
+        "Chapter Sixty-Four: " : " "
+        "Chapter Sixty-Five: " : " "
+        "Chapter Sixty-Six: " : " "
+        "Chapter Sixty-Seven: " : " "
+        "Chapter Sixty-Eight: " : " "
+        "Chapter Sixty-Nine: " : " "
+        "Chapter Seventy: " : " "
+        "Chapter Seventy-One: " : " "
+        "Chapter Seventy-Two: " : " "
+        "Chapter Seventy-Three: " : " "
+        "Chapter Seventy-Four: " : " "
+        "Chapter Seventy-Five: " : " "
+        "Chapter Seventy-Six: " : " "
+        "Chapter Seventy-Seven: " : " "
+        "Chapter Seventy-Eight: " : " "
+        "Chapter Seventy-Nine: " : " "
+        "Chapter Eighty: " : " "
+        "Chapter Eighty-One: " : " "
+        "Chapter Eighty-Two: " : " "
+        "Chapter Eighty-Three: " : " "
+        "Chapter Eighty-Four: " : " "
+        "Chapter Eighty-Five: " : " "
+        "Chapter Eighty-Six: " : " "
+        "Chapter Eighty-Seven: " : " "
+        "Chapter Eighty-Eight: " : " "
+        "Chapter Eighty-Nine: " : " "
+        "Chapter Ninety: " : " "
+        "Chapter Ninety-One: " : " "
+        "Chapter Ninety-Two: " : " "
+        "Chapter Ninety-Three: " : " "
+        "Chapter Ninety-Four: " : " "
+        "Chapter Ninety-Five: " : " "
+        "Chapter Ninety-Six: " : " "
+        "Chapter Ninety-Seven: " : " "
+        "Chapter Ninety-Eight: " : " "
+        "Chapter Ninety-Nine: " : " "
+        "Chapter One Hundred: " : " "
+        "Chapter One Hundred and One: " : " "
+        "Chapter One Hundred and Two: " : " "
+        "Chapter One Hundred and Three: " : " "
+        "Chapter One Hundred and Four: " : " "
+        "Chapter One Hundred and Five: " : " "
+        "Chapter One Hundred and Six: " : " "
+        "Chapter One Hundred and Seven: " : " "
+        "Chapter One Hundred and Eight: " : " "
+        "Chapter One Hundred and Nine: " : " "
+        "Chapter One Hundred and Ten: " : " "
+        "Chapter One Hundred and Eleven: " : " "
+        "Chapter One Hundred and Twelve: " : " "
+        "Chapter One Hundred and Thirteen: " : " "
+        "Chapter One Hundred and Fourteen: " : " "
+        "Chapter One Hundred and Fifteen: " : " "
+        "Chapter One Hundred and Sixteen: " : " "
+        "Chapter One Hundred and Seventeen: " : " "
+        "Chapter One Hundred Eighteen: " : " "
+        "Chapter One Hundred Nineteen: " : " "
+        "Chapter One Hundred Twenty: " : " "
+        "Chapter One Hundred Twenty-One: " : " "
+        "Chapter One Hundred Twenty-Two: " : " "
+        "Chapter One Hundred Twenty-Three: " : " "
+        "Chapter One Hundred Twenty-Four: " : " "
+        "Chapter One Hundred Twenty-Five: " : " "
+        "Chapter One Hundred Twenty-Six: " : " "
+        "Chapter One Hundred Twenty-Seven: " : " "
+        "Chapter One Hundred Twenty-Eight: " : " "
+        "Chapter One Hundred Twenty-Nine: " : " "
+        "Chapter One Hundred Thirty: " : " "
+        "Chapter One Hundred Thirty-One: " : " "
+        "Chapter One Hundred Thirty-Two: " : " "
+        "Chapter One Hundred Thirty-Three: " : " "
+        "Chapter One Hundred Thirty-Four: " : " "
+        "Chapter One Hundred Thirty-Five: " : " "
+        "Chapter One Hundred Thirty-Six: " : " "
+        "Chapter One Hundred Thirty-Seven: " : " "
+    extras:
+      frame_width: 20
+      frame_color: "#2E8BC0"
+      episode_text_font_size: 1.5  
+    watched_style: unique
+    unwatched_style: blur grayscale
+    season_posters:
+      create: false
+
+
+  "The Stand (1994)":
+    library: TV Shows
+    card_type: divider
+    watched-style: unique
+    episode_text_format: Chapter {episode_number}
+    unwatched_style: grayscale blur
+    top_element: logo
+    bottom_element: index
+    font:
+      file: "/config/fonts/king1.otf"
+      size: 260%
+    seasons:
+      hide: true
+    extras:
+      title_text_position: right
+      text_position: lower left
+
+ 
+  "Bar Rescue (2011)":
+    library: TV Shows
+    card_type: tinted frame
+    episode_text_format: "{airdate: %B %d, %Y}"
+    image_source_priority: tmdb, plex
+    font:
+      file: "/config/fonts/neon.ttf"
+      size: 170%
+      color: "#ffffff"
+    extras:
+      episode_text_color: "#ffffff"
+      frame_color: "#ff0800"
+      frame_width: 10
+      episode_text_font_size: 2
+    seasons:
+      hide: true
+    
+ 
+  "The Righteous Gemstones (2019)":
+    library: TV Shows
+    card_type: divider
+    watched_style: unique
+    unwatched_style: grayscale blur
+    episode_text_format: "{season_number}:{episode_number}"
+    font:
+      file: "/config/fonts/gemstones.otf"
+      size: 200%
+    seasons:
+      hide: true
+  
+  "The Stand (2020)":
+    library: TV Shows
+    card_type: divider
+    watched-style: unique
+    episode_text_format: Chapter {episode_number}
+    unwatched_style: grayscale blur
+    top_element: logo
+    bottom_element: index
+    font:
+      file: "/config/fonts/king2.otf"
+      size: 199%
+    seasons:
+      hide: true
+    extras:
+      title_text_position: right
+      text_position: lower left
+
+  "Its Always Sunny in Philadelphia (2005)":
+    library: TV Shows
+    card_type: divider
+    font:
+      file: "/config/fonts/Sunny.otf"
+      case: title
+      size: 250%
+      kerning: 100%
+    watched_style: unique
+    unwatched_style: blur grayscale
+    seasons:
+      hide: true
+    episode_text_format: s{season_number}e{episode_number}
+
+
+  "Pokémon (1997)":
+    library: TV Shows
+    card_type: anime
+    translation:
+    - language: ja
+      key: kanji
+    episode_text_format: "Episode {episode_number_cardinal}"
+    seasons:
+      1: "Indigo League"
+      2: "Adventures in the Orange Islands"
+      3: "The Johto Journeys"
+      4: "Johto League Champions"
+      5: "Master Quest"
+      6: "Advanced"
+      7: "Advanced Challenge"
+      8: "Advanced Battle"
+      9: "Battle Frontier"
+      10: "Diamond and Pearl"
+      11: "DP Battle Dimension"
+      12: "DP Galactic Battles"
+      13: "Sinnoh League Victors"
+      14: "Black and White"
+      15: "BW Rival Destinies"
+      16: "BW Adventures in Unova and Beyond"
+      17: "XY"
+      18: "XY Kalos Quest"
+      19: "XYZ"
+      20: "Sun & Moon"
+    font:
+      file: "/config/fonts/pokemon.ttf"
+      size: 148%
+      vertical_shift: 20
+      color: "#FFD300"
+      stroke_width: 450%
+      kerning: 150%
+      case: title
+    extras:
+      stroke_color: "#004F98"
+      kanji_vertical_shift: 50
+      
+  "That 70s Show (1998)":
+    library: TV Shows
+    card_type: frame
+    episode_text_format: Track {episode_number}
+    episode_text_size: 150%
+    font:
+      file: /config/fonts/70s.otf
+      size: 125%
+      stroke_width: 175%
+      stroke_color: "#FAD02C"
+      case: title
+    seasons:
+      hide: true
+    extras:
+      episode_text_position: right
+
+      
+  "Death Note (2006)":
+    library: TV Shows
+    card_type: anime
+    translation:
+    - language: ja
+      key: kanji
+    episode_text_format: "Chapter {episode_number_cardinal}"
+    font:
+      file: "/config/fonts/dn.ttf"
+      size: 250%
+    seasons:
+      0: "specials"
+      1: ""
+
+  "Fringe (2008)":
+    library: TV Shows
+    card_type: standard
+    seasons:
+      hide: true
+    episode_text_format: S{season_number}E{episode_number}
+    image_source_priority: plex
+    font:
+        file: "/config/fonts/gothicb.ttf"
+        case: upper
+        size: 135%
+    extras:
+        text_position: lower left
+        title_text_position: right
+        
+
+  "The Mandalorian (2019)":
+    library: TV Shows
+    card_type: star wars
+    episode_text_format: "Chapter {abs_number}"
+    watched_style: unique
+    unwatched_style: blur
+    font:
+      size: 200%  
+        
+  "Anthony Bourdain: Parts Unknown (2013)":
+    library: TV Shows
+    card_type: landscape
+    extras:
+      add_bounding_box: true
+      darken: box
+      
+  "Yellowjackets (2021)":
+    library: TV Shows
+    card_type: standard
+    watched_style: unique
+    unwatched_style: blur
+    font:
+        file: "/config/fonts/yellowjackets.ttf"
+        color: "#FFDE21"
+        case: lower
+        size: 175%
+    extras:
+      logo: "/config/logos/yellowjackets.png"
+      stroke_width: 0%
+      
+  "CSI: Crime Scene Investigation (2000)":
+    library: TV Shows
+    font:
+      file: "/config/fonts/csi.ttf"
+      size: 125%
+      color: "#0096FF" 
+      
+  "CSI: Miami (2002)":
+    library: TV Shows
+    font:
+      file: "/config/fonts/csi.ttf"
+      size: 125%
+      color: "#FFCC00" 
+    watched_style: unique
+    unwatched_style: blur grayscale
+      
+  "CSI: NY (2004)":
+    library: TV Shows
+    font:
+      file: "/config/fonts/csi.ttf"
+      size: 125%
+      color: "#EE4B2B" 
+    watched_style: unique
+    unwatched_style: blur grayscale
+      
+  "CSI: Vegas (2021)":
+    library: TV Shows
+    font:
+      file: "/config/fonts/csi.ttf"
+      size: 125%
+      color: "#FFA500" 
+    unwatched_style: blur grayscale
+    watched_style: unique
+    
+  "CSI: Cyber (2015)":
+    library: TV Shows
+    font:
+      file: "/config/fonts/csi.ttf"
+      size: 125%
+      color: "#AAFF00" 
+      
+  "Star Trek: The Animated Series (1973)":
+    library: TV Shows
+    font:
+      file: /config/fonts/startrek.otf
+      color: "#FFAE42"
+      size: 170%
+      kerning: 120%
+      case: title
+      stroke_width: 120%       
+      
+  "Star Trek: Picard (2020)":
+    library: TV Shows
+    font:
+      file: /config/fonts/startrek.otf
+      color: "#72e9e9"
+      size: 171%
+      kerning: 120%
+      case: title
+      stroke_width: 120%
+      
+  "Hello Tomorrow! (2023)":
+    library: TV Shows
+    card_type: olivier
+    watched_style: unique
+    unwatched_style: blur grayscale
+    font:
+      file: /config/fonts/typewriter.otf
+      case: title
+      size: 150%
+      stroke_width: 110%
+      
+  "Lost (2004)":
+    library: TV Shows
+    episode_data_source: plex
+    image_source_priority: plex, tmdb
+    card_type: olivier
+    font:
+      case: upper
+      file: /config/fonts/lost.otf
+      size: 145%
+    watched_style: unique
+    unwatched_style: blur grayscale
+      
+  "Neon Genesis Evangelion (1995)":
+    library: TV Shows
+    card_type: anime
+    translation:
+      language: ja
+      key: kanji
+    font:
+      size: 123%
+      file: /config/fonts/eva.otf
+      kerning: 80%
+    watched_style: unique
+    unwatched_style: blur grayscale
+    
+  "Breaking Bad (2008)":
+    library: TV Shows
+    card_type: olivier
+    font:
+      file: /config/fonts/bb.otf
+      case: lower
+      size: 202%
+    watched_style: unique
+    unwatched_style: blur grayscale
+    
+  "The Last Of Us (2023)":
+    library: TV Shows
+    card_type: olivier
+    font:
+      file: /config/fonts/lastofus.otf
+      case: upper
+      size: 299%
+    watched_style: unique
+    unwatched_style: unique
+    
+  "The Boys (2019)":
+    library: TV Shows
+    card_type: standard
+    font:
+      file: /config/fonts/boys.ttf
+      case: upper
+      size: 95%
+      color: "#FF0000"
+    watched_style: unique
+    unwatched_style: blur grayscale
+    
+    
+  "The Man in the High Castle (2015)":
+    library: TV Shows
+    card_type: olivier
+    font:
+      file: /config/fonts/highcastle.ttf
+      case: upper
+      size: 225%
+      color: "#FFCC00" 
+    watched_style: unique
+    unwatched_style: blur grayscale
+    
+  "His Dark Materials (2019)":
+    library: TV Shows
+    card_type: olivier
+    font:
+      file:  /config/fonts/eurostile.ttf
+      size: 150%
+    watched_style: unique
+    unwatched_style: blur grayscale
+ 
+  "Samurai Jack (2001)":
+    library: TV Shows
+    card_type: anime
+    translation:
+    - language: ja
+      key: kanji
+    episode_text_format: "Chapter {episode_number_cardinal}"
+    font:
+      file: "/config/fonts/samjack.ttf"
+      size: 170%
+    watched_style: unique
+    unwatched_style: blur grayscale
+    episode_data_source: plex
+    
+  "Monster (2004)":
+    library: TV Shows
+    card_type: anime
+    translation:
+    - language: ja
+      key: kanji
+    episode_text_format: "Chapter {episode_number_cardinal}"
+    font:
+      file: "/config/fonts/eva.otf"
+      size: 101%
+      case: upper
+    seasons:
+      hide: true
+     
+      
+  "Silo (2023)":
+    library: TV Shows
+    watched_style: unique
+    unwatched_style: blur grayscale
+    card_type: standard
+    font:
+      color: "#FFA500"
+      file: /config/fonts/silostencil.ttf
+      size: 199%
+      
+  "Foundation (2021)":
+    library: TV Shows
+    card_type: tinted frame
+    watched_style: unique
+    unwatched_style: blur
+    font:
+        file: "/config/fonts/foundation.ttf"
+        case: title
+        size: 100%
+        replacements:
+          delete_missing: true
+        
+  "Clone High (2002)":
+    library: TV Shows
+    card_type: divider
+    episode_text_format: "{episode_number}"
+    episode_data_source: plex
+    seasons:
+      hide: true
+    font:
+        file: "/config/fonts/gothicb.ttf"
+        case: upper
+        size: 176%
+      
+  "Clone High (2023)":
+    library: TV Shows
+    card_type: divider
+    episode_text_format: "{episode_number}"
+    font:
+        file: "/config/fonts/gothicb.ttf"
+        case: upper
+        size: 190%
+    seasons:
+      hide: true
+         
+  "Mythic Quest (2020)":
+    library: TV Shows
+    card_type: divider
+    episode_text_format: v{season_number}.{episode_number}
+    font:
+        file: "/config/fonts/mrq.ttf"
+        case: title
+        size: 250%
+    seasons:
+      hide: true
+      
+  "Laid-Back Camp (2018)":
+    library: TV Shows
+    card_type: anime
+    translation:
+    - language: ja
+      key: kanji
+    font:
+      file: "/config/fonts/camp.otf"
+      size: 171%
+      case: title
+      replacements:
+        delete_missing: true
+    watched_style: unique
+    unwatched_style: blur grayscale
+    episode_data_source: plex
+    
+
+        
+ 

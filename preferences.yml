@@ -1,0 +1,26 @@
+options:
+  source: /config/source/
+  series: /config/tv.yml
+  episode_data_source: plex
+  image_source_priority: tmdb, plex
+  
+tautulli:
+  url: http://192.168.111.77:8181/          # Your Tautulli URL
+  api_key: 7p6yOQnr5gvXh_rxomOJCVYCmMlZX8_q        # Your API key
+  update_script: /config/update_card.sh
+  verify_ssl: false
+  username: tyfighter0
+  agent_name: tyfighter0      # Your Username
+  script_timeout: 2 
+  
+plex:
+  url: http://192.168.111.77:32400/
+  token: isFgSyj8THjGwnitrzdP
+
+sonarr:
+  url: http://192.168.111.77:6969/api/v3
+  api_key: 10f942931b074103b2ac98cac196b9a6
+
+tmdb:
+  api_key: bd0b3698af22a3a427b63647d66c6839
+  retry_count: 5
