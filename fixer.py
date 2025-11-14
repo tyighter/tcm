@@ -26,7 +26,7 @@ ENV_IS_DOCKER = 'TCM_IS_DOCKER'
 ENV_PREFERENCE_FILE = 'TCM_PREFERENCES'
 
 # Default values
-DEFAULT_PREFERENCE_FILE = Path(__file__).parent / 'preferences.yml'
+DEFAULT_PREFERENCE_FILE = Path(__file__).parent / 'config' / 'preferences.yml'
 
 # Create ArgumentParser object
 parser = ArgumentParser(description='Manual fixes for the TitleCardMaker')

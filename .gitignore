@@ -9,12 +9,11 @@ __pycache__/
 # PEP 582
 __pypackages__/
 
-config/
-yaml/
-yml/
-source/
-logs/
-fonts/
+/yaml/
+/yml/
+/source/
+/logs/
+/fonts/
 modules/.objects/
 *._*
 *.prof
