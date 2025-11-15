@@ -72,12 +72,10 @@ class TitleCard:
     """Default card type identifier to utilize if unspecified"""
     DEFAULT_CARD_TYPE = 'standard'
 
-    """Mapping of card type identifiers to CardType classes"""
-    CARD_TYPES = {
-        '4x3': FadeTitleCard,
+    """Mapping of canonical card type identifiers to CardType classes"""
+    BUILTIN_CARD_TYPES = {
         'anime': AnimeTitleCard,
         'banner': BannerTitleCard,
-        'blurred border': TintedFrameTitleCard,
         'calligraphy': CalligraphyTitleCard,
         'comic book': ComicBookTitleCard,
         'cutout': CutoutTitleCard,
@@ -85,31 +83,18 @@ class TitleCard:
         'fade': FadeTitleCard,
         'formula 1': FormulaOneTitleCard,
         'frame': FrameTitleCard,
-        'generic': StandardTitleCard,
         'graph': GraphTitleCard,
-        'gundam': PosterTitleCard,
-        'import': TextlessTitleCard,
         'inset': InsetTitleCard,
-        'ishalioh': OlivierTitleCard,
         'landscape': LandscapeTitleCard,
         'logo': LogoTitleCard,
         'marvel': MarvelTitleCard,
         'music': MusicTitleCard,
-        'musikmann': WhiteBorderTitleCard,
         'notification': NotificationTitleCard,
         'olivier': OlivierTitleCard,
         'overline': OverlineTitleCard,
-        'phendrena': CutoutTitleCard,
-        'photo': FrameTitleCard,
-        'polygon': StripedTitleCard,
-        'polymath': StandardTitleCard,
         'poster': PosterTitleCard,
-        'reality tv': LogoTitleCard,
-        'roman': RomanNumeralTitleCard,
         'roman numeral': RomanNumeralTitleCard,
         'shape': ShapeTitleCard,
-        'sherlock': TintedGlassTitleCard,
-        'spotify': MusicTitleCard,
         'standard': StandardTitleCard,
         'star wars': StarWarsTitleCard,
         'striped': StripedTitleCard,
@@ -117,6 +102,34 @@ class TitleCard:
         'tinted frame': TintedFrameTitleCard,
         'tinted glass': TintedGlassTitleCard,
         'white border': WhiteBorderTitleCard,
+    }
+
+    """Additional aliases that map to the canonical identifiers"""
+    CARD_TYPE_ALIASES = {
+        '4x3': 'fade',
+        'blurred border': 'tinted frame',
+        'generic': 'standard',
+        'gundam': 'poster',
+        'import': 'textless',
+        'ishalioh': 'olivier',
+        'musikmann': 'white border',
+        'phendrena': 'cutout',
+        'photo': 'frame',
+        'polygon': 'striped',
+        'polymath': 'standard',
+        'reality tv': 'logo',
+        'roman': 'roman numeral',
+        'sherlock': 'tinted glass',
+        'spotify': 'music',
+    }
+
+    """Mapping of card type identifiers to CardType classes"""
+    CARD_TYPES = {
+        **BUILTIN_CARD_TYPES,
+        **{
+            alias: BUILTIN_CARD_TYPES[target]
+            for alias, target in CARD_TYPE_ALIASES.items()
+        },
     }
 
     __slots__ = ('episode', 'profile', 'converted_title', 'maker', 'file')
