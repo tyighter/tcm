@@ -4,6 +4,7 @@ const state = {
   fields: [],
   fontDirectory: '/config/fonts',
   filter: '',
+  pendingEntryId: null,
 };
 
 const dom = {
@@ -11,6 +12,7 @@ const dom = {
   search: document.getElementById('series-search'),
   addEntry: document.getElementById('add-entry'),
   save: document.getElementById('save-config'),
+  alphabetize: document.getElementById('alphabetize-entries'),
   modals: document.getElementById('modals'),
 };
 
@@ -56,6 +58,7 @@ async function loadConfiguration() {
     name: entry.name,
     config: entry.config || {},
   }));
+  sortEntries();
 }
 
 function registerEvents() {
@@ -67,6 +70,14 @@ function registerEvents() {
   dom.addEntry.addEventListener('click', () => openAddEntryModal());
 
   dom.save.addEventListener('click', () => saveConfiguration());
+
+  if (dom.alphabetize) {
+    dom.alphabetize.addEventListener('click', () => {
+      sortEntries();
+      renderEntries();
+      showToast('Entries alphabetized', 'success');
+    });
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -75,9 +86,11 @@ function registerEvents() {
 function renderEntries() {
   dom.entries.innerHTML = '';
 
-  const filtered = state.entries.filter((entry) =>
-    entry.name.toLowerCase().includes(state.filter)
-  );
+  const filtered = state.entries
+    .filter((entry) => entry.name.toLowerCase().includes(state.filter))
+    .sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    );
 
   if (filtered.length === 0) {
     const empty = document.createElement('div');
@@ -88,14 +101,32 @@ function renderEntries() {
     return;
   }
 
+  let highlightElement = null;
+
   filtered.forEach((entry) => {
-    dom.entries.appendChild(renderEntry(entry));
+    const element = renderEntry(entry);
+    if (entry.id === state.pendingEntryId) {
+      highlightElement = element;
+    }
+    dom.entries.appendChild(element);
   });
+
+  if (highlightElement) {
+    requestAnimationFrame(() => {
+      highlightElement.classList.add('entry-highlight');
+      highlightElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => {
+        highlightElement.classList.remove('entry-highlight');
+      }, 2000);
+      state.pendingEntryId = null;
+    });
+  }
 }
 
 function renderEntry(entry) {
   const container = document.createElement('article');
   container.className = 'entry';
+  container.dataset.entryId = entry.id;
 
   const header = document.createElement('div');
   header.className = 'entry-header';
@@ -105,6 +136,11 @@ function renderEntry(entry) {
   titleInput.value = entry.name;
   titleInput.addEventListener('input', (event) => {
     entry.name = event.target.value;
+  });
+  titleInput.addEventListener('blur', () => {
+    sortEntries();
+    state.pendingEntryId = entry.id;
+    renderEntries();
   });
 
   const actions = document.createElement('div');
@@ -171,11 +207,13 @@ function renderFieldRow(entry, field, value) {
       controls.appendChild(booleanSelect(entry, field, value));
       break;
     case 'library':
-    case 'card-type':
     case 'style':
     case 'choice':
     case 'font-case':
       controls.appendChild(optionSelect(entry, field, value));
+      break;
+    case 'card-type':
+      controls.appendChild(cardTypePicker(entry, field, value));
       break;
     case 'csv':
       controls.appendChild(csvInput(entry, field, value));
@@ -299,6 +337,158 @@ function optionSelect(entry, field, value) {
     updateField(entry, field, event.target.value);
   });
   return select;
+}
+
+function cardTypePicker(entry, field, value) {
+  const container = document.createElement('div');
+  container.className = 'card-type-control';
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'card-type-trigger';
+
+  const current = document.createElement('span');
+  current.className = 'card-type-current';
+  const caret = document.createElement('span');
+  caret.className = 'card-type-caret';
+  caret.innerHTML = '&#x25BE;';
+
+  button.append(current, caret);
+  container.appendChild(button);
+
+  const updateLabel = (val) => {
+    if (!val) {
+      current.textContent = 'Select card type';
+      return;
+    }
+    const match = (field.choices || []).find(
+      (choice) => choice.value === val
+    );
+    if (match) {
+      current.textContent = match.label || match.value;
+    } else {
+      current.textContent = `Custom: ${val}`;
+    }
+  };
+
+  updateLabel(value);
+
+  button.addEventListener('click', () => {
+    openCardTypeModal(field, value, (selection) => {
+      value = selection;
+      updateField(entry, field, selection);
+      updateLabel(selection);
+    });
+  });
+
+  return container;
+}
+
+function openCardTypeModal(field, currentValue, onSelect) {
+  const modal = buildModal('Select card type');
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'card-type-modal';
+
+  const search = document.createElement('input');
+  search.type = 'search';
+  search.placeholder = 'Search card types...';
+  search.className = 'modal-search';
+
+  const results = document.createElement('div');
+  results.className = 'search-results card-type-results';
+
+  wrapper.append(search, results);
+  modal.content.appendChild(wrapper);
+
+  const choices = field.choices || [];
+
+  const renderResults = () => {
+    const term = search.value.trim().toLowerCase();
+    results.innerHTML = '';
+
+    const matches = choices.filter((choice) => {
+      const label = (choice.label || '').toLowerCase();
+      const value = (choice.value || '').toLowerCase();
+      if (!term) return true;
+      return label.includes(term) || value.includes(term);
+    });
+
+    if (matches.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'helper-text';
+      empty.textContent = 'No card types match your search.';
+      results.appendChild(empty);
+      return;
+    }
+
+    matches.forEach((choice) => {
+      const item = document.createElement('div');
+      item.className = 'search-result';
+      if (choice.value === currentValue) {
+        item.classList.add('active');
+      }
+
+      const summary = document.createElement('div');
+      summary.innerHTML = `<h3>${choice.label}</h3><p class="helper-text">${choice.value}</p>`;
+
+      const selectButton = document.createElement('button');
+      selectButton.textContent =
+        choice.value === currentValue ? 'Selected' : 'Use card type';
+      if (choice.value === currentValue) {
+        selectButton.disabled = true;
+      }
+      selectButton.addEventListener('click', () => {
+        onSelect(choice.value);
+        closeModal(modal.element);
+      });
+
+      item.append(summary, selectButton);
+      results.appendChild(item);
+    });
+  };
+
+  search.addEventListener('input', renderResults);
+  renderResults();
+
+  const customWrapper = document.createElement('div');
+  customWrapper.className = 'card-type-custom';
+
+  const customLabel = document.createElement('p');
+  customLabel.className = 'helper-text';
+  customLabel.textContent =
+    'Need something else? Provide a custom card type identifier.';
+
+  const customInput = document.createElement('input');
+  customInput.type = 'text';
+  customInput.placeholder = 'Custom card type identifier';
+
+  const hasCurrent = choices.some((choice) => choice.value === currentValue);
+  if (currentValue && !hasCurrent) {
+    customInput.value = currentValue;
+  }
+
+  const customButton = document.createElement('button');
+  customButton.textContent = 'Use custom value';
+  customButton.disabled = customInput.value.trim() === '';
+
+  customInput.addEventListener('input', () => {
+    customButton.disabled = customInput.value.trim() === '';
+  });
+
+  customButton.addEventListener('click', () => {
+    const customValue = customInput.value.trim();
+    if (!customValue) {
+      return;
+    }
+    onSelect(customValue);
+    closeModal(modal.element);
+  });
+
+  customWrapper.append(customLabel, customInput, customButton);
+  modal.content.appendChild(customWrapper);
+
+  modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
 }
 
 function csvInput(entry, field, value) {
@@ -945,11 +1135,14 @@ function openAddEntryModal() {
       if (selectedResult.ids.imdb_id) config.imdb_id = selectedResult.ids.imdb_id;
     }
 
-    state.entries.push({
+    const newEntry = {
       id: `${name}-${Date.now()}`,
       name,
       config,
-    });
+    };
+    state.entries.push(newEntry);
+    state.pendingEntryId = newEntry.id;
+    sortEntries();
 
     closeModal(modal.element);
     renderEntries();
@@ -972,6 +1165,8 @@ function selectDefaultLibrary(result) {
 // -----------------------------------------------------------------------------
 async function saveConfiguration() {
   try {
+    sortEntries();
+    renderEntries();
     const payload = {
       libraries: state.libraries,
       series: state.entries.map((entry) => ({
@@ -995,6 +1190,12 @@ async function saveConfiguration() {
   } catch (error) {
     showToast(error.message, 'error');
   }
+}
+
+function sortEntries() {
+  state.entries.sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+  );
 }
 
 // -----------------------------------------------------------------------------
