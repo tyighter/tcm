@@ -31,7 +31,31 @@ class AppContext:
     def tv_files(self) -> list[Path]:
         """All configured series YAML files from the preferences."""
 
-        return [Path(file) for file in self.preference_parser.series_files]
+        files: list[Path] = []
+        seen: set[Path] = set()
+
+        for raw_path in self.preference_parser.series_files:
+            if not raw_path:
+                continue
+            path = Path(raw_path)
+            if path in seen:
+                continue
+            files.append(path)
+            seen.add(path)
+
+        fallback_candidates = [
+            Path("/config/tv.yml"),
+            self.preference_file.with_name("tv.yml"),
+        ]
+
+        for candidate in fallback_candidates:
+            if candidate in seen:
+                continue
+            if candidate.exists():
+                files.append(candidate)
+                seen.add(candidate)
+
+        return files
 
     @property
     def default_tv_file(self) -> Path:
@@ -66,6 +90,11 @@ def _resolve_preference_file(repo_root: Path) -> Path:
     pref = os.environ.get(ENV_PREFERENCE_FILE)
     if pref:
         return Path(pref)
+
+    docker_pref = Path("/config/preferences.yml")
+    if docker_pref.exists():
+        return docker_pref
+
     return repo_root / "config" / "preferences.yml"
 
 
