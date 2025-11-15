@@ -11,7 +11,7 @@ services:
       PUID: ${PUID:-99}
       PGID: ${PGID:-100}
       UMASK: ${UMASK:-002}
-      TCM_WEBUI: ${TCM_WEBUI:-}
+      TCM_WEBUI: ${TCM_WEBUI:-true}
       TCM_WEBUI_PORT: ${TCM_WEBUI_PORT:-4343}
     volumes:
       - ./config:/config

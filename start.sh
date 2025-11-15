@@ -32,19 +32,29 @@ if [ "$#" -eq 0 ]; then
   set -- python3 main.py --run --no-color
 fi
 
-if [ -n "${TCM_WEBUI:-}" ]; then
-  lower_webui=${TCM_WEBUI,,}
-  case "$lower_webui" in
-    1|true|yes|on)
-      webui_port=${TCM_WEBUI_PORT:-4343}
-      if ! [[ "$webui_port" =~ ^[0-9]+$ ]]; then
-        echo "Invalid TCM_WEBUI_PORT value '$webui_port', defaulting to 4343" >&2
-        webui_port=4343
-      fi
-      set -- python3 -c "from webui.server import run; run(port=${webui_port})"
-      ;;
-  esac
-fi
+lower_webui=${TCM_WEBUI:-true}
+lower_webui=${lower_webui,,}
+case "$lower_webui" in
+  0|false|no|off)
+    ;;
+  1|true|yes|on)
+    webui_port=${TCM_WEBUI_PORT:-4343}
+    if ! [[ "$webui_port" =~ ^[0-9]+$ ]]; then
+      echo "Invalid TCM_WEBUI_PORT value '$webui_port', defaulting to 4343" >&2
+      webui_port=4343
+    fi
+    set -- python3 -c "from webui.server import run; run(port=${webui_port})"
+    ;;
+  *)
+    echo "Invalid TCM_WEBUI value '${TCM_WEBUI:-}' provided, defaulting to enabled" >&2
+    webui_port=${TCM_WEBUI_PORT:-4343}
+    if ! [[ "$webui_port" =~ ^[0-9]+$ ]]; then
+      echo "Invalid TCM_WEBUI_PORT value '$webui_port', defaulting to 4343" >&2
+      webui_port=4343
+    fi
+    set -- python3 -c "from webui.server import run; run(port=${webui_port})"
+    ;;
+esac
 
 chown -R titlecardmaker:titlecardmaker /maker /config
 
