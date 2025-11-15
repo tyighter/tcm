@@ -418,6 +418,7 @@ function slugifyCardType(value) {
 
 function cardTypeImageCandidates(choice) {
   const baseUrls = [
+    '/static/card-types',
     'https://raw.githubusercontent.com/wiki/CollinHeist/TitleCardMaker/images/card-types',
     'https://raw.githubusercontent.com/wiki/CollinHeist/TitleCardMaker/images',
     'https://raw.githubusercontent.com/wiki/CollinHeist/TitleCardMaker',
