@@ -58,7 +58,13 @@ RUN set -eux; \
         fi; \
     done; \
     rm -rf /var/lib/apt/lists/*; \
-    cp modules/ref/policy.xml /etc/ImageMagick-6/policy.xml
+    if [ -d /etc/ImageMagick-6 ]; then \
+        install -m 644 modules/ref/policy.xml /etc/ImageMagick-6/policy.xml; \
+    elif [ -d /etc/ImageMagick-7 ]; then \
+        install -m 644 modules/ref/policy.xml /etc/ImageMagick-7/policy.xml; \
+    else \
+        install -D -m 644 modules/ref/policy.xml /etc/ImageMagick-7/policy.xml; \
+    fi
 
 VOLUME [ "/config" ]
 
