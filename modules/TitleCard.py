@@ -124,13 +124,9 @@ class TitleCard:
     }
 
     """Mapping of card type identifiers to CardType classes"""
-    CARD_TYPES = {
-        **BUILTIN_CARD_TYPES,
-        **{
-            alias: BUILTIN_CARD_TYPES[target]
-            for alias, target in CARD_TYPE_ALIASES.items()
-        },
-    }
+    CARD_TYPES = dict(BUILTIN_CARD_TYPES)
+    for alias, target in CARD_TYPE_ALIASES.items():
+        CARD_TYPES[alias] = BUILTIN_CARD_TYPES[target]
 
     __slots__ = ('episode', 'profile', 'converted_title', 'maker', 'file')
 
