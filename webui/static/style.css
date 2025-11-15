@@ -107,6 +107,12 @@ button.accent:hover {
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: 0 25px 45px rgba(0, 0, 0, 0.35);
   overflow: hidden;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.entry.entry-highlight {
+  border-color: var(--accent);
+  box-shadow: 0 30px 60px rgba(255, 146, 52, 0.25);
 }
 
 .entry-header {
@@ -152,6 +158,77 @@ button.accent:hover {
 .field-row .field-controls {
   display: flex;
   gap: 0.75rem;
+}
+
+.card-type-control {
+  flex: 1;
+}
+
+.card-type-trigger {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-weight: 500;
+  transform: none;
+}
+
+.card-type-trigger:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: none;
+}
+
+.card-type-current {
+  flex: 1;
+  text-align: left;
+}
+
+.card-type-caret {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.card-type-modal {
+  display: grid;
+  gap: 1rem;
+}
+
+.modal-search {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.modal-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.card-type-custom {
+  margin-top: 1.5rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.card-type-custom input {
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.card-type-custom button {
+  justify-self: start;
 }
 
 .field-row label {
@@ -305,6 +382,11 @@ button.accent:hover {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
+}
+
+.search-result.active {
+  border-color: var(--accent);
+  background: rgba(255, 179, 71, 0.12);
 }
 
 .search-result h3 {
