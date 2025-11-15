@@ -60,7 +60,7 @@ services:
 
 On first start the container seeds `/config/preferences.yml` and `/config/tv.yml` with the bundled examples so you can edit them in place. The `PUID`, `PGID`, and `UMASK` environment variables make it simple to run the container with the same permissions model used by Unraid, but you can set them to match your own environment.
 
-To launch the Web UI instead of the CLI, set `TCM_WEBUI=true` in the container's environment. The server listens on port `4343` by default, so map that port to your host (as shown above). You can change the internal listening port with `TCM_WEBUI_PORT` if you need to avoid conflicts.
+The Web UI now launches by default when the container starts. The server listens on port `4343`, so map that port to your host (as shown above). You can change the internal listening port with `TCM_WEBUI_PORT` if you need to avoid conflicts. To disable the Web UI and run the CLI instead, set `TCM_WEBUI=false` (or any other "off" value such as `no` or `0`).
 
 If you're using Unraid's Community Apps, there is also an application template available - just search `titlecardmaker` to install it directly from the UI.
 
