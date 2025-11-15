@@ -5,11 +5,18 @@ import mimetypes
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Callable
 from urllib.parse import parse_qs, urlparse
 
 from .config import AppContext, create_app_context
 from .options import build_series_fields
-from .services import generate_preview, search_plex
+from .services import (
+    ActionInProgressError,
+    generate_preview,
+    run_builder,
+    run_metadata_sync,
+    search_plex,
+)
 from .tv_data import TvYamlManager
 
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
@@ -81,6 +88,19 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             return json.loads(raw.decode("utf-8"))
         except json.JSONDecodeError as exc:
             raise ValueError("Invalid JSON payload") from exc
+
+    def _run_manager_action(self, action: Callable[[], None]) -> None:
+        try:
+            action()
+        except ActionInProgressError as exc:
+            self._error(str(exc), status=HTTPStatus.CONFLICT)
+            return
+        except Exception as exc:  # pylint: disable=broad-except
+            self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+
+        self.tv_manager.invalidate()
+        self._json_response({"status": "ok"})
 
     # HTTP verb handlers ----------------------------------------------
     def do_GET(self) -> None:  # type: ignore[override]
@@ -198,6 +218,14 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             self._json_response({"mime": mime, "data": data})
+            return
+
+        if parsed.path == "/api/actions/sync":
+            self._run_manager_action(run_metadata_sync)
+            return
+
+        if parsed.path == "/api/actions/build":
+            self._run_manager_action(run_builder)
             return
 
         self.send_error(HTTPStatus.NOT_FOUND.value)

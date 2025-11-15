@@ -90,6 +90,13 @@ button.accent:hover {
   background: var(--accent-strong);
 }
 
+button:disabled,
+button:disabled:hover {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .content {
   padding: 2rem;
   display: grid;
