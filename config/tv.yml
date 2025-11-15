@@ -661,15 +661,6 @@ series:
       size: 145%
     episode_data_source: plex
     image_source_priority: plex
-
-  "Westworld (2016)":
-    library: TV Shows
-    card_type: olivier
-    watched_style: unique
-    unwatched_style: blur grayscale
-    font:
-      file: "/config/fonts/ww.ttf"
-      size: 175%
       
   "Star Trek: Discovery (2017)":
     library: TV Shows
@@ -1720,4 +1711,5 @@ series:
     
 
         
+
  
