@@ -75,7 +75,7 @@ function registerEvents() {
     dom.alphabetize.addEventListener('click', () => {
       sortEntries();
       renderEntries();
-      showToast('Entries alphabetized', 'success');
+      showToast('Entries alphabetized. Save to update tv.yml.', 'success');
     });
   }
 }
@@ -86,11 +86,9 @@ function registerEvents() {
 function renderEntries() {
   dom.entries.innerHTML = '';
 
-  const filtered = state.entries
-    .filter((entry) => entry.name.toLowerCase().includes(state.filter))
-    .sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-    );
+  const filtered = state.entries.filter((entry) =>
+    entry.name.toLowerCase().includes(state.filter)
+  );
 
   if (filtered.length === 0) {
     const empty = document.createElement('div');
@@ -312,7 +310,11 @@ function booleanSelect(entry, field, value) {
 
 function optionSelect(entry, field, value) {
   const select = document.createElement('select');
-  const choices = field.choices || [];
+  const choices = [...(field.choices || [])].sort((a, b) =>
+    (a.label || a.value || '').localeCompare(b.label || b.value || '', undefined, {
+      sensitivity: 'base',
+    })
+  );
   const hasValue =
     value !== undefined && choices.some((choice) => choice.value === value);
 
@@ -401,7 +403,11 @@ function openCardTypeModal(field, currentValue, onSelect) {
   wrapper.append(search, results);
   modal.content.appendChild(wrapper);
 
-  const choices = field.choices || [];
+  const choices = [...(field.choices || [])].sort((a, b) =>
+    (a.label || a.value || '').localeCompare(b.label || b.value || '', undefined, {
+      sensitivity: 'base',
+    })
+  );
 
   const renderResults = () => {
     const term = search.value.trim().toLowerCase();
@@ -1114,6 +1120,11 @@ function openAddEntryModal() {
     if (state.entries.some((entry) => entry.name === name)) {
       showToast('A series with that name already exists', 'error');
       return;
+    }
+
+    state.filter = '';
+    if (dom.search) {
+      dom.search.value = '';
     }
 
     const config = {};
