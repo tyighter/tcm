@@ -401,6 +401,50 @@ button:disabled:hover {
   font-size: 1rem;
 }
 
+.card-type-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex: 1;
+}
+
+.card-type-details {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.card-type-thumbnail {
+  width: 150px;
+  min-width: 150px;
+  height: 84px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+
+.card-type-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.card-type-thumbnail-fallback {
+  padding: 0.45rem 0.5rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.card-type-thumbnail.card-type-thumbnail-empty {
+  border-style: dashed;
+}
+
 .preview-image {
   max-width: 100%;
   border-radius: 12px;

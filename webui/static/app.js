@@ -407,6 +407,91 @@ function cardTypePicker(entry, field, value) {
   return container;
 }
 
+function slugifyCardType(value) {
+  return (value || '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function cardTypeImageCandidates(choice) {
+  const baseUrls = [
+    'https://raw.githubusercontent.com/wiki/CollinHeist/TitleCardMaker/images/card-types',
+    'https://raw.githubusercontent.com/wiki/CollinHeist/TitleCardMaker/images',
+    'https://raw.githubusercontent.com/wiki/CollinHeist/TitleCardMaker',
+  ];
+
+  const slug = slugifyCardType(choice.value || choice.label || '');
+  const titleCasedSlug = slug
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join('-');
+
+  const filenames = ['jpg', 'png', 'webp'].flatMap((ext) => [
+    `${slug}.${ext}`,
+    `${titleCasedSlug}.${ext}`,
+  ]);
+
+  const explicit = [];
+  if (choice.thumbnail) {
+    if (Array.isArray(choice.thumbnail)) {
+      explicit.push(...choice.thumbnail);
+    } else {
+      explicit.push(choice.thumbnail);
+    }
+  }
+
+  const candidates = [
+    ...explicit,
+    ...baseUrls.flatMap((base) => filenames.map((name) => `${base}/${name}`)),
+  ];
+
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+function createCardTypeThumbnail(choice) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'card-type-thumbnail';
+
+  const fallback = document.createElement('span');
+  fallback.className = 'card-type-thumbnail-fallback';
+  fallback.textContent = choice.label || choice.value || 'Card type';
+  wrapper.appendChild(fallback);
+
+  const candidates = cardTypeImageCandidates(choice);
+  if (candidates.length === 0) {
+    wrapper.classList.add('card-type-thumbnail-empty');
+    return wrapper;
+  }
+
+  const img = document.createElement('img');
+  img.alt = `${choice.label || choice.value} example`;
+  img.loading = 'lazy';
+  img.decoding = 'async';
+
+  let index = 0;
+  const tryNext = () => {
+    if (index >= candidates.length) {
+      wrapper.classList.add('card-type-thumbnail-empty');
+      return;
+    }
+    img.src = candidates[index++];
+  };
+
+  img.addEventListener('load', () => {
+    wrapper.classList.add('card-type-thumbnail-loaded');
+    wrapper.prepend(img);
+    fallback.remove();
+  });
+
+  img.addEventListener('error', tryNext);
+  tryNext();
+
+  return wrapper;
+}
+
 function openCardTypeModal(field, currentValue, onSelect) {
   const modal = buildModal('Select card type');
 
@@ -457,7 +542,13 @@ function openCardTypeModal(field, currentValue, onSelect) {
       }
 
       const summary = document.createElement('div');
-      summary.innerHTML = `<h3>${choice.label}</h3><p class="helper-text">${choice.value}</p>`;
+      summary.className = 'card-type-summary';
+
+      const thumbnail = createCardTypeThumbnail(choice);
+
+      const details = document.createElement('div');
+      details.className = 'card-type-details';
+      details.innerHTML = `<h3>${choice.label}</h3><p class="helper-text">${choice.value}</p>`;
 
       const selectButton = document.createElement('button');
       selectButton.textContent =
@@ -469,6 +560,9 @@ function openCardTypeModal(field, currentValue, onSelect) {
         onSelect(choice.value);
         closeModal(modal.element);
       });
+
+      summary.prepend(thumbnail);
+      summary.appendChild(details);
 
       item.append(summary, selectButton);
       results.appendChild(item);
