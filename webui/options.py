@@ -263,7 +263,13 @@ def build_series_fields(libraries: dict[str, Any]) -> list[dict[str, Any]]:
         for name in libraries.keys()
     ]
 
-    card_types = sorted(set(TitleCard.CARD_TYPES.keys()))
+    card_types = sorted(
+        (
+            (identifier, identifier.title())
+            for identifier in TitleCard.BUILTIN_CARD_TYPES.keys()
+        ),
+        key=lambda item: item[1].casefold(),
+    )
     style_choices = sorted(set(StyleSet.SPOIL_TYPE_STYLE_MAP.keys()))
     episode_sources = list(PreferenceParser.VALID_EPISODE_DATA_SOURCES)
     font_cases = sorted(BaseCardType.CASE_FUNCTIONS.keys())
@@ -274,7 +280,8 @@ def build_series_fields(libraries: dict[str, Any]) -> list[dict[str, Any]]:
             filled["choices"] = library_choices
         elif field["id"] == "card_type":
             filled["choices"] = [
-                {"value": value, "label": value.title()} for value in card_types
+                {"value": value, "label": label}
+                for value, label in card_types
             ]
         elif field["id"] == "watched_style" or field["id"] == "unwatched_style":
             filled["choices"] = [
