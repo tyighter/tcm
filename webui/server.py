@@ -14,12 +14,35 @@ from .tv_data import TvYamlManager
 
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
 TEMPLATE_ROOT = Path(__file__).resolve().parent / "templates"
-DEFAULT_FONT_DIRECTORY = Path("/config/fonts")
+
+
+def _resolve_font_directory(context: AppContext) -> Path:
+    """Determine the base directory to browse for fonts."""
+
+    candidates = [
+        Path("/config/fonts"),
+        context.preference_file.parent / "fonts",
+    ]
+
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_dir():
+            return candidate
+
+    for candidate in candidates:
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            continue
+        return candidate
+
+    # As a last resort return the first candidate without ensuring it exists.
+    return candidates[0]
 
 
 class WebRequestHandler(BaseHTTPRequestHandler):
     context: AppContext
     tv_manager: TvYamlManager
+    font_directory: Path
 
     # Silence default logging
     def log_message(self, format: str, *args) -> None:  # type: ignore[override]
@@ -92,14 +115,16 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 {
                     "fields": fields,
                     "cardTypes": card_types,
-                    "fontDirectory": DEFAULT_FONT_DIRECTORY.as_posix(),
+                    "fontDirectory": self.font_directory.as_posix(),
                 }
             )
             return
 
         if parsed.path == "/api/fonts":
             params = parse_qs(parsed.query)
-            requested = Path(params.get("path", [DEFAULT_FONT_DIRECTORY.as_posix()])[0])
+            requested = self._resolve_font_path(
+                params.get("path", [self.font_directory.as_posix()])[0]
+            )
             entries = []
             if requested.exists():
                 for item in sorted(requested.iterdir(), key=lambda p: (p.is_file(), p.name.lower())):
@@ -177,6 +202,27 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         self.send_error(HTTPStatus.NOT_FOUND.value)
 
+    def _resolve_font_path(self, raw_path: str) -> Path:
+        """Clamp the requested font browser path to the configured directory."""
+
+        base = self.font_directory.resolve(strict=False)
+        candidate = Path(raw_path) if raw_path else base
+
+        if not candidate.is_absolute():
+            candidate = (base / candidate).resolve(strict=False)
+        else:
+            candidate = candidate.resolve(strict=False)
+
+        try:
+            candidate.relative_to(base)
+        except ValueError:
+            return base
+
+        if not candidate.exists() or not candidate.is_dir():
+            return base
+
+        return candidate
+
 
 def run(port: int = 4343) -> None:
     context = create_app_context()
@@ -184,6 +230,7 @@ def run(port: int = 4343) -> None:
 
     WebRequestHandler.context = context
     WebRequestHandler.tv_manager = tv_manager
+    WebRequestHandler.font_directory = _resolve_font_directory(context)
 
     with ThreadingHTTPServer(("0.0.0.0", port), WebRequestHandler) as server:
         try:
