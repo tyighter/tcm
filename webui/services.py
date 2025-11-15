@@ -5,7 +5,8 @@ import tempfile
 from copy import deepcopy
 from pathlib import Path
 from shutil import rmtree
-from typing import Any
+from threading import Lock
+from typing import Any, Callable
 
 from modules.Manager import Manager
 from modules.Show import Show
@@ -13,6 +14,13 @@ from modules.TitleCard import TitleCard
 
 from .config import AppContext
 from .tv_data import TvYamlManager, _to_builtin
+
+
+class ActionInProgressError(RuntimeError):
+    """Raised when a long-running Manager action is already in progress."""
+
+
+_action_lock = Lock()
 
 
 def merge_series_configuration(
@@ -153,3 +161,28 @@ def generate_preview(
     rmtree(temp_dir, ignore_errors=True)
 
     return "image/jpeg", base64.b64encode(data).decode("ascii")
+
+
+def _run_manager_job(task: Callable[[Manager], None]) -> None:
+    """Execute a Manager job while ensuring only one runs at a time."""
+
+    if not _action_lock.acquire(blocking=False):
+        raise ActionInProgressError("Another task is already running")
+
+    try:
+        manager = Manager(check_tautulli=False)
+        task(manager)
+    finally:
+        _action_lock.release()
+
+
+def run_metadata_sync() -> None:
+    """Trigger only the metadata sync step."""
+
+    _run_manager_job(lambda manager: manager.sync_series_files())
+
+
+def run_builder() -> None:
+    """Run the full TitleCardMaker pipeline."""
+
+    _run_manager_job(lambda manager: manager.run())

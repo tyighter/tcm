@@ -94,6 +94,11 @@ class TvYamlManager:
 
         self._data = current
 
+    def invalidate(self) -> None:
+        """Drop the cached YAML data so it is reloaded on next access."""
+
+        self._data = None
+
     def clone_series_yaml(self, name: str, config: dict[str, Any]) -> dict[str, Any]:
         """Return a deep copy of the provided series YAML."""
 

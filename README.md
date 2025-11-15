@@ -37,6 +37,10 @@ All configuration/automation of the TitleCardMaker is done via YAML files, and t
 
 Read the [Getting Started](https://github.com/CollinHeist/TitleCardMaker/wiki) page on the Wiki for the traditional install, or the [Getting Started on Docker](https://github.com/CollinHeist/TitleCardMaker/wiki/Docker-Tutorial) page to install using Docker.
 
+### ImageMagick dependency
+
+The Maker renders every card with [ImageMagick](https://imagemagick.org/). The [`Dockerfile`](Dockerfile) now installs ImageMagick, its supplemental codecs, and the `convert`/`magick` binaries automatically as part of the build, so running the container never requires any manual host setup. If you're hacking directly on your workstation instead of Docker you'll still need ImageMagick on your `PATH`, but standard Docker deployments pull a fully configured image.
+
 ### Quick start on Docker / Unraid
 
 The container now bootstraps a fresh configuration automatically, making it easy to drop the image straight into Unraid or any Docker host. A minimal `docker-compose.yml` looks like this:

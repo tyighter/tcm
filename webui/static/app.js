@@ -13,6 +13,8 @@ const dom = {
   addEntry: document.getElementById('add-entry'),
   save: document.getElementById('save-config'),
   alphabetize: document.getElementById('alphabetize-entries'),
+  runSync: document.getElementById('run-metadata-sync'),
+  runBuilder: document.getElementById('run-builder'),
   modals: document.getElementById('modals'),
 };
 
@@ -77,6 +79,25 @@ function registerEvents() {
       renderEntries();
       showToast('Entries alphabetized. Save to update tv.yml.', 'success');
     });
+  }
+
+  if (dom.runSync) {
+    dom.runSync.addEventListener('click', () =>
+      triggerServerAction(dom.runSync, '/api/actions/sync', 'Metadata sync complete', {
+        workingLabel: 'Syncing...'
+      })
+    );
+  }
+
+  if (dom.runBuilder) {
+    dom.runBuilder.addEventListener('click', () =>
+      triggerServerAction(
+        dom.runBuilder,
+        '/api/actions/build',
+        'Builder run complete',
+        { workingLabel: 'Building...', refresh: true }
+      )
+    );
   }
 }
 
@@ -1254,5 +1275,45 @@ function showToast(message, type = 'info') {
   toast.textContent = message;
   toastContainer.appendChild(toast);
   setTimeout(() => toast.remove(), 4500);
+}
+
+async function triggerServerAction(
+  button,
+  endpoint,
+  successMessage,
+  { workingLabel = 'Working...', refresh = true } = {}
+) {
+  if (!button) {
+    return;
+  }
+
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = workingLabel;
+
+  try {
+    const response = await fetch(endpoint, { method: 'POST' });
+    let payload = {};
+    try {
+      payload = await response.json();
+    } catch (error) {
+      // Ignore JSON parse errors for non-JSON responses
+    }
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to run action');
+    }
+
+    if (refresh) {
+      await loadConfiguration();
+      renderEntries();
+    }
+    showToast(successMessage, 'success');
+  } catch (error) {
+    const message = error?.message || 'Unable to run action';
+    showToast(message, 'error');
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
 }
 

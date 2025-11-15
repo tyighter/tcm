@@ -1,4 +1,5 @@
 ARG PYVERSION=3.11
+ARG DEBIAN_FRONTEND=noninteractive
 
 # Create pipenv image to convert Pipfile to requirements.txt
 FROM python:${PYVERSION}-slim as pipenv
@@ -40,15 +41,18 @@ ENV TCM_PREFERENCES=/config/preferences.yml \
 
 # Delete setup files
 # Create user and group to run the container
-# Install imagemagick
-# Clean up apt cache
+# Install runtime dependencies (ImageMagick + extras)
 # Override default ImageMagick policy XML file
 RUN set -eux; \
     rm -f Pipfile Pipfile.lock; \
     groupadd -g 99 titlecardmaker; \
     useradd -u 100 -g 99 titlecardmaker; \
     apt-get update; \
-    apt-get install -y --no-install-recommends imagemagick; \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        fonts-dejavu-core \
+        ghostscript \
+        imagemagick; \
     for package in libmagickcore-6.q16-8-extra \
                    libmagickcore-6.q16-7-extra \
                    libmagickcore-6.q16-6-extra; do \
