@@ -110,6 +110,12 @@ def generate_preview(
     show.read_source()
     show.find_multipart_episodes()
 
+    # If no local episode metadata exists yet, fetch it from the media server
+    # so the preview can still render a representative card.
+    if not show.episodes:
+        show.add_new_episodes()
+        show.find_multipart_episodes()
+
     if not show.episodes:
         raise RuntimeError("No episodes are available for preview")
 
