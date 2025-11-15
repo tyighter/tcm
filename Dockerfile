@@ -35,6 +35,9 @@ COPY . /maker
 # Copy python packages from python-reqs
 COPY --from=python-reqs /usr/local /usr/local
 
+# Cache example images for built-in card types
+RUN python3 -m webui.card_type_images
+
 # Script environment variables
 ENV TCM_PREFERENCES=/config/preferences.yml \
     TCM_IS_DOCKER=TRUE

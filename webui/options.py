@@ -6,6 +6,7 @@ from modules.BaseCardType import BaseCardType
 from modules.PreferenceParser import PreferenceParser
 from modules.StyleSet import StyleSet
 from modules.TitleCard import TitleCard
+from .card_type_images import load_card_type_thumbnails, slugify_card_type
 
 SERIES_FIELD_TEMPLATE = [
     {
@@ -270,6 +271,7 @@ def build_series_fields(libraries: dict[str, Any]) -> list[dict[str, Any]]:
         ),
         key=lambda item: item[1].casefold(),
     )
+    thumbnails = load_card_type_thumbnails()
     style_choices = sorted(set(StyleSet.SPOIL_TYPE_STYLE_MAP.keys()))
     episode_sources = list(PreferenceParser.VALID_EPISODE_DATA_SOURCES)
     font_cases = sorted(BaseCardType.CASE_FUNCTIONS.keys())
@@ -279,10 +281,14 @@ def build_series_fields(libraries: dict[str, Any]) -> list[dict[str, Any]]:
         if field["id"] == "library":
             filled["choices"] = library_choices
         elif field["id"] == "card_type":
-            filled["choices"] = [
-                {"value": value, "label": label}
-                for value, label in card_types
-            ]
+            filled["choices"] = []
+            for value, label in card_types:
+                slug = slugify_card_type(value)
+                thumbnail = thumbnails.get(slug)
+                choice = {"value": value, "label": label}
+                if thumbnail:
+                    choice["thumbnail"] = thumbnail
+                filled["choices"].append(choice)
         elif field["id"] == "watched_style" or field["id"] == "unwatched_style":
             filled["choices"] = [
                 {"value": value, "label": value} for value in style_choices
