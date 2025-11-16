@@ -35,6 +35,35 @@ logger = logging.getLogger(__name__)
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
 CONFIG_THUMBNAIL_ROOT = Path("/config/thumbnails")
 TEMPLATE_ROOT = Path(__file__).resolve().parent / "templates"
+LOG_FILE = Path("/config/webui.log")
+
+
+def _configure_logging() -> None:
+    """Configure logging to stdout and a fresh log file in /config."""
+
+    log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+
+    handlers: list[logging.Handler] = []
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging.INFO)
+    stream_handler.setFormatter(logging.Formatter(log_format))
+    handlers.append(stream_handler)
+
+    try:
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(LOG_FILE, mode="w")
+    except OSError as exc:
+        print(f"Unable to create log file {LOG_FILE}: {exc}")
+    else:
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter(log_format))
+        handlers.append(file_handler)
+
+    logging.basicConfig(level=logging.DEBUG, handlers=handlers, force=True)
+
+    if any(isinstance(handler, logging.FileHandler) for handler in handlers):
+        logger.info("Writing web UI logs to %s", LOG_FILE)
 
 
 def _resolve_font_directory(context: AppContext) -> Path:
@@ -89,6 +118,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         """Return a thumbnail file matching the requested card type image."""
 
         requested_slug = slugify_card_type(Path(requested_name).stem)
+        logger.debug("Resolving thumbnail for %s (slug=%s)", requested_name, requested_slug)
         search_roots = []
         try:
             search_roots.append(CONFIG_THUMBNAIL_ROOT.resolve())
@@ -102,6 +132,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         seen: set[Path] = set()
         for root in search_roots:
             if root in seen or not root.exists():
+                logger.debug("Skipping thumbnail root %s (seen=%s, exists=%s)", root, root in seen, root.exists())
                 continue
             seen.add(root)
 
@@ -111,8 +142,12 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
                 candidate_slug = slugify_card_type(path.stem)
                 if _match_thumbnail_slug(requested_slug, {candidate_slug}):
+                    logger.debug(
+                        "Matched thumbnail %s for slug %s", path, requested_slug
+                    )
                     return path
 
+        logger.debug("No thumbnail found for slug %s", requested_slug)
         return None
 
     def _parse_json(self) -> dict:
@@ -169,14 +204,17 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             params = parse_qs(parsed.query)
             slug = params.get("slug", [""])[0].strip()
             if not slug:
+                logger.debug("Thumbnail API request missing slug: %s", self.path)
                 self._error("Missing card type slug")
                 return
 
             match = self._resolve_card_type_thumbnail(slug)
             if match is None:
+                logger.info("Thumbnail not found for slug %s", slug)
                 self.send_error(HTTPStatus.NOT_FOUND.value)
                 return
 
+            logger.debug("Serving thumbnail %s for slug %s", match, slug)
             self._serve_file(match)
             return
 
@@ -426,11 +464,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
 
 def run(port: int = 4343) -> None:
-    if not logging.getLogger().handlers:
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        )
+    _configure_logging()
 
     context = create_app_context()
     tv_manager = TvYamlManager(context.default_tv_file)
