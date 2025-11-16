@@ -174,8 +174,9 @@ def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, str]:
         target = CARD_TYPE_STATIC_ROOT / target_name
 
         try:
-            if not target.exists() or path.stat().st_mtime > target.stat().st_mtime:
-                target.write_bytes(path.read_bytes())
+            # Always overwrite so user-provided thumbnails (especially from
+            # /config/thumbnails) take precedence over the bundled defaults.
+            target.write_bytes(path.read_bytes())
         except OSError:
             continue
 
