@@ -770,11 +770,47 @@ function fontPicker(entry, field, value) {
     updateField(entry, field, event.target.value || undefined);
   });
 
+  const uploadInput = document.createElement('input');
+  uploadInput.type = 'file';
+  uploadInput.accept = '.ttf,.otf,.woff,.woff2';
+  uploadInput.style.display = 'none';
+
   const browse = document.createElement('button');
   browse.textContent = 'Browse';
   browse.addEventListener('click', () => openFontBrowser(entry, field, input));
 
-  wrapper.append(input, browse);
+  const upload = document.createElement('button');
+  upload.textContent = 'Upload';
+  upload.addEventListener('click', () => uploadInput.click());
+
+  uploadInput.addEventListener('change', async (event) => {
+    const [file] = event.target.files || [];
+    if (!file) return;
+
+    const targetDirectory = PathParent(input.value) || state.fontDirectory;
+
+    upload.disabled = true;
+    const originalLabel = upload.textContent;
+    upload.textContent = 'Uploading...';
+
+    try {
+      const { path } = await uploadFont(file, targetDirectory);
+      if (path) {
+        input.value = path;
+        updateField(entry, field, path);
+        showToast(`Uploaded ${file.name}`, 'success');
+      }
+    } catch (error) {
+      const message = error?.message || 'Upload failed';
+      showToast(message, 'error');
+    } finally {
+      upload.disabled = false;
+      upload.textContent = originalLabel;
+      uploadInput.value = '';
+    }
+  });
+
+  wrapper.append(input, browse, uploadInput, upload);
   return wrapper;
 }
 
@@ -1127,6 +1163,26 @@ function PathParent(path) {
   if (parts.length === 0) return null;
   parts.pop();
   return `/${parts.join('/')}`;
+}
+
+async function uploadFont(file, targetDirectory) {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (targetDirectory) {
+    formData.append('path', targetDirectory);
+  }
+
+  const response = await fetch('/api/fonts/upload', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || 'Unable to upload font');
+  }
+
+  return response.json();
 }
 
 function openPreview(entry) {

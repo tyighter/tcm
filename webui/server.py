@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import mimetypes
+from cgi import FieldStorage
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -32,24 +33,14 @@ TEMPLATE_ROOT = Path(__file__).resolve().parent / "templates"
 def _resolve_font_directory(context: AppContext) -> Path:
     """Determine the base directory to browse for fonts."""
 
-    candidates = [
-        Path("/config/fonts"),
-        context.preference_file.parent / "fonts",
-    ]
+    base = Path("/config/fonts")
 
-    for candidate in candidates:
-        if candidate.exists() and candidate.is_dir():
-            return candidate
+    try:
+        base.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        logger.warning("Unable to ensure font directory %s: %s", base, exc)
 
-    for candidate in candidates:
-        try:
-            candidate.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            continue
-        return candidate
-
-    # As a last resort return the first candidate without ensuring it exists.
-    return candidates[0]
+    return base
 
 
 class WebRequestHandler(BaseHTTPRequestHandler):
@@ -300,6 +291,52 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 lambda: forget_series_cards(self.tv_manager, series_name, series_config),
                 context=f"forget-cards:{series_name}",
             )
+            return
+
+        if parsed.path == "/api/fonts/upload":
+            content_type = self.headers.get("Content-Type", "")
+            if "multipart/form-data" not in content_type:
+                self._error(
+                    "Uploads must be sent as multipart form data",
+                    status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                )
+                return
+
+            form = FieldStorage(
+                fp=self.rfile,
+                headers=self.headers,
+                environ={
+                    "REQUEST_METHOD": "POST",
+                    "CONTENT_TYPE": content_type,
+                    "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
+                },
+                keep_blank_values=True,
+            )
+
+            file_field = form.get("file")
+            if not file_field or not getattr(file_field, "filename", None):
+                self._error("Missing font file")
+                return
+
+            filename = Path(file_field.filename).name
+            target_directory = self._resolve_font_path(
+                form.getfirst("path", self.font_directory.as_posix())
+            )
+
+            try:
+                target_directory.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:  # pylint: disable=broad-except
+                self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
+                return
+
+            destination = (target_directory / filename).resolve(strict=False)
+            try:
+                destination.write_bytes(file_field.file.read())
+            except OSError as exc:  # pylint: disable=broad-except
+                self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
+                return
+
+            self._json_response({"status": "ok", "path": destination.as_posix()})
             return
 
         self.send_error(HTTPStatus.NOT_FOUND.value)
