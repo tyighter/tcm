@@ -150,6 +150,10 @@ def _match_thumbnail_slug(slug: str, known_slugs: set[str]) -> str | None:
         if slug.startswith(f"{candidate}-") or slug.endswith(f"-{candidate}"):
             return candidate
 
+        parts = slug.split("-")
+        if candidate in parts:
+            return candidate
+
     return None
 
 
