@@ -165,6 +165,21 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             self.send_error(HTTPStatus.NOT_FOUND.value)
             return
 
+        if parsed.path == "/api/card-types/thumbnail":
+            params = parse_qs(parsed.query)
+            slug = params.get("slug", [""])[0].strip()
+            if not slug:
+                self._error("Missing card type slug")
+                return
+
+            match = self._resolve_card_type_thumbnail(slug)
+            if match is None:
+                self.send_error(HTTPStatus.NOT_FOUND.value)
+                return
+
+            self._serve_file(match)
+            return
+
         if parsed.path == "/api/config":
             payload = self.tv_manager.as_payload()
             self._json_response(payload)

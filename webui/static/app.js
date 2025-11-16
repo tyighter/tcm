@@ -460,6 +460,12 @@ function slugifyCardType(value) {
 }
 
 function cardTypeImageCandidates(choice) {
+  const slug = slugifyCardType(choice.value || choice.label || '');
+
+  const apiCandidate = slug
+    ? `/api/card-types/thumbnail?slug=${encodeURIComponent(slug)}`
+    : null;
+
   const baseUrls = [
     '/static/card-types',
     'https://raw.githubusercontent.com/wiki/CollinHeist/TitleCardMaker/images/card-types',
@@ -467,7 +473,6 @@ function cardTypeImageCandidates(choice) {
     'https://raw.githubusercontent.com/wiki/CollinHeist/TitleCardMaker',
   ];
 
-  const slug = slugifyCardType(choice.value || choice.label || '');
   const titleCasedSlug = slug
     .split('-')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -488,6 +493,7 @@ function cardTypeImageCandidates(choice) {
   }
 
   const candidates = [
+    apiCandidate,
     ...explicit,
     ...baseUrls.flatMap((base) => filenames.map((name) => `${base}/${name}`)),
   ];
