@@ -1453,6 +1453,7 @@ async function triggerServerAction(
     showToast(successMessage, 'success');
   } catch (error) {
     const message = error?.message || 'Unable to run action';
+    console.error('Action request failed', { endpoint, payload, error });
     showToast(message, 'error');
   } finally {
     button.disabled = false;
