@@ -26,7 +26,10 @@ _image_regex = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
 def slugify_card_type(name: str) -> str:
     """Normalize a card type name for consistent matching."""
 
-    return _slug_regex.sub("-", name.strip().lower()).strip("-")
+    slug = _slug_regex.sub("-", name.strip().lower()).strip("-")
+    slug = re.sub(r"([a-z])([0-9])", r"\1-\2", slug)
+    slug = re.sub(r"([0-9])([a-z])", r"\1-\2", slug)
+    return re.sub(r"-+", "-", slug).strip("-")
 
 
 def _iter_image_urls(markdown: str) -> Iterable[str]:
@@ -126,9 +129,14 @@ def _load_local_thumbnails() -> dict[str, str]:
     thumbnails: dict[str, str] = {}
 
     for path in _iter_thumbnail_paths():
+        slug = slugify_card_type(path.stem)
+        if not slug:
+            continue
+
         CARD_TYPE_STATIC_ROOT.mkdir(parents=True, exist_ok=True)
 
-        target = CARD_TYPE_STATIC_ROOT / path.name
+        target_name = f"{slug}{path.suffix.lower()}"
+        target = CARD_TYPE_STATIC_ROOT / target_name
 
         try:
             if not target.exists() or path.stat().st_mtime > target.stat().st_mtime:
@@ -136,8 +144,7 @@ def _load_local_thumbnails() -> dict[str, str]:
         except OSError:
             continue
 
-        slug = slugify_card_type(path.stem)
-        thumbnails[slug] = f"/static/card-types/{path.name}"
+        thumbnails[slug] = f"/static/card-types/{target_name}"
 
     return thumbnails
 
