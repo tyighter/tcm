@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import mimetypes
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -21,6 +22,8 @@ from .services import (
     search_plex,
 )
 from .tv_data import TvYamlManager
+
+logger = logging.getLogger(__name__)
 
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
 TEMPLATE_ROOT = Path(__file__).resolve().parent / "templates"
@@ -92,13 +95,16 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         except json.JSONDecodeError as exc:
             raise ValueError("Invalid JSON payload") from exc
 
-    def _run_manager_action(self, action: Callable[[], None]) -> None:
+    def _run_manager_action(self, action: Callable[[], None], *, context: str | None = None) -> None:
+        if context:
+            logger.info("Running action: %s", context)
         try:
             action()
         except ActionInProgressError as exc:
             self._error(str(exc), status=HTTPStatus.CONFLICT)
             return
         except Exception as exc:  # pylint: disable=broad-except
+            logger.exception("Action %s failed", context or action)
             self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
             return
 
@@ -224,11 +230,11 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/actions/sync":
-            self._run_manager_action(run_metadata_sync)
+            self._run_manager_action(run_metadata_sync, context="metadata-sync")
             return
 
         if parsed.path == "/api/actions/build":
-            self._run_manager_action(run_builder)
+            self._run_manager_action(run_builder, context="build-all")
             return
 
         if parsed.path == "/api/actions/build-series":
@@ -244,10 +250,13 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             series_config = payload.get("config") if isinstance(payload, dict) else None
+            logger.info("Build requested for %s", series_name)
+            logger.debug("Series config: %s", series_config)
             self._run_manager_action(
                 lambda: run_builder_for_series(
                     self.context, self.tv_manager, series_name, series_config
-                )
+                ),
+                context=f"build-series:{series_name}",
             )
             return
 
@@ -264,8 +273,11 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             series_config = payload.get("config") if isinstance(payload, dict) else None
+            logger.info("Revert requested for %s", series_name)
+            logger.debug("Series config: %s", series_config)
             self._run_manager_action(
-                lambda: revert_series_cards(self.tv_manager, series_name, series_config)
+                lambda: revert_series_cards(self.tv_manager, series_name, series_config),
+                context=f"revert-series:{series_name}",
             )
             return
 
@@ -282,8 +294,11 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             series_config = payload.get("config") if isinstance(payload, dict) else None
+            logger.info("Forget cards requested for %s", series_name)
+            logger.debug("Series config: %s", series_config)
             self._run_manager_action(
-                lambda: forget_series_cards(self.tv_manager, series_name, series_config)
+                lambda: forget_series_cards(self.tv_manager, series_name, series_config),
+                context=f"forget-cards:{series_name}",
             )
             return
 
@@ -312,6 +327,12 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
 
 def run(port: int = 4343) -> None:
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        )
+
     context = create_app_context()
     tv_manager = TvYamlManager(context.default_tv_file)
 
