@@ -18,6 +18,37 @@ DOCKER_THUMBNAIL_ROOT = Path("/config/thumbnails")
 MANIFEST_FILENAME = "manifest.json"
 THUMBNAIL_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
+# Mapping of card type names to their expected thumbnail filenames in /config/thumbnails.
+DEFAULT_THUMBNAIL_MAP = {
+    "Anime": "anime.jpg",
+    "Banner": "banner.jpg",
+    "Calligraphy": "calligraphy.jpg",
+    "Comic Book": "comicbook.jpg",
+    "Cutout": "cutout.jpg",
+    "Divider": "divider.jpg",
+    "Fade": "fade.jpg",
+    "Formula 1": "formula1.jpg",
+    "Frame": "frame.jpg",
+    "Graph": "graph.jpg",
+    "Inset": "inset.jpg",
+    "Landscape": "landscape.jpg",
+    "Logo": "logo.jpg",
+    "Marvel": "marvel.jpg",
+    "Music": "music.jpg",
+    "Notification": "notification.jpg",
+    "Olivier": "olivier.jpg",
+    "Overline": "overline.jpg",
+    "Poster": "poster.jpg",
+    "Roman Numeral": "roman.jpg",
+    "Shape": "shape.jpg",
+    "Standard": "standard.jpg",
+    "Star Wars": "starwars.jpg",
+    "Striped": "striped.jpg",
+    "Textless": "textless.jpg",
+    "Tinted Frame": "tintedframe.jpg",
+    "Tinted Glass": "tintedglass.jpg",
+}
+
 
 _slug_regex = re.compile(r"[^a-z0-9]+")
 _image_regex = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
@@ -161,8 +192,39 @@ def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, str]:
     """Copy bundled thumbnails into the static folder and return their URLs."""
 
     thumbnails: dict[str, str] = {}
+    seen_paths: set[Path] = set()
+
+    # Ensure default thumbnails map to the correct card type slug even when the
+    # filename doesn't match (e.g., "comicbook.jpg" -> "comic-book"). Prefer
+    # user-supplied files from /config over the bundled defaults.
+    for name, filename in DEFAULT_THUMBNAIL_MAP.items():
+        slug = slugify_card_type(name)
+        for root in (DOCKER_THUMBNAIL_ROOT, REPO_THUMBNAIL_ROOT):
+            path = root / filename
+            try:
+                if not path.exists() or path in seen_paths:
+                    continue
+            except OSError:
+                continue
+
+            CARD_TYPE_STATIC_ROOT.mkdir(parents=True, exist_ok=True)
+
+            target_name = f"{slug}{path.suffix.lower()}"
+            target = CARD_TYPE_STATIC_ROOT / target_name
+
+            try:
+                target.write_bytes(path.read_bytes())
+            except OSError:
+                continue
+
+            thumbnails[slug] = f"/static/card-types/{target_name}"
+            seen_paths.add(path)
+            break
 
     for path in _iter_thumbnail_paths():
+        if path in seen_paths:
+            continue
+
         source_slug = slugify_card_type(path.stem)
         target_slug = _match_thumbnail_slug(source_slug, known_slugs) or source_slug
         if not target_slug:
