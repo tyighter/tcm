@@ -1436,14 +1436,14 @@ async function triggerServerAction(
     }
 
     const response = await fetch(endpoint, requestOptions);
-    let payload = {};
+    let responsePayload = {};
     try {
-      payload = await response.json();
+      responsePayload = await response.json();
     } catch (error) {
       // Ignore JSON parse errors for non-JSON responses
     }
     if (!response.ok) {
-      throw new Error(payload.error || 'Failed to run action');
+      throw new Error(responsePayload.error || 'Failed to run action');
     }
 
     if (refresh) {
