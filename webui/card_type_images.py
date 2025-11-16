@@ -99,6 +99,16 @@ def load_card_type_thumbnails(
         slug = slugify_card_type(key)
         thumbnails.setdefault(slug, value)
 
+    # If a thumbnail exists for an alias but not its canonical card type,
+    # reuse the alias image so every selectable card type shows a thumbnail.
+    from modules.TitleCard import TitleCard
+
+    for alias, target in TitleCard.CARD_TYPE_ALIASES.items():
+        alias_slug = slugify_card_type(alias)
+        target_slug = slugify_card_type(target)
+        if alias_slug in thumbnails and target_slug not in thumbnails:
+            thumbnails[target_slug] = thumbnails[alias_slug]
+
     return thumbnails
 
 
