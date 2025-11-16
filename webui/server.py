@@ -27,6 +27,7 @@ from .tv_data import TvYamlManager
 logger = logging.getLogger(__name__)
 
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
+CONFIG_THUMBNAIL_ROOT = Path("/config/thumbnails")
 TEMPLATE_ROOT = Path(__file__).resolve().parent / "templates"
 
 
@@ -115,7 +116,17 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             if not str(target).startswith(str(STATIC_ROOT.resolve())):
                 self.send_error(HTTPStatus.NOT_FOUND.value)
                 return
-            self._serve_file(target)
+            if target.exists() and target.is_file():
+                self._serve_file(target)
+                return
+
+            if rel.startswith("card-types/"):
+                fallback = CONFIG_THUMBNAIL_ROOT / Path(rel).name
+                if fallback.exists() and fallback.is_file():
+                    self._serve_file(fallback)
+                    return
+
+            self.send_error(HTTPStatus.NOT_FOUND.value)
             return
 
         if parsed.path == "/api/config":
