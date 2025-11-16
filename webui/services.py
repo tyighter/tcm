@@ -110,6 +110,7 @@ def generate_preview(
         raise RuntimeError("Series configuration is invalid; check required fields")
 
     manager = Manager(check_tautulli=False)
+    manager.sync_series_files()
     show.assign_interfaces(
         manager.emby_interface,
         manager.jellyfin_interface,
@@ -225,6 +226,7 @@ def run_builder_for_series(
         raise RuntimeError("Series configuration is invalid; check required fields")
 
     def _run(manager: Manager) -> None:
+        manager.sync_series_files()
         manager.shows = [show]
         manager.archives = []
 
