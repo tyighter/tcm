@@ -13,7 +13,8 @@ CARD_TYPE_MARKDOWN_URL = (
     "https://raw.githubusercontent.com/wiki/CollinHeist/TitleCardMaker/Custom-Card-Types.md"
 )
 CARD_TYPE_STATIC_ROOT = Path(__file__).resolve().parent / "static" / "card-types"
-LOCAL_THUMBNAIL_ROOT = Path(__file__).resolve().parent.parent / "config" / "thumbnails"
+REPO_THUMBNAIL_ROOT = Path(__file__).resolve().parent.parent / "config" / "thumbnails"
+DOCKER_THUMBNAIL_ROOT = Path("/config/thumbnails")
 MANIFEST_FILENAME = "manifest.json"
 THUMBNAIL_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -98,18 +99,34 @@ def load_card_type_thumbnails(
     return thumbnails
 
 
+def _iter_thumbnail_paths() -> Iterable[Path]:
+    """Yield thumbnail files from known configuration directories."""
+
+    roots = set()
+    for root in (REPO_THUMBNAIL_ROOT, DOCKER_THUMBNAIL_ROOT):
+        try:
+            resolved = root.resolve()
+        except OSError:
+            continue
+        if resolved in roots:
+            continue
+        roots.add(resolved)
+
+        if not root.exists():
+            continue
+
+        for path in root.iterdir():
+            if path.is_file() and path.suffix.lower() in THUMBNAIL_EXTENSIONS:
+                yield path
+
+
 def _load_local_thumbnails() -> dict[str, str]:
     """Copy bundled thumbnails into the static folder and return their URLs."""
 
-    if not LOCAL_THUMBNAIL_ROOT.exists():
-        return {}
-
-    CARD_TYPE_STATIC_ROOT.mkdir(parents=True, exist_ok=True)
-
     thumbnails: dict[str, str] = {}
-    for path in LOCAL_THUMBNAIL_ROOT.iterdir():
-        if not path.is_file() or path.suffix.lower() not in THUMBNAIL_EXTENSIONS:
-            continue
+
+    for path in _iter_thumbnail_paths():
+        CARD_TYPE_STATIC_ROOT.mkdir(parents=True, exist_ok=True)
 
         target = CARD_TYPE_STATIC_ROOT / path.name
 
