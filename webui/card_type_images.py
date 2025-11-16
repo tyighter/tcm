@@ -13,7 +13,7 @@ CARD_TYPE_MARKDOWN_URL = (
     "https://raw.githubusercontent.com/wiki/CollinHeist/TitleCardMaker/Custom-Card-Types.md"
 )
 CARD_TYPE_STATIC_ROOT = Path(__file__).resolve().parent / "static" / "card-types"
-LOCAL_THUMBNAIL_ROOT = Path(__file__).resolve().parent.parent / "thumbnails"
+LOCAL_THUMBNAIL_ROOT = Path(__file__).resolve().parent.parent / "config" / "thumbnails"
 MANIFEST_FILENAME = "manifest.json"
 THUMBNAIL_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
