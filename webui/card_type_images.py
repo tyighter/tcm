@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import urlparse
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 CARD_TYPE_MARKDOWN_URL = (
     "https://raw.githubusercontent.com/wiki/CollinHeist/TitleCardMaker/Custom-Card-Types.md"
@@ -118,16 +121,22 @@ def load_card_type_thumbnails(
         slugify_card_type(name) for name in TitleCard.BUILTIN_CARD_TYPES.keys()
     }
 
+    logger.debug("Loading card type thumbnails; manifest_path=%s", manifest_path)
+
     thumbnails = _load_local_thumbnails(known_slugs)
     manifest_path = manifest_path or CARD_TYPE_STATIC_ROOT / MANIFEST_FILENAME
     try:
         raw = manifest_path.read_text()
     except FileNotFoundError:
+        logger.info("Thumbnail manifest not found at %s", manifest_path)
         manifest = {}
     else:
         try:
             manifest = json.loads(raw)
         except json.JSONDecodeError:
+            logger.warning(
+                "Thumbnail manifest file is not valid JSON: %s", manifest_path
+            )
             manifest = {}
 
     for key, value in manifest.items():
@@ -136,6 +145,12 @@ def load_card_type_thumbnails(
 
         slug = slugify_card_type(key)
         thumbnails.setdefault(slug, value)
+    logger.debug(
+        "Loaded %d thumbnails (%d from manifest, %d from local files)",
+        len(thumbnails),
+        len(manifest),
+        len(thumbnails) - len(manifest),
+    )
 
     # If a thumbnail exists for an alias but not its canonical card type,
     # reuse the alias image so every selectable card type shows a thumbnail.
@@ -144,6 +159,9 @@ def load_card_type_thumbnails(
         target_slug = slugify_card_type(target)
         if alias_slug in thumbnails and target_slug not in thumbnails:
             thumbnails[target_slug] = thumbnails[alias_slug]
+            logger.debug(
+                "Mapped alias thumbnail %s -> %s", alias_slug, target_slug
+            )
 
     return thumbnails
 
@@ -162,10 +180,12 @@ def _iter_thumbnail_paths() -> Iterable[Path]:
         roots.add(resolved)
 
         if not root.exists():
+            logger.debug("Thumbnail root does not exist: %s", resolved)
             continue
 
         for path in root.iterdir():
             if path.is_file() and path.suffix.lower() in THUMBNAIL_EXTENSIONS:
+                logger.debug("Discovered thumbnail candidate: %s", path)
                 yield path
 
 
@@ -223,6 +243,7 @@ def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, str]:
 
             thumbnails[slug] = f"/static/card-types/{target_name}"
             seen_paths.add(path)
+            logger.debug("Copied default thumbnail for %s from %s", slug, path)
             break
 
     for path in _iter_thumbnail_paths():
@@ -247,6 +268,7 @@ def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, str]:
             continue
 
         thumbnails[target_slug] = f"/static/card-types/{target_name}"
+        logger.debug("Registered thumbnail for %s from %s", target_slug, path)
 
     return thumbnails
 
