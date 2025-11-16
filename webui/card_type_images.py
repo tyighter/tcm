@@ -47,6 +47,7 @@ DEFAULT_THUMBNAIL_MAP = {
     "Textless": "textless.jpg",
     "Tinted Frame": "tintedframe.jpg",
     "Tinted Glass": "tintedglass.jpg",
+    "White Border": "whiteborder.jpg",
 }
 
 
@@ -183,6 +184,9 @@ def _match_thumbnail_slug(slug: str, known_slugs: set[str]) -> str | None:
 
         parts = slug.split("-")
         if candidate in parts:
+            return candidate
+
+        if slug.replace("-", "") == candidate.replace("-", ""):
             return candidate
 
     return None
