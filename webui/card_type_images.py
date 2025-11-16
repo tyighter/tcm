@@ -80,7 +80,13 @@ def load_card_type_thumbnails(
 ) -> dict[str, str]:
     """Load cached card type thumbnails from the manifest file."""
 
-    thumbnails = _load_local_thumbnails()
+    from modules.TitleCard import TitleCard
+
+    known_slugs = {
+        slugify_card_type(name) for name in TitleCard.BUILTIN_CARD_TYPES.keys()
+    }
+
+    thumbnails = _load_local_thumbnails(known_slugs)
     manifest_path = manifest_path or CARD_TYPE_STATIC_ROOT / MANIFEST_FILENAME
     try:
         raw = manifest_path.read_text()
@@ -101,8 +107,6 @@ def load_card_type_thumbnails(
 
     # If a thumbnail exists for an alias but not its canonical card type,
     # reuse the alias image so every selectable card type shows a thumbnail.
-    from modules.TitleCard import TitleCard
-
     for alias, target in TitleCard.CARD_TYPE_ALIASES.items():
         alias_slug = slugify_card_type(alias)
         target_slug = slugify_card_type(target)
@@ -133,19 +137,36 @@ def _iter_thumbnail_paths() -> Iterable[Path]:
                 yield path
 
 
-def _load_local_thumbnails() -> dict[str, str]:
+def _match_thumbnail_slug(slug: str, known_slugs: set[str]) -> str | None:
+    """Return the card type slug that best matches the thumbnail file name."""
+
+    if not slug:
+        return None
+
+    if slug in known_slugs:
+        return slug
+
+    for candidate in sorted(known_slugs, key=len, reverse=True):
+        if slug.startswith(f"{candidate}-") or slug.endswith(f"-{candidate}"):
+            return candidate
+
+    return None
+
+
+def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, str]:
     """Copy bundled thumbnails into the static folder and return their URLs."""
 
     thumbnails: dict[str, str] = {}
 
     for path in _iter_thumbnail_paths():
-        slug = slugify_card_type(path.stem)
-        if not slug:
+        source_slug = slugify_card_type(path.stem)
+        target_slug = _match_thumbnail_slug(source_slug, known_slugs) or source_slug
+        if not target_slug:
             continue
 
         CARD_TYPE_STATIC_ROOT.mkdir(parents=True, exist_ok=True)
 
-        target_name = f"{slug}{path.suffix.lower()}"
+        target_name = f"{target_slug}{path.suffix.lower()}"
         target = CARD_TYPE_STATIC_ROOT / target_name
 
         try:
@@ -154,7 +175,7 @@ def _load_local_thumbnails() -> dict[str, str]:
         except OSError:
             continue
 
-        thumbnails[slug] = f"/static/card-types/{target_name}"
+        thumbnails[target_slug] = f"/static/card-types/{target_name}"
 
     return thumbnails
 
