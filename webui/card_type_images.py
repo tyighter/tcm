@@ -13,7 +13,9 @@ CARD_TYPE_MARKDOWN_URL = (
     "https://raw.githubusercontent.com/wiki/CollinHeist/TitleCardMaker/Custom-Card-Types.md"
 )
 CARD_TYPE_STATIC_ROOT = Path(__file__).resolve().parent / "static" / "card-types"
+LOCAL_THUMBNAIL_ROOT = Path(__file__).resolve().parent.parent / "thumbnails"
 MANIFEST_FILENAME = "manifest.json"
+THUMBNAIL_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 
 _slug_regex = re.compile(r"[^a-z0-9]+")
@@ -74,22 +76,53 @@ def load_card_type_thumbnails(
 ) -> dict[str, str]:
     """Load cached card type thumbnails from the manifest file."""
 
+    thumbnails = _load_local_thumbnails()
     manifest_path = manifest_path or CARD_TYPE_STATIC_ROOT / MANIFEST_FILENAME
     try:
         raw = manifest_path.read_text()
     except FileNotFoundError:
+        manifest = {}
+    else:
+        try:
+            manifest = json.loads(raw)
+        except json.JSONDecodeError:
+            manifest = {}
+
+    for key, value in manifest.items():
+        if not isinstance(value, str):
+            continue
+
+        slug = slugify_card_type(key)
+        thumbnails.setdefault(slug, value)
+
+    return thumbnails
+
+
+def _load_local_thumbnails() -> dict[str, str]:
+    """Copy bundled thumbnails into the static folder and return their URLs."""
+
+    if not LOCAL_THUMBNAIL_ROOT.exists():
         return {}
 
-    try:
-        manifest = json.loads(raw)
-    except json.JSONDecodeError:
-        return {}
+    CARD_TYPE_STATIC_ROOT.mkdir(parents=True, exist_ok=True)
 
-    return {
-        slugify_card_type(key): value
-        for key, value in manifest.items()
-        if isinstance(value, str)
-    }
+    thumbnails: dict[str, str] = {}
+    for path in LOCAL_THUMBNAIL_ROOT.iterdir():
+        if not path.is_file() or path.suffix.lower() not in THUMBNAIL_EXTENSIONS:
+            continue
+
+        target = CARD_TYPE_STATIC_ROOT / path.name
+
+        try:
+            if not target.exists() or path.stat().st_mtime > target.stat().st_mtime:
+                target.write_bytes(path.read_bytes())
+        except OSError:
+            continue
+
+        slug = slugify_card_type(path.stem)
+        thumbnails[slug] = f"/static/card-types/{path.name}"
+
+    return thumbnails
 
 
 def main() -> None:
