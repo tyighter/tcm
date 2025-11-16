@@ -12,9 +12,12 @@ from .config import AppContext, create_app_context
 from .options import build_series_fields
 from .services import (
     ActionInProgressError,
+    forget_series_cards,
     generate_preview,
     run_builder,
+    run_builder_for_series,
     run_metadata_sync,
+    revert_series_cards,
     search_plex,
 )
 from .tv_data import TvYamlManager
@@ -226,6 +229,62 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/actions/build":
             self._run_manager_action(run_builder)
+            return
+
+        if parsed.path == "/api/actions/build-series":
+            try:
+                payload = self._parse_json()
+            except ValueError as exc:
+                self._error(str(exc))
+                return
+
+            series_name = payload.get("name")
+            if not series_name:
+                self._error("Missing series name")
+                return
+
+            series_config = payload.get("config") if isinstance(payload, dict) else None
+            self._run_manager_action(
+                lambda: run_builder_for_series(
+                    self.context, self.tv_manager, series_name, series_config
+                )
+            )
+            return
+
+        if parsed.path == "/api/actions/revert-series":
+            try:
+                payload = self._parse_json()
+            except ValueError as exc:
+                self._error(str(exc))
+                return
+
+            series_name = payload.get("name")
+            if not series_name:
+                self._error("Missing series name")
+                return
+
+            series_config = payload.get("config") if isinstance(payload, dict) else None
+            self._run_manager_action(
+                lambda: revert_series_cards(self.tv_manager, series_name, series_config)
+            )
+            return
+
+        if parsed.path == "/api/actions/forget-cards":
+            try:
+                payload = self._parse_json()
+            except ValueError as exc:
+                self._error(str(exc))
+                return
+
+            series_name = payload.get("name")
+            if not series_name:
+                self._error("Missing series name")
+                return
+
+            series_config = payload.get("config") if isinstance(payload, dict) else None
+            self._run_manager_action(
+                lambda: forget_series_cards(self.tv_manager, series_name, series_config)
+            )
             return
 
         self.send_error(HTTPStatus.NOT_FOUND.value)

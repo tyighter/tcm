@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import base64
+import re
+import subprocess
+import sys
 import tempfile
 from copy import deepcopy
 from pathlib import Path
@@ -10,6 +13,7 @@ from typing import Any, Callable
 
 from modules.Manager import Manager
 from modules.Show import Show
+from modules.ShowArchive import ShowArchive
 from modules.TitleCard import TitleCard
 
 from .config import AppContext
@@ -161,6 +165,149 @@ def generate_preview(
     rmtree(temp_dir, ignore_errors=True)
 
     return "image/jpeg", base64.b64encode(data).decode("ascii")
+
+
+def _prepare_series_context(
+    tv_manager: TvYamlManager,
+    series_name: str,
+    series_config: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Resolve a usable series configuration for the given entry."""
+
+    if series_config is not None:
+        return tv_manager.clone_series_yaml(series_name, series_config)
+
+    data = tv_manager.load()
+    source_config = data.get("series", {}).get(series_name)
+    if source_config is None:
+        raise ValueError(f'Series "{series_name}" was not found in tv.yml')
+
+    return tv_manager.clone_series_yaml(series_name, source_config)
+
+
+def _split_series_name(series_name: str) -> tuple[str, str]:
+    """Split a series name into title and year components."""
+
+    match = re.match(r"^(.*)\((\d{4})\)\s*$", series_name)
+    if not match:
+        raise ValueError(
+            "Series name must include a year in parentheses, e.g. "
+            '"Example (2024)"'
+        )
+
+    title = match.group(1).strip()
+    year = match.group(2)
+    return title, year
+
+
+def run_builder_for_series(
+    context: AppContext,
+    tv_manager: TvYamlManager,
+    series_name: str,
+    series_config: dict[str, Any] | None = None,
+) -> None:
+    """Run the builder pipeline for a single series."""
+
+    config = _prepare_series_context(tv_manager, series_name, series_config)
+
+    runtime_config = merge_series_configuration(
+        context, tv_manager, series_name, config
+    )
+
+    show = Show(
+        series_name,
+        runtime_config,
+        context.preference_parser.source_directory,
+        context.preference_parser,
+    )
+
+    if not show.valid:
+        raise RuntimeError("Series configuration is invalid; check required fields")
+
+    def _run(manager: Manager) -> None:
+        manager.shows = [show]
+        manager.archives = []
+
+        if manager.preferences.create_archive and show.archive:
+            manager.archives = [
+                ShowArchive(manager.preferences.archive_directory, show)
+            ]
+
+        manager._Manager__run(serial=True)  # pylint: disable=protected-access
+
+    _run_manager_job(_run)
+
+
+def _run_fixer_command(arguments: list[str]) -> None:
+    """Execute fixer.py with the supplied arguments, ensuring exclusivity."""
+
+    if not _action_lock.acquire(blocking=False):
+        raise ActionInProgressError("Another task is already running")
+
+    try:
+        result = subprocess.run(
+            arguments, capture_output=True, check=False, text=True
+        )
+    finally:
+        _action_lock.release()
+
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        stdout = result.stdout.strip()
+        message = stderr or stdout or "Fixer command failed"
+        raise RuntimeError(message)
+
+
+def _build_fixer_arguments(
+    tv_manager: TvYamlManager,
+    series_name: str,
+    series_config: dict[str, Any] | None,
+    flag: str,
+) -> list[str]:
+    """Construct the fixer.py argument list for the provided flag."""
+
+    config = _prepare_series_context(tv_manager, series_name, series_config)
+    library = config.get("library")
+    if not library:
+        raise ValueError("Series must specify a library to run fixer actions")
+
+    title, year = _split_series_name(series_name)
+
+    fixer_script = Path(__file__).resolve().parent.parent / "fixer.py"
+    return [
+        sys.executable,
+        fixer_script.as_posix(),
+        flag,
+        str(library),
+        title,
+        year,
+    ]
+
+
+def revert_series_cards(
+    tv_manager: TvYamlManager,
+    series_name: str,
+    series_config: dict[str, Any] | None = None,
+) -> None:
+    """Invoke fixer.py to revert cards for a single series."""
+
+    args = _build_fixer_arguments(
+        tv_manager, series_name, series_config, "--revert-series"
+    )
+    _run_fixer_command(args)
+
+
+def forget_series_cards(
+    tv_manager: TvYamlManager,
+    series_name: str,
+    series_config: dict[str, Any] | None = None,
+) -> None:
+    """Invoke fixer.py to forget previously loaded cards for a series."""
+
+    args = _build_fixer_arguments(
+        tv_manager, series_name, series_config, "--forget-cards"
+    )
+    _run_fixer_command(args)
 
 
 def _run_manager_job(task: Callable[[Manager], None]) -> None:

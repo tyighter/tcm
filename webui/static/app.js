@@ -165,6 +165,41 @@ function renderEntry(entry) {
   const actions = document.createElement('div');
   actions.className = 'entry-actions';
 
+  const entryPayload = () => ({ name: entry.name, config: entry.config });
+
+  const buildButton = document.createElement('button');
+  buildButton.textContent = 'Build cards';
+  buildButton.addEventListener('click', () =>
+    triggerServerAction(
+      buildButton,
+      '/api/actions/build-series',
+      `Built cards for ${entry.name}`,
+      { workingLabel: 'Building...', refresh: false, payload: entryPayload() }
+    )
+  );
+
+  const revertButton = document.createElement('button');
+  revertButton.textContent = 'Revert cards';
+  revertButton.addEventListener('click', () =>
+    triggerServerAction(
+      revertButton,
+      '/api/actions/revert-series',
+      `Reverted cards for ${entry.name}`,
+      { workingLabel: 'Reverting...', refresh: false, payload: entryPayload() }
+    )
+  );
+
+  const forgetButton = document.createElement('button');
+  forgetButton.textContent = 'Forget cards';
+  forgetButton.addEventListener('click', () =>
+    triggerServerAction(
+      forgetButton,
+      '/api/actions/forget-cards',
+      `Forgot loaded cards for ${entry.name}`,
+      { workingLabel: 'Forgetting...', refresh: false, payload: entryPayload() }
+    )
+  );
+
   const previewButton = document.createElement('button');
   previewButton.textContent = 'Preview';
   previewButton.addEventListener('click', () => openPreview(entry));
@@ -174,7 +209,13 @@ function renderEntry(entry) {
   deleteButton.style.background = 'rgba(227, 107, 107, 0.15)';
   deleteButton.addEventListener('click', () => removeEntry(entry));
 
-  actions.append(previewButton, deleteButton);
+  actions.append(
+    buildButton,
+    revertButton,
+    forgetButton,
+    previewButton,
+    deleteButton
+  );
   header.append(titleInput, actions);
 
   const body = document.createElement('div');
@@ -1376,7 +1417,7 @@ async function triggerServerAction(
   button,
   endpoint,
   successMessage,
-  { workingLabel = 'Working...', refresh = true } = {}
+  { workingLabel = 'Working...', refresh = true, payload } = {}
 ) {
   if (!button) {
     return;
@@ -1387,7 +1428,14 @@ async function triggerServerAction(
   button.textContent = workingLabel;
 
   try {
-    const response = await fetch(endpoint, { method: 'POST' });
+    const requestOptions = { method: 'POST' };
+
+    if (payload !== undefined) {
+      requestOptions.headers = { 'Content-Type': 'application/json' };
+      requestOptions.body = JSON.stringify(payload);
+    }
+
+    const response = await fetch(endpoint, requestOptions);
     let payload = {};
     try {
       payload = await response.json();
