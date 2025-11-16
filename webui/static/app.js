@@ -438,6 +438,11 @@ function cardTypePicker(entry, field, value) {
   updateLabel(value);
 
   button.addEventListener('click', () => {
+    console.debug('Card type picker opened', {
+      entry: entry.name,
+      field: field.name,
+      currentValue: value,
+    });
     openCardTypeModal(field, value, (selection) => {
       value = selection;
       updateField(entry, field, selection);
@@ -493,8 +498,8 @@ function cardTypeImageCandidates(choice) {
   }
 
   const candidates = [
-    apiCandidate,
     ...explicit,
+    apiCandidate,
     ...baseUrls.flatMap((base) => filenames.map((name) => `${base}/${name}`)),
   ];
 
@@ -511,6 +516,10 @@ function createCardTypeThumbnail(choice) {
   wrapper.appendChild(fallback);
 
   const candidates = cardTypeImageCandidates(choice);
+  console.debug('Card type thumbnail candidates', {
+    choice: choice.value,
+    candidates,
+  });
   if (candidates.length === 0) {
     wrapper.classList.add('card-type-thumbnail-empty');
     return wrapper;
@@ -524,13 +533,28 @@ function createCardTypeThumbnail(choice) {
   let index = 0;
   const tryNext = () => {
     if (index >= candidates.length) {
+      console.debug('All thumbnail candidates failed', {
+        choice: choice.value,
+        candidates,
+      });
       wrapper.classList.add('card-type-thumbnail-empty');
       return;
     }
-    img.src = candidates[index++];
+    const candidate = candidates[index++];
+    console.debug('Attempting card type thumbnail', {
+      choice: choice.value,
+      candidate,
+      position: index,
+      total: candidates.length,
+    });
+    img.src = candidate;
   };
 
   img.addEventListener('load', () => {
+    console.debug('Card type thumbnail loaded', {
+      choice: choice.value,
+      src: img.currentSrc || img.src,
+    });
     wrapper.classList.add('card-type-thumbnail-loaded');
     wrapper.prepend(img);
     fallback.remove();
@@ -564,6 +588,10 @@ function openCardTypeModal(field, currentValue, onSelect) {
       sensitivity: 'base',
     })
   );
+  console.debug('Rendering card type modal', {
+    choicesCount: choices.length,
+    currentValue,
+  });
 
   const renderResults = () => {
     const term = search.value.trim().toLowerCase();
@@ -574,6 +602,11 @@ function openCardTypeModal(field, currentValue, onSelect) {
       const value = (choice.value || '').toLowerCase();
       if (!term) return true;
       return label.includes(term) || value.includes(term);
+    });
+
+    console.debug('Card type search results', {
+      searchTerm: term,
+      matchCount: matches.length,
     });
 
     if (matches.length === 0) {
