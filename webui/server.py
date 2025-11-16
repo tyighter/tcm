@@ -10,6 +10,12 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import parse_qs, urlparse
 
+from .card_type_images import (
+    REPO_THUMBNAIL_ROOT,
+    THUMBNAIL_EXTENSIONS,
+    _match_thumbnail_slug,
+    slugify_card_type,
+)
 from .config import AppContext, create_app_context
 from .options import build_series_fields
 from .services import (
@@ -79,6 +85,36 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _resolve_card_type_thumbnail(self, requested_name: str) -> Path | None:
+        """Return a thumbnail file matching the requested card type image."""
+
+        requested_slug = slugify_card_type(Path(requested_name).stem)
+        search_roots = []
+        try:
+            search_roots.append(CONFIG_THUMBNAIL_ROOT.resolve())
+        except OSError:
+            pass
+        try:
+            search_roots.append(REPO_THUMBNAIL_ROOT.resolve())
+        except OSError:
+            pass
+
+        seen: set[Path] = set()
+        for root in search_roots:
+            if root in seen or not root.exists():
+                continue
+            seen.add(root)
+
+            for path in root.iterdir():
+                if not path.is_file() or path.suffix.lower() not in THUMBNAIL_EXTENSIONS:
+                    continue
+
+                candidate_slug = slugify_card_type(path.stem)
+                if _match_thumbnail_slug(requested_slug, {candidate_slug}):
+                    return path
+
+        return None
+
     def _parse_json(self) -> dict:
         length = int(self.headers.get("Content-Length", "0"))
         raw = self.rfile.read(length)
@@ -121,8 +157,8 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             if rel.startswith("card-types/"):
-                fallback = CONFIG_THUMBNAIL_ROOT / Path(rel).name
-                if fallback.exists() and fallback.is_file():
+                fallback = self._resolve_card_type_thumbnail(Path(rel).name)
+                if fallback is not None:
                     self._serve_file(fallback)
                     return
 
