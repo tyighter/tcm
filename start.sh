@@ -13,9 +13,13 @@ usermod -o -u "$PUID" titlecardmaker
 
 mkdir -p /config
 
-for config_dir in source fonts; do
+for config_dir in source fonts thumbnails; do
   mkdir -p "/config/${config_dir}"
 done
+
+if [ ! -d "/config/thumbnails" ] && [ -d "/maker/config/thumbnails" ]; then
+  cp -r "/maker/config/thumbnails" /config/
+fi
 
 default_files=(
   preferences.yml
