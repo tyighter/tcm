@@ -486,23 +486,6 @@ function slugifyCardType(value) {
 
 function cardTypeImageCandidates(choice) {
   const slug = choice.slug || slugifyCardType(choice.value || choice.label || '');
-
-  const apiCandidate = slug
-    ? `/api/card-types/thumbnail?slug=${encodeURIComponent(slug)}`
-    : null;
-
-  const baseUrls = ['/static/card-types'];
-
-  const titleCasedSlug = slug
-    .split('-')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join('-');
-
-  const filenames = ['jpg', 'png', 'webp'].flatMap((ext) => [
-    `${slug}.${ext}`,
-    `${titleCasedSlug}.${ext}`,
-  ]);
-
   const explicit = [];
   if (choice.thumbnail) {
     if (Array.isArray(choice.thumbnail)) {
@@ -512,13 +495,15 @@ function cardTypeImageCandidates(choice) {
     }
   }
 
-  const candidates = [
-    ...explicit,
-    apiCandidate,
-    ...baseUrls.flatMap((base) => filenames.map((name) => `${base}/${name}`)),
-  ];
+  if (explicit.length > 0) {
+    return [...new Set(explicit.filter(Boolean))];
+  }
 
-  return [...new Set(candidates.filter(Boolean))];
+  if (!slug) {
+    return [];
+  }
+
+  return [`/api/card-types/thumbnail?slug=${encodeURIComponent(slug)}`];
 }
 
 function createCardTypeThumbnail(choice) {

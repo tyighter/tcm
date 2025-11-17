@@ -9,6 +9,7 @@ from typing import Iterable
 from urllib.parse import urlparse
 
 import requests
+from PIL import Image, ImageOps
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ CARD_TYPE_STATIC_ROOT = Path(__file__).resolve().parent / "static" / "card-types
 REPO_THUMBNAIL_ROOT = Path(__file__).resolve().parent.parent / "config" / "thumbnails"
 DOCKER_THUMBNAIL_ROOT = Path("/config/thumbnails")
 MANIFEST_FILENAME = "manifest.json"
-THUMBNAIL_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+THUMBNAIL_SIZE = (150, 84)
 
 # Mapping of card type names to their expected thumbnail filenames in /config/thumbnails.
 DEFAULT_THUMBNAIL_MAP = {
@@ -65,6 +66,14 @@ def slugify_card_type(name: str) -> str:
     slug = re.sub(r"([a-z])([0-9])", r"\1-\2", slug)
     slug = re.sub(r"([0-9])([a-z])", r"\1-\2", slug)
     return re.sub(r"-+", "-", slug).strip("-")
+
+
+# Precomputed mapping of normalized slugs to their expected filenames. Using a
+# deterministic mapping avoids guessing at alternative extensions or file
+# naming conventions.
+DEFAULT_THUMBNAIL_SLUG_MAP = {
+    slugify_card_type(name): filename for name, filename in DEFAULT_THUMBNAIL_MAP.items()
+}
 
 
 def _iter_image_urls(markdown: str) -> Iterable[str]:
@@ -164,69 +173,19 @@ def load_card_type_thumbnails(
             )
 
     return thumbnails
-
-
-def _iter_thumbnail_paths() -> Iterable[Path]:
-    """Yield thumbnail files from known configuration directories."""
-
-    roots = set()
-    for root in (REPO_THUMBNAIL_ROOT, DOCKER_THUMBNAIL_ROOT):
-        try:
-            resolved = root.resolve()
-        except OSError:
-            continue
-        if resolved in roots:
-            continue
-        roots.add(resolved)
-
-        if not root.exists():
-            logger.debug("Thumbnail root does not exist: %s", resolved)
-            continue
-
-        for path in root.iterdir():
-            if path.is_file() and path.suffix.lower() in THUMBNAIL_EXTENSIONS:
-                logger.debug("Discovered thumbnail candidate: %s", path)
-                yield path
-
-
-def _match_thumbnail_slug(slug: str, known_slugs: set[str]) -> str | None:
-    """Return the card type slug that best matches the thumbnail file name."""
-
-    if not slug:
-        return None
-
-    if slug in known_slugs:
-        return slug
-
-    for candidate in sorted(known_slugs, key=len, reverse=True):
-        if slug.startswith(f"{candidate}-") or slug.endswith(f"-{candidate}"):
-            return candidate
-
-        parts = slug.split("-")
-        if candidate in parts:
-            return candidate
-
-        if slug.replace("-", "") == candidate.replace("-", ""):
-            return candidate
-
-    return None
-
-
 def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, str]:
-    """Copy bundled thumbnails into the static folder and return their URLs."""
+    """Copy known thumbnails into the static folder and return their URLs."""
 
     thumbnails: dict[str, str] = {}
-    seen_paths: set[Path] = set()
 
-    # Ensure default thumbnails map to the correct card type slug even when the
-    # filename doesn't match (e.g., "comicbook.jpg" -> "comic-book"). Prefer
-    # user-supplied files from /config over the bundled defaults.
-    for name, filename in DEFAULT_THUMBNAIL_MAP.items():
-        slug = slugify_card_type(name)
+    for slug, filename in DEFAULT_THUMBNAIL_SLUG_MAP.items():
+        if slug not in known_slugs:
+            continue
+
         for root in (DOCKER_THUMBNAIL_ROOT, REPO_THUMBNAIL_ROOT):
             path = root / filename
             try:
-                if not path.exists() or path in seen_paths:
+                if not path.exists():
                     continue
             except OSError:
                 continue
@@ -236,41 +195,48 @@ def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, str]:
             target_name = f"{slug}{path.suffix.lower()}"
             target = CARD_TYPE_STATIC_ROOT / target_name
 
-            try:
-                target.write_bytes(path.read_bytes())
-            except OSError:
-                continue
-
-            thumbnails[slug] = f"/static/card-types/{target_name}"
-            seen_paths.add(path)
-            logger.debug("Copied default thumbnail for %s from %s", slug, path)
-            break
-
-    for path in _iter_thumbnail_paths():
-        if path in seen_paths:
-            continue
-
-        source_slug = slugify_card_type(path.stem)
-        target_slug = _match_thumbnail_slug(source_slug, known_slugs) or source_slug
-        if not target_slug:
-            continue
-
-        CARD_TYPE_STATIC_ROOT.mkdir(parents=True, exist_ok=True)
-
-        target_name = f"{target_slug}{path.suffix.lower()}"
-        target = CARD_TYPE_STATIC_ROOT / target_name
-
-        try:
-            # Always overwrite so user-provided thumbnails (especially from
-            # /config/thumbnails) take precedence over the bundled defaults.
-            target.write_bytes(path.read_bytes())
-        except OSError:
-            continue
-
-        thumbnails[target_slug] = f"/static/card-types/{target_name}"
-        logger.debug("Registered thumbnail for %s from %s", target_slug, path)
+            if _copy_and_resize_thumbnail(path, target):
+                thumbnails[slug] = f"/static/card-types/{target_name}"
+                logger.debug("Copied thumbnail for %s from %s", slug, path)
+                break
 
     return thumbnails
+
+
+def _copy_and_resize_thumbnail(source: Path, destination: Path) -> bool:
+    """Copy a thumbnail image and resize it to fit the UI slot."""
+
+    try:
+        with Image.open(source) as img:
+            img = img.convert("RGB")
+            resized = ImageOps.fit(
+                img,
+                THUMBNAIL_SIZE,
+                method=Image.Resampling.LANCZOS,
+                bleed=0.0,
+                centering=(0.5, 0.5),
+            )
+
+            format_hint = {
+                ".jpg": "JPEG",
+                ".jpeg": "JPEG",
+                ".png": "PNG",
+                ".webp": "WEBP",
+            }.get(destination.suffix.lower(), "JPEG")
+
+            resized.save(destination, format=format_hint)
+    
+        return True
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.warning(
+            "Failed to prepare thumbnail %s -> %s: %s", source, destination, exc
+        )
+        try:
+            destination.write_bytes(source.read_bytes())
+        except OSError:
+            return False
+
+        return True
 
 
 def main() -> None:

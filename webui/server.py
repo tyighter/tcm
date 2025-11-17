@@ -11,9 +11,8 @@ from typing import Callable
 from urllib.parse import parse_qs, urlparse
 
 from .card_type_images import (
+    DEFAULT_THUMBNAIL_SLUG_MAP,
     REPO_THUMBNAIL_ROOT,
-    THUMBNAIL_EXTENSIONS,
-    _match_thumbnail_slug,
     slugify_card_type,
 )
 from .config import AppContext, create_app_context
@@ -119,40 +118,30 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         requested_slug = slugify_card_type(Path(requested_name).stem)
         logger.debug("Resolving thumbnail for %s (slug=%s)", requested_name, requested_slug)
-        search_roots = []
-        # Prefer the cached thumbnails that were copied into the web UI's static
-        # directory. These are generated on startup by ``load_card_type_thumbnails``
-        # and mirror any user-provided images in /config/thumbnails.
+        filename = DEFAULT_THUMBNAIL_SLUG_MAP.get(requested_slug)
+        if not filename:
+            logger.debug("No thumbnail mapping found for slug %s", requested_slug)
+            return None
+
+        suffix = Path(filename).suffix.lower()
+        candidate_paths = []
         try:
-            search_roots.append((STATIC_ROOT / "card-types").resolve())
+            candidate_paths.append((STATIC_ROOT / "card-types" / f"{requested_slug}{suffix}").resolve())
         except OSError:
             pass
         try:
-            search_roots.append(CONFIG_THUMBNAIL_ROOT.resolve())
+            candidate_paths.append((CONFIG_THUMBNAIL_ROOT / filename).resolve())
         except OSError:
             pass
         try:
-            search_roots.append(REPO_THUMBNAIL_ROOT.resolve())
+            candidate_paths.append((REPO_THUMBNAIL_ROOT / filename).resolve())
         except OSError:
             pass
 
-        seen: set[Path] = set()
-        for root in search_roots:
-            if root in seen or not root.exists():
-                logger.debug("Skipping thumbnail root %s (seen=%s, exists=%s)", root, root in seen, root.exists())
-                continue
-            seen.add(root)
-
-            for path in root.iterdir():
-                if not path.is_file() or path.suffix.lower() not in THUMBNAIL_EXTENSIONS:
-                    continue
-
-                candidate_slug = slugify_card_type(path.stem)
-                if _match_thumbnail_slug(requested_slug, {candidate_slug}):
-                    logger.debug(
-                        "Matched thumbnail %s for slug %s", path, requested_slug
-                    )
-                    return path
+        for path in candidate_paths:
+            if path.exists() and path.is_file():
+                logger.debug("Matched thumbnail %s for slug %s", path, requested_slug)
+                return path
 
         logger.debug("No thumbnail found for slug %s", requested_slug)
         return None
