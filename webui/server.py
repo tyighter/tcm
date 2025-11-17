@@ -293,6 +293,35 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             self._json_response({"status": "ok"})
             return
 
+        if parsed.path == "/api/client-log":
+            try:
+                payload = self._parse_json()
+            except ValueError as exc:
+                self._error(str(exc))
+                return
+
+            message = payload.get("message") or payload.get("event")
+            level = payload.get("level", "DEBUG").upper()
+            context = payload.get("context", {})
+
+            if not message:
+                self._error("Client log entries must include a message")
+                return
+
+            numeric_level = logging.getLevelName(level)
+            if not isinstance(numeric_level, int):
+                numeric_level = logging.DEBUG
+
+            logger.log(
+                numeric_level,
+                "Client log: %s | context=%s",
+                message,
+                context,
+            )
+
+            self._json_response({"status": "ok"})
+            return
+
         if parsed.path == "/api/preview":
             try:
                 payload = self._parse_json()
