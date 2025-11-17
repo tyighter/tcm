@@ -68,6 +68,10 @@ def slugify_card_type(name: str) -> str:
     return re.sub(r"-+", "-", slug).strip("-")
 
 
+def _thumbnail_api_url(slug: str) -> str:
+    return f"/api/card-types/thumbnail?slug={slug}"
+
+
 # Precomputed mapping of normalized slugs to their expected filenames. Using a
 # deterministic mapping avoids guessing at alternative extensions or file
 # naming conventions.
@@ -91,7 +95,7 @@ def _download(url: str, destination: Path) -> None:
 
 def cache_card_type_images(
     markdown_url: str = CARD_TYPE_MARKDOWN_URL,
-    destination: Path = CARD_TYPE_STATIC_ROOT,
+    destination: Path = DOCKER_THUMBNAIL_ROOT,
 ) -> dict[str, str]:
     """Download example images for built-in card types and return a manifest."""
 
@@ -110,7 +114,7 @@ def cache_card_type_images(
         _download(url, target)
 
         slug = slugify_card_type(Path(filename).stem)
-        manifest[slug] = f"/static/card-types/{filename}"
+        manifest[slug] = _thumbnail_api_url(slug)
 
     (destination / MANIFEST_FILENAME).write_text(
         json.dumps(manifest, indent=2, sort_keys=True)
@@ -133,7 +137,7 @@ def load_card_type_thumbnails(
     logger.debug("Loading card type thumbnails; manifest_path=%s", manifest_path)
 
     thumbnails = _load_local_thumbnails(known_slugs)
-    manifest_path = manifest_path or CARD_TYPE_STATIC_ROOT / MANIFEST_FILENAME
+    manifest_path = manifest_path or DOCKER_THUMBNAIL_ROOT / MANIFEST_FILENAME
     try:
         raw = manifest_path.read_text()
     except FileNotFoundError:
@@ -153,7 +157,8 @@ def load_card_type_thumbnails(
             continue
 
         slug = slugify_card_type(key)
-        thumbnails.setdefault(slug, value)
+        normalized = _normalize_thumbnail_url(slug, value)
+        thumbnails.setdefault(slug, normalized)
     logger.debug(
         "Loaded %d thumbnails (%d from manifest, %d from local files)",
         len(thumbnails),
@@ -173,8 +178,14 @@ def load_card_type_thumbnails(
             )
 
     return thumbnails
+
+
+def _normalize_thumbnail_url(slug: str, url: str) -> str:
+    if url.startswith("/static/card-types/"):
+        return _thumbnail_api_url(slug)
+    return url
 def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, str]:
-    """Copy known thumbnails into the static folder and return their URLs."""
+    """Return API URLs for thumbnails present on disk."""
 
     thumbnails: dict[str, str] = {}
 
@@ -190,15 +201,9 @@ def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, str]:
             except OSError:
                 continue
 
-            CARD_TYPE_STATIC_ROOT.mkdir(parents=True, exist_ok=True)
-
-            target_name = f"{slug}{path.suffix.lower()}"
-            target = CARD_TYPE_STATIC_ROOT / target_name
-
-            if _copy_and_resize_thumbnail(path, target):
-                thumbnails[slug] = f"/static/card-types/{target_name}"
-                logger.debug("Copied thumbnail for %s from %s", slug, path)
-                break
+            thumbnails[slug] = _thumbnail_api_url(slug)
+            logger.debug("Found thumbnail for %s at %s", slug, path)
+            break
 
     return thumbnails
 

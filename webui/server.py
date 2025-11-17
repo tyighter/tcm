@@ -126,15 +126,15 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         suffix = Path(filename).suffix.lower()
         candidate_paths = []
         try:
-            candidate_paths.append((STATIC_ROOT / "card-types" / f"{requested_slug}{suffix}").resolve())
-        except OSError:
-            pass
-        try:
             candidate_paths.append((CONFIG_THUMBNAIL_ROOT / filename).resolve())
         except OSError:
             pass
         try:
             candidate_paths.append((REPO_THUMBNAIL_ROOT / filename).resolve())
+        except OSError:
+            pass
+        try:
+            candidate_paths.append((STATIC_ROOT / "card-types" / f"{requested_slug}{suffix}").resolve())
         except OSError:
             pass
 
