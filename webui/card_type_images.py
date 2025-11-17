@@ -136,7 +136,13 @@ def load_card_type_thumbnails(
 
     logger.debug("Loading card type thumbnails; manifest_path=%s", manifest_path)
 
-    thumbnails = _load_local_thumbnails(known_slugs)
+    thumbnails: dict[str, str] = {}
+    local_thumbnails = _load_local_thumbnails(known_slugs)
+    for slug, source in local_thumbnails.items():
+        prepared = _prepare_resized_thumbnail(slug, source)
+        if prepared:
+            thumbnails[slug] = _thumbnail_api_url(slug)
+
     manifest_path = manifest_path or DOCKER_THUMBNAIL_ROOT / MANIFEST_FILENAME
     try:
         raw = manifest_path.read_text()
@@ -184,10 +190,10 @@ def _normalize_thumbnail_url(slug: str, url: str) -> str:
     if url.startswith("/static/card-types/"):
         return _thumbnail_api_url(slug)
     return url
-def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, str]:
-    """Return API URLs for thumbnails present on disk."""
+def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, Path]:
+    """Return thumbnail files present on disk keyed by slug."""
 
-    thumbnails: dict[str, str] = {}
+    thumbnails: dict[str, Path] = {}
 
     for slug, filename in DEFAULT_THUMBNAIL_SLUG_MAP.items():
         if slug not in known_slugs:
@@ -201,7 +207,7 @@ def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, str]:
             except OSError:
                 continue
 
-            thumbnails[slug] = _thumbnail_api_url(slug)
+            thumbnails[slug] = path
             logger.debug("Found thumbnail for %s at %s", slug, path)
             break
 
@@ -242,6 +248,35 @@ def _copy_and_resize_thumbnail(source: Path, destination: Path) -> bool:
             return False
 
         return True
+
+
+def _prepare_resized_thumbnail(slug: str, source: Path) -> Path | None:
+    """Create (or reuse) a resized thumbnail suitable for the UI."""
+
+    suffix = source.suffix.lower() or ".jpg"
+    destination = CARD_TYPE_STATIC_ROOT / f"{slug}{suffix}"
+
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        logger.warning(
+            "Unable to ensure thumbnail directory %s: %s", destination.parent, exc
+        )
+        return None
+
+    try:
+        if destination.exists() and destination.stat().st_mtime >= source.stat().st_mtime:
+            logger.debug("Using cached resized thumbnail for %s at %s", slug, destination)
+            return destination
+    except OSError:
+        # Fall through to attempt regenerating the thumbnail
+        pass
+
+    if _copy_and_resize_thumbnail(source, destination):
+        logger.debug("Prepared resized thumbnail %s -> %s", source, destination)
+        return destination
+
+    return None
 
 
 def main() -> None:
