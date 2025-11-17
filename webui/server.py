@@ -120,6 +120,13 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         requested_slug = slugify_card_type(Path(requested_name).stem)
         logger.debug("Resolving thumbnail for %s (slug=%s)", requested_name, requested_slug)
         search_roots = []
+        # Prefer the cached thumbnails that were copied into the web UI's static
+        # directory. These are generated on startup by ``load_card_type_thumbnails``
+        # and mirror any user-provided images in /config/thumbnails.
+        try:
+            search_roots.append((STATIC_ROOT / "card-types").resolve())
+        except OSError:
+            pass
         try:
             search_roots.append(CONFIG_THUMBNAIL_ROOT.resolve())
         except OSError:
