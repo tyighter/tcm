@@ -491,12 +491,7 @@ function cardTypeImageCandidates(choice) {
     ? `/api/card-types/thumbnail?slug=${encodeURIComponent(slug)}`
     : null;
 
-  const baseUrls = [
-    '/static/card-types',
-    'https://raw.githubusercontent.com/wiki/CollinHeist/TitleCardMaker/images/card-types',
-    'https://raw.githubusercontent.com/wiki/CollinHeist/TitleCardMaker/images',
-    'https://raw.githubusercontent.com/wiki/CollinHeist/TitleCardMaker',
-  ];
+  const baseUrls = ['/static/card-types'];
 
   const titleCasedSlug = slug
     .split('-')
@@ -540,10 +535,6 @@ function createCardTypeThumbnail(choice) {
     choice: choice.value,
     candidates,
   });
-  logToServer('DEBUG', 'Card type thumbnail candidates', {
-    choice: choice.value,
-    candidates,
-  });
   if (candidates.length === 0) {
     wrapper.classList.add('card-type-thumbnail-empty');
     logToServer('INFO', 'No thumbnail candidates available', {
@@ -578,12 +569,6 @@ function createCardTypeThumbnail(choice) {
       position: index,
       total: candidates.length,
     });
-    logToServer('DEBUG', 'Attempting card type thumbnail', {
-      choice: choice.value,
-      candidate,
-      position: index,
-      total: candidates.length,
-    });
     img.src = candidate;
   };
 
@@ -592,7 +577,7 @@ function createCardTypeThumbnail(choice) {
       choice: choice.value,
       src: img.currentSrc || img.src,
     });
-    logToServer('INFO', 'Card type thumbnail loaded', {
+    logToServer('DEBUG', 'Card type thumbnail loaded', {
       choice: choice.value,
       src: img.currentSrc || img.src,
     });
