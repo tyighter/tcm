@@ -22,6 +22,21 @@ const toastContainer = document.createElement('div');
 toastContainer.className = 'toast-container';
 document.body.appendChild(toastContainer);
 
+const CLIENT_LOG_ENDPOINT = '/api/client-log';
+
+function logToServer(level, message, context = {}) {
+  try {
+    fetch(CLIENT_LOG_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ level, message, context }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch (error) {
+    // Logging errors should never affect UX.
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Initialization
 // -----------------------------------------------------------------------------
@@ -443,6 +458,11 @@ function cardTypePicker(entry, field, value) {
       field: field.name,
       currentValue: value,
     });
+    logToServer('DEBUG', 'Card type picker opened', {
+      entry: entry.name,
+      field: field.name,
+      currentValue: value,
+    });
     openCardTypeModal(field, value, (selection) => {
       value = selection;
       updateField(entry, field, selection);
@@ -520,8 +540,15 @@ function createCardTypeThumbnail(choice) {
     choice: choice.value,
     candidates,
   });
+  logToServer('DEBUG', 'Card type thumbnail candidates', {
+    choice: choice.value,
+    candidates,
+  });
   if (candidates.length === 0) {
     wrapper.classList.add('card-type-thumbnail-empty');
+    logToServer('INFO', 'No thumbnail candidates available', {
+      choice: choice.value,
+    });
     return wrapper;
   }
 
@@ -537,6 +564,10 @@ function createCardTypeThumbnail(choice) {
         choice: choice.value,
         candidates,
       });
+      logToServer('INFO', 'All thumbnail candidates failed', {
+        choice: choice.value,
+        candidates,
+      });
       wrapper.classList.add('card-type-thumbnail-empty');
       return;
     }
@@ -547,11 +578,21 @@ function createCardTypeThumbnail(choice) {
       position: index,
       total: candidates.length,
     });
+    logToServer('DEBUG', 'Attempting card type thumbnail', {
+      choice: choice.value,
+      candidate,
+      position: index,
+      total: candidates.length,
+    });
     img.src = candidate;
   };
 
   img.addEventListener('load', () => {
     console.debug('Card type thumbnail loaded', {
+      choice: choice.value,
+      src: img.currentSrc || img.src,
+    });
+    logToServer('INFO', 'Card type thumbnail loaded', {
       choice: choice.value,
       src: img.currentSrc || img.src,
     });
