@@ -202,6 +202,35 @@ def prepare_thumbnail_from_config(slug: str) -> Path | None:
 
     filename = DEFAULT_THUMBNAIL_SLUG_MAP.get(slug)
     logger.debug("Preparing thumbnail for slug=%s; filename=%s", slug, filename)
+
+    source_paths: list[Path] = []
+    for root in (DOCKER_THUMBNAIL_ROOT, REPO_THUMBNAIL_ROOT):
+        if filename:
+            path = root / filename
+            try:
+                if path.exists():
+                    source_paths.append(path)
+            except OSError as exc:
+                logger.debug("Unable to inspect thumbnail candidate %s: %s", path, exc)
+        try:
+            for candidate in root.iterdir():
+                try:
+                    if not candidate.is_file():
+                        continue
+                except OSError:
+                    continue
+
+                if slugify_card_type(candidate.stem) != slug:
+                    continue
+
+                logger.debug(
+                    "Matched thumbnail by stem for slug %s at %s", slug, candidate
+                )
+                source_paths.append(candidate)
+        except FileNotFoundError:
+            logger.debug("Thumbnail root %s does not exist", root)
+        except OSError as exc:
+            logger.debug("Unable to inspect thumbnail root %s: %s", root, exc)
     if not filename:
         logger.debug("No thumbnail filename mapping for slug %s", slug)
         return None

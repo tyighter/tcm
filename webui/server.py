@@ -118,6 +118,9 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         """Return a thumbnail file matching the requested card type image."""
 
         requested_slug = slugify_card_type(Path(requested_name).stem)
+        logger.debug(
+            "Resolving thumbnail for %s (slug=%s)", requested_name, requested_slug
+        )
         logger.debug("Resolving thumbnail for %s (slug=%s)", requested_name, requested_slug)
 
         prepared = prepare_thumbnail_from_config(requested_slug)
@@ -213,6 +216,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 self._error("Missing card type slug")
                 return
 
+            logger.debug("Thumbnail API request for slug=%s", slug)
             match = self._resolve_card_type_thumbnail(slug)
             if match is None:
                 logger.info("Thumbnail not found for slug %s", slug)
