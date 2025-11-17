@@ -485,7 +485,7 @@ function slugifyCardType(value) {
 }
 
 function cardTypeImageCandidates(choice) {
-  const slug = slugifyCardType(choice.value || choice.label || '');
+  const slug = choice.slug || slugifyCardType(choice.value || choice.label || '');
 
   const apiCandidate = slug
     ? `/api/card-types/thumbnail?slug=${encodeURIComponent(slug)}`
