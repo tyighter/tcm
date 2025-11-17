@@ -285,7 +285,7 @@ def build_series_fields(libraries: dict[str, Any]) -> list[dict[str, Any]]:
             for value, label in card_types:
                 slug = slugify_card_type(value)
                 thumbnail = thumbnails.get(slug)
-                choice = {"value": value, "label": label}
+                choice = {"value": value, "label": label, "slug": slug}
                 if thumbnail:
                     choice["thumbnail"] = thumbnail
                 filled["choices"].append(choice)
