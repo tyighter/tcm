@@ -190,6 +190,54 @@ def _normalize_thumbnail_url(slug: str, url: str) -> str:
     if url.startswith("/static/card-types/"):
         return _thumbnail_api_url(slug)
     return url
+
+
+def prepare_thumbnail_from_config(slug: str) -> Path | None:
+    """Ensure a resized thumbnail exists for the requested slug.
+
+    The function looks for a JPG in `/config/thumbnails` (or the repository
+    fallback) using the default mapping, resizes it to the UI slot, and stores
+    the prepared image under the static card-type directory.
+    """
+
+    filename = DEFAULT_THUMBNAIL_SLUG_MAP.get(slug)
+    logger.debug("Preparing thumbnail for slug=%s; filename=%s", slug, filename)
+    if not filename:
+        logger.debug("No thumbnail filename mapping for slug %s", slug)
+        return None
+
+    source_paths = []
+    for root in (DOCKER_THUMBNAIL_ROOT, REPO_THUMBNAIL_ROOT):
+        path = root / filename
+        try:
+            if path.exists():
+                source_paths.append(path)
+        except OSError as exc:
+            logger.debug("Unable to inspect thumbnail candidate %s: %s", path, exc)
+            continue
+
+    if not source_paths:
+        logger.debug(
+            "No source thumbnails found for slug %s in %s", slug, DOCKER_THUMBNAIL_ROOT
+        )
+        return None
+
+    source = source_paths[0]
+    logger.debug("Selected source thumbnail %s for slug %s", source, slug)
+    prepared = _prepare_resized_thumbnail(slug, source)
+    if prepared:
+        logger.debug(
+            "Prepared resized thumbnail for slug %s at %s (source=%s)",
+            slug,
+            prepared,
+            source,
+        )
+    else:
+        logger.debug("Failed to prepare resized thumbnail for slug %s", slug)
+
+    return prepared
+
+
 def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, Path]:
     """Return thumbnail files present on disk keyed by slug."""
 
