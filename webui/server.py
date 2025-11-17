@@ -121,6 +121,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         logger.debug(
             "Resolving thumbnail for %s (slug=%s)", requested_name, requested_slug
         )
+        logger.debug("Resolving thumbnail for %s (slug=%s)", requested_name, requested_slug)
 
         prepared = prepare_thumbnail_from_config(requested_slug)
         if prepared:

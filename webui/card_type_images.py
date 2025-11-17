@@ -231,6 +231,19 @@ def prepare_thumbnail_from_config(slug: str) -> Path | None:
             logger.debug("Thumbnail root %s does not exist", root)
         except OSError as exc:
             logger.debug("Unable to inspect thumbnail root %s: %s", root, exc)
+    if not filename:
+        logger.debug("No thumbnail filename mapping for slug %s", slug)
+        return None
+
+    source_paths = []
+    for root in (DOCKER_THUMBNAIL_ROOT, REPO_THUMBNAIL_ROOT):
+        path = root / filename
+        try:
+            if path.exists():
+                source_paths.append(path)
+        except OSError as exc:
+            logger.debug("Unable to inspect thumbnail candidate %s: %s", path, exc)
+            continue
 
     if not source_paths:
         logger.debug(
