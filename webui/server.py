@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlparse
 from .card_type_images import (
     DEFAULT_THUMBNAIL_SLUG_MAP,
     REPO_THUMBNAIL_ROOT,
+    prepare_thumbnail_from_config,
     slugify_card_type,
 )
 from .config import AppContext, create_app_context
@@ -118,6 +119,14 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         requested_slug = slugify_card_type(Path(requested_name).stem)
         logger.debug("Resolving thumbnail for %s (slug=%s)", requested_name, requested_slug)
+
+        prepared = prepare_thumbnail_from_config(requested_slug)
+        if prepared:
+            logger.debug(
+                "Using prepared thumbnail for slug %s at %s", requested_slug, prepared
+            )
+            return prepared
+
         filename = DEFAULT_THUMBNAIL_SLUG_MAP.get(requested_slug)
         if not filename:
             logger.debug("No thumbnail mapping found for slug %s", requested_slug)
