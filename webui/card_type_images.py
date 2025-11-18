@@ -226,29 +226,24 @@ def prepare_thumbnail_from_config(slug: str) -> Path | None:
                 logger.debug(
                     "Matched thumbnail by stem for slug %s at %s", slug, candidate
                 )
-                source_paths.append(candidate)
+                if candidate not in source_paths:
+                    source_paths.append(candidate)
         except FileNotFoundError:
             logger.debug("Thumbnail root %s does not exist", root)
         except OSError as exc:
             logger.debug("Unable to inspect thumbnail root %s: %s", root, exc)
-    if not filename:
-        logger.debug("No thumbnail filename mapping for slug %s", slug)
-        return None
-
-    source_paths = []
-    for root in (DOCKER_THUMBNAIL_ROOT, REPO_THUMBNAIL_ROOT):
-        path = root / filename
-        try:
-            if path.exists():
-                source_paths.append(path)
-        except OSError as exc:
-            logger.debug("Unable to inspect thumbnail candidate %s: %s", path, exc)
-            continue
 
     if not source_paths:
-        logger.debug(
-            "No source thumbnails found for slug %s in %s", slug, DOCKER_THUMBNAIL_ROOT
-        )
+        if filename:
+            logger.debug(
+                "No source thumbnails found for slug %s in %s",
+                slug,
+                DOCKER_THUMBNAIL_ROOT,
+            )
+        else:
+            logger.debug(
+                "No thumbnail filename mapping or matching files found for slug %s", slug
+            )
         return None
 
     source = source_paths[0]
@@ -271,12 +266,14 @@ def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, Path]:
     """Return thumbnail files present on disk keyed by slug."""
 
     thumbnails: dict[str, Path] = {}
+    roots = (DOCKER_THUMBNAIL_ROOT, REPO_THUMBNAIL_ROOT)
 
+    # First, honor the default filename mapping so known files keep priority.
     for slug, filename in DEFAULT_THUMBNAIL_SLUG_MAP.items():
         if slug not in known_slugs:
             continue
 
-        for root in (DOCKER_THUMBNAIL_ROOT, REPO_THUMBNAIL_ROOT):
+        for root in roots:
             path = root / filename
             try:
                 if not path.exists():
@@ -287,6 +284,27 @@ def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, Path]:
             thumbnails[slug] = path
             logger.debug("Found thumbnail for %s at %s", slug, path)
             break
+
+    # Fill in any remaining slugs by matching filename stems.
+    for root in roots:
+        try:
+            for candidate in root.iterdir():
+                try:
+                    if not candidate.is_file():
+                        continue
+                except OSError:
+                    continue
+
+                slug = slugify_card_type(candidate.stem)
+                if slug not in known_slugs or slug in thumbnails:
+                    continue
+
+                thumbnails[slug] = candidate
+                logger.debug("Found slug-matched thumbnail for %s at %s", slug, candidate)
+        except FileNotFoundError:
+            logger.debug("Thumbnail root %s does not exist", root)
+        except OSError as exc:
+            logger.debug("Unable to inspect thumbnail root %s: %s", root, exc)
 
     return thumbnails
 
