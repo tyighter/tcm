@@ -358,7 +358,7 @@ async function loadConfiguration() {
     config: entry.config || {},
   }));
   sortEntries();
-  state.collapsedEntries = new Set();
+  state.collapsedEntries = new Set(state.entries.map((entry) => entry.id));
 }
 
 function registerEvents() {
@@ -434,7 +434,7 @@ function renderEntries() {
   if (highlightElement) {
     requestAnimationFrame(() => {
       highlightElement.classList.add('entry-highlight');
-      highlightElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      highlightElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
       setTimeout(() => {
         highlightElement.classList.remove('entry-highlight');
       }, 2000);
@@ -1503,6 +1503,7 @@ const BASICS_FIELDS = new Set([
   'episode_data_source',
   'watched_style',
   'unwatched_style',
+  'image_source_priority',
 ]);
 
 const ID_FIELDS = new Set([
@@ -1515,23 +1516,6 @@ const ID_FIELDS = new Set([
   'sonarr_id',
 ]);
 
-const SYNC_FIELDS = new Set([
-  'refresh_titles',
-  'sync_specials',
-  'sonarr_sync',
-  'tmdb_sync',
-  'tmdb_skip_localized_images',
-]);
-
-const OUTPUT_FIELDS = new Set([
-  'archive',
-  'archive_all_variations',
-  'archive_name',
-  'library_override',
-  'filename_format',
-  'image_source_priority',
-]);
-
 const TEXT_FIELDS = new Set(['translation']);
 
 const FIELD_GROUP_DEFINITIONS = [
@@ -1541,19 +1525,14 @@ const FIELD_GROUP_DEFINITIONS = [
     matcher: (field) => BASICS_FIELDS.has(field.id),
   },
   {
-    id: 'identifiers',
-    label: 'Metadata IDs',
-    matcher: (field) => ID_FIELDS.has(field.id),
+    id: 'font',
+    label: 'Font & typography',
+    matcher: (field) => field.path?.[0] === 'font',
   },
   {
-    id: 'sync',
-    label: 'Sync & automation',
-    matcher: (field) => SYNC_FIELDS.has(field.id),
-  },
-  {
-    id: 'output',
-    label: 'Output & archiving',
-    matcher: (field) => OUTPUT_FIELDS.has(field.id),
+    id: 'seasons',
+    label: 'Seasons & episodes',
+    matcher: (field) => field.path?.[0] === 'seasons' || field.id === 'episode_ranges',
   },
   {
     id: 'text',
@@ -1561,27 +1540,71 @@ const FIELD_GROUP_DEFINITIONS = [
     matcher: (field) => TEXT_FIELDS.has(field.id),
   },
   {
-    id: 'font',
-    label: 'Font & typography',
-    matcher: (field) => field.path?.[0] === 'font',
-  },
-  {
-    id: 'extras',
-    label: 'Advanced card options',
-    matcher: (field) => field.id === 'extras',
-  },
-  {
-    id: 'seasons',
-    label: 'Seasons & episodes',
-    matcher: (field) => field.path?.[0] === 'seasons' || field.id === 'episode_ranges',
+    id: 'identifiers',
+    label: 'Metadata IDs',
+    matcher: (field) => ID_FIELDS.has(field.id),
   },
 ];
+
+const FIELD_DISPLAY_ORDER = [
+  'library',
+  'card_type',
+  'episode_text_format',
+  'episode_data_source',
+  'watched_style',
+  'unwatched_style',
+  'image_source_priority',
+  'font.file',
+  'font.size',
+  'font.color',
+  'font.case',
+  'font.vertical_shift',
+  'font.interline_spacing',
+  'font.interword_spacing',
+  'font.kerning',
+  'font.stroke_width',
+  'font.validate',
+  'font.replacements',
+  'seasons.hide',
+  'seasons.titles',
+  'episode_ranges',
+  'translation',
+  'tmdb_id',
+  'tvdb_id',
+  'imdb_id',
+  'tvrage_id',
+  'emby_id',
+  'jellyfin_id',
+  'sonarr_id',
+];
+
+const FIELD_DISPLAY_ORDER_LOOKUP = FIELD_DISPLAY_ORDER.reduce((map, fieldId, index) => {
+  map.set(fieldId, index);
+  return map;
+}, new Map());
 
 const DEFAULT_FIELD_GROUP = { id: 'other', label: 'Other fields' };
 
 function resolveFieldGroup(field) {
   const match = FIELD_GROUP_DEFINITIONS.find((group) => group.matcher(field));
   return match || DEFAULT_FIELD_GROUP;
+}
+
+function compareFieldOptions(a, b) {
+  const orderA = FIELD_DISPLAY_ORDER_LOOKUP.get(a.id);
+  const orderB = FIELD_DISPLAY_ORDER_LOOKUP.get(b.id);
+  const hasOrderA = orderA !== undefined;
+  const hasOrderB = orderB !== undefined;
+  if (hasOrderA && hasOrderB) {
+    return orderA - orderB;
+  }
+  if (hasOrderA) {
+    return -1;
+  }
+  if (hasOrderB) {
+    return 1;
+  }
+  return (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' });
 }
 
 function createFieldOption(field, onSelect) {
@@ -1641,7 +1664,7 @@ function renderFieldGroups(container, fields, onSelect) {
     }
     const section = document.createElement('details');
     section.className = 'field-group';
-    section.open = true;
+    section.open = false;
 
     const summary = document.createElement('summary');
     summary.className = 'field-group__summary';
@@ -1655,9 +1678,7 @@ function renderFieldGroups(container, fields, onSelect) {
     const list = document.createElement('div');
     list.className = 'field-group__list';
     group.fields
-      .sort((a, b) =>
-        (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' })
-      )
+      .sort((a, b) => compareFieldOptions(a, b))
       .forEach((field) => list.appendChild(createFieldOption(field, onSelect)));
 
     section.append(summary, list);
@@ -2036,6 +2057,7 @@ function openAddEntryModal() {
       config,
     };
     state.entries.push(newEntry);
+    setEntryCollapsed(newEntry.id, false);
     state.pendingEntryId = newEntry.id;
     sortEntries();
 
