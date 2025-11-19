@@ -534,9 +534,9 @@ function createCardTypeThumbnail(choice) {
 
   const img = document.createElement('img');
   img.alt = `${choice.label || choice.value} example`;
-  img.loading = 'lazy';
   img.decoding = 'async';
-  img.style.display = 'none';
+  img.style.opacity = '0';
+  img.style.transition = 'opacity 150ms ease-out';
 
   let index = 0;
   const tryNext = () => {
@@ -577,7 +577,7 @@ function createCardTypeThumbnail(choice) {
       choice: choice.value,
       src: img.currentSrc || img.src,
     });
-    img.style.display = '';
+    img.style.opacity = '1';
     wrapper.classList.add('card-type-thumbnail-loaded');
     wrapper.prepend(img);
     fallback.remove();
