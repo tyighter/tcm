@@ -207,6 +207,65 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         logger.debug("No thumbnail found for slug %s", requested_slug)
         return None
 
+    def _resolve_card_type_original(self, requested_name: str) -> Path | None:
+        """Return the original image file for the requested card type if available."""
+
+        requested_slug = slugify_card_type(Path(requested_name).stem)
+        if not requested_slug:
+            return None
+
+        logger.debug(
+            "Resolving original thumbnail for %s (slug=%s)", requested_name, requested_slug
+        )
+
+        filename = DEFAULT_THUMBNAIL_SLUG_MAP.get(requested_slug)
+        candidate_paths: list[Path] = []
+        for root in (CONFIG_THUMBNAIL_ROOT, REPO_THUMBNAIL_ROOT):
+            try:
+                root_resolved = root.resolve()
+            except OSError:
+                continue
+
+            if filename:
+                candidate = (root / filename).resolve()
+                if str(candidate).startswith(str(root_resolved)):
+                    candidate_paths.append(candidate)
+
+            try:
+                for entry in root.iterdir():
+                    try:
+                        if not entry.is_file():
+                            continue
+                    except OSError:
+                        continue
+
+                    if slugify_card_type(entry.stem) != requested_slug:
+                        continue
+
+                    resolved_entry = entry.resolve()
+                    if not str(resolved_entry).startswith(str(root_resolved)):
+                        continue
+
+                    if resolved_entry not in candidate_paths:
+                        candidate_paths.append(resolved_entry)
+            except FileNotFoundError:
+                continue
+            except OSError:
+                continue
+
+        for path in candidate_paths:
+            try:
+                if path.exists() and path.is_file():
+                    logger.debug(
+                        "Matched original thumbnail %s for slug %s", path, requested_slug
+                    )
+                    return path
+            except OSError:
+                continue
+
+        logger.debug("No original thumbnail found for slug %s", requested_slug)
+        return None
+
     def _parse_json(self) -> dict:
         length = int(self.headers.get("Content-Length", "0"))
         raw = self.rfile.read(length)
@@ -288,6 +347,27 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             logger.debug("Serving thumbnail %s for slug %s", match, slug)
+            self._serve_file(match)
+            return
+
+        if parsed.path == "/api/card-types/preview":
+            params = parse_qs(parsed.query)
+            slug = params.get("slug", [""])[0].strip()
+            if not slug:
+                logger.debug("Preview API request missing slug: %s", self.path)
+                self._error("Missing card type slug")
+                return
+
+            logger.debug("Preview API request for slug=%s", slug)
+            match = self._resolve_card_type_original(slug)
+            if match is None:
+                logger.info("Original preview not found for slug %s", slug)
+                match = self._resolve_card_type_thumbnail(slug)
+            if match is None:
+                self.send_error(HTTPStatus.NOT_FOUND.value)
+                return
+
+            logger.debug("Serving preview %s for slug %s", match, slug)
             self._serve_file(match)
             return
 
