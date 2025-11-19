@@ -901,6 +901,19 @@ button:disabled:hover {
   align-items: center;
 }
 
+.color-input input[type='color'] {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.color-input input[type='text'] {
+  min-width: 120px;
+}
+
 fieldset {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;

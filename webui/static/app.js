@@ -659,6 +659,9 @@ function renderFieldRow(entry, field, value) {
     case 'text':
       controls.appendChild(textInput(entry, field, value));
       break;
+    case 'color':
+      controls.appendChild(colorInput(entry, field, value));
+      break;
     case 'number':
       controls.appendChild(numberInput(entry, field, value));
       break;
@@ -722,6 +725,48 @@ function textInput(entry, field, value) {
     enableEpisodeTextFormatHelper(input);
   }
   return input;
+}
+
+function isValidHexColor(value) {
+  if (!value) {
+    return false;
+  }
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value.trim());
+}
+
+function colorInput(entry, field, value) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'inline-actions color-input';
+
+  const color = document.createElement('input');
+  color.type = 'color';
+  color.value = isValidHexColor(value) ? value : '#ffffff';
+
+  const text = document.createElement('input');
+  text.type = 'text';
+  text.placeholder = '#RRGGBB';
+  text.value = value ?? '';
+
+  const setValue = (newValue) => {
+    updateField(entry, field, newValue || undefined);
+  };
+
+  color.addEventListener('input', (event) => {
+    const selected = event.target.value;
+    text.value = selected;
+    setValue(selected);
+  });
+
+  text.addEventListener('input', (event) => {
+    const rawValue = event.target.value.trim();
+    setValue(rawValue);
+    if (isValidHexColor(rawValue)) {
+      color.value = rawValue;
+    }
+  });
+
+  wrapper.append(color, text);
+  return wrapper;
 }
 
 function defaultValueForField(field) {
