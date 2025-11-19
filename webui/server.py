@@ -411,6 +411,15 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             self._json_response({"path": requested.as_posix(), "entries": entries})
             return
 
+        if parsed.path == "/api/fonts/file":
+            params = parse_qs(parsed.query)
+            requested = self._resolve_font_file(params.get("path", [""])[0])
+            if not requested:
+                self._error("Font not found", status=HTTPStatus.NOT_FOUND)
+                return
+            self._serve_file(requested)
+            return
+
         if parsed.path == "/api/plex/search":
             params = parse_qs(parsed.query)
             query = params.get("q") or params.get("query")
@@ -645,6 +654,30 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         if not candidate.exists() or not candidate.is_dir():
             return base
+
+        return candidate
+
+    def _resolve_font_file(self, raw_path: str) -> Path | None:
+        """Resolve a font file path ensuring it stays within the font directory."""
+
+        if not raw_path:
+            return None
+
+        base = self.font_directory.resolve(strict=False)
+        candidate = Path(raw_path)
+
+        if not candidate.is_absolute():
+            candidate = (base / candidate).resolve(strict=False)
+        else:
+            candidate = candidate.resolve(strict=False)
+
+        try:
+            candidate.relative_to(base)
+        except ValueError:
+            return None
+
+        if not candidate.exists() or not candidate.is_file():
+            return None
 
         return candidate
 

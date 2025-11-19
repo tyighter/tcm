@@ -1721,71 +1721,106 @@ function openFieldSelector(entry) {
   modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
 }
 
+const fontFaceRegistry = new Map();
+
+function registerFontPreviewFace(path) {
+  if (!path) return null;
+  if (fontFaceRegistry.has(path)) {
+    return fontFaceRegistry.get(path);
+  }
+
+  const safeName = path.replace(/[^a-zA-Z0-9]/g, '_');
+  const fontName = `fontPreview_${safeName}_${fontFaceRegistry.size}`;
+  const fontUrl = `/api/fonts/file?path=${encodeURIComponent(path)}`;
+
+  const style = document.createElement('style');
+  style.textContent = `
+    @font-face {
+      font-family: '${fontName}';
+      src: url('${fontUrl}');
+    }
+  `;
+  document.head.appendChild(style);
+
+  fontFaceRegistry.set(path, fontName);
+  return fontName;
+}
+
 function openFontBrowser(entry, field, input) {
   const modal = buildModal('Select font');
 
-  let currentPath = input.value || state.fontDirectory;
-
   const pathDisplay = document.createElement('p');
   pathDisplay.className = 'helper-text';
+  pathDisplay.textContent = state.fontDirectory;
   modal.content.appendChild(pathDisplay);
 
   const browser = document.createElement('div');
   browser.className = 'font-browser';
 
-  const directories = document.createElement('div');
-  directories.className = 'panel';
-  const files = document.createElement('div');
-  files.className = 'panel';
+  const filesPanel = document.createElement('div');
+  filesPanel.className = 'panel';
+  const panelTitle = document.createElement('strong');
+  panelTitle.textContent = 'Available fonts';
+  filesPanel.appendChild(panelTitle);
 
-  browser.append(directories, files);
+  const fontGrid = document.createElement('div');
+  fontGrid.className = 'font-grid';
+  filesPanel.appendChild(fontGrid);
+
+  browser.appendChild(filesPanel);
   modal.content.appendChild(browser);
 
-  const loadPath = async (path) => {
-    const response = await fetch(`/api/fonts?path=${encodeURIComponent(path)}`);
+  const renderFonts = (entries) => {
+    fontGrid.innerHTML = '';
+    const fonts = (entries || []).filter((fileEntry) => fileEntry.type === 'file');
+
+    if (!fonts.length) {
+      const empty = document.createElement('p');
+      empty.className = 'font-grid__empty';
+      empty.textContent = 'No fonts found in /config/fonts';
+      fontGrid.appendChild(empty);
+      return;
+    }
+
+    fonts.forEach((fileEntry) => {
+      const tile = document.createElement('button');
+      tile.type = 'button';
+      tile.className = 'font-tile';
+      tile.addEventListener('click', () => {
+        input.value = fileEntry.path;
+        updateField(entry, field, fileEntry.path);
+        closeModal(modal.element);
+      });
+
+      const fontFace = registerFontPreviewFace(fileEntry.path);
+      const preview = document.createElement('span');
+      preview.className = 'font-tile__preview';
+      if (fontFace) {
+        preview.style.fontFamily = fontFace;
+      }
+      preview.textContent = 'AaBbCc 123';
+
+      const name = document.createElement('span');
+      name.className = 'font-tile__filename';
+      name.textContent = fileEntry.name;
+
+      tile.append(preview, name);
+      fontGrid.appendChild(tile);
+    });
+  };
+
+  const loadFonts = async () => {
+    const response = await fetch(`/api/fonts?path=${encodeURIComponent(state.fontDirectory)}`);
     if (!response.ok) {
       showToast('Unable to load fonts', 'error');
       return;
     }
     const data = await response.json();
-    currentPath = data.path;
     pathDisplay.textContent = data.path;
-
-    directories.innerHTML = '<strong>Folders</strong>';
-    files.innerHTML = '<strong>Fonts</strong>';
-
-    const dirList = document.createElement('ul');
-    const fileList = document.createElement('ul');
-
-    const parent = PathParent(data.path);
-    if (parent) {
-      const up = document.createElement('li');
-      up.textContent = '⬆︎ Parent directory';
-      up.addEventListener('click', () => loadPath(parent));
-      dirList.appendChild(up);
-    }
-
-    (data.entries || []).forEach((fileEntry) => {
-      const item = document.createElement('li');
-      item.textContent = fileEntry.name;
-      if (fileEntry.type === 'directory') {
-        item.addEventListener('click', () => loadPath(fileEntry.path));
-        dirList.appendChild(item);
-      } else {
-        item.addEventListener('click', () => {
-          input.value = fileEntry.path;
-          updateField(entry, field, fileEntry.path);
-          closeModal(modal.element);
-        });
-        fileList.appendChild(item);
-      }
-    });
-
-    directories.appendChild(dirList);
-    files.appendChild(fileList);
+    renderFonts(data.entries || []);
   };
 
-  loadPath(currentPath);
+  loadFonts();
 
   modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
 }
