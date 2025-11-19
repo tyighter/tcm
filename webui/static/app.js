@@ -14,6 +14,7 @@ const dom = {
   save: document.getElementById('save-config'),
   alphabetize: document.getElementById('alphabetize-entries'),
   runSync: document.getElementById('run-metadata-sync'),
+  downloadSources: document.getElementById('download-sources'),
   runBuilder: document.getElementById('run-builder'),
   modals: document.getElementById('modals'),
 };
@@ -101,6 +102,17 @@ function registerEvents() {
       triggerServerAction(dom.runSync, '/api/actions/sync', 'Metadata sync complete', {
         workingLabel: 'Syncing...'
       })
+    );
+  }
+
+  if (dom.downloadSources) {
+    dom.downloadSources.addEventListener('click', () =>
+      triggerServerAction(
+        dom.downloadSources,
+        '/api/actions/download-sources',
+        'Downloaded logos and sources',
+        { workingLabel: 'Downloading...' }
+      )
     );
   }
 

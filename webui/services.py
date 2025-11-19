@@ -335,3 +335,21 @@ def run_builder() -> None:
     """Run the full TitleCardMaker pipeline."""
 
     _run_manager_job(lambda manager: manager.run())
+
+
+def run_asset_downloads() -> None:
+    """Download logos and source images for all configured series."""
+
+    def _execute(manager: Manager) -> None:
+        manager.sync_series_files()
+        manager.create_shows()
+        manager.assign_interfaces()
+        manager.set_show_ids()
+        manager.read_show_source()
+        manager.add_new_episodes()
+        manager.set_episode_ids()
+        manager.add_translations()
+        manager.download_logos()
+        manager.select_source_images()
+
+    _run_manager_job(_execute)
