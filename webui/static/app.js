@@ -551,10 +551,6 @@ function createCardTypeThumbnail(choice) {
     choice: choice.value,
     candidates,
   });
-  logToServer('DEBUG', 'Card type thumbnail candidates', {
-    choice: choice.value,
-    candidates,
-  });
   if (candidates.length === 0) {
     wrapper.classList.add('card-type-thumbnail-empty');
     logToServer('INFO', 'No thumbnail candidates available', {
@@ -590,21 +586,11 @@ function createCardTypeThumbnail(choice) {
       position: index,
       total: candidates.length,
     });
-    logToServer('DEBUG', 'Attempting card type thumbnail', {
-      choice: choice.value,
-      candidate,
-      position: index,
-      total: candidates.length,
-    });
     img.src = candidate;
   };
 
   img.addEventListener('load', () => {
     console.debug('Card type thumbnail loaded', {
-      choice: choice.value,
-      src: img.currentSrc || img.src,
-    });
-    logToServer('DEBUG', 'Card type thumbnail loaded', {
       choice: choice.value,
       src: img.currentSrc || img.src,
     });

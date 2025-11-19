@@ -787,7 +787,7 @@ class Show(YamlReader):
 
             # Log to user
             if self.logo.exists():
-                log.debug(f'Downloaded logo for {self}')
+                log.debug(f'Downloaded logo for {self} to {self.logo}')
 
         return None
 
@@ -976,8 +976,13 @@ class Show(YamlReader):
                 # Attempt to download image, log status and exit loop
                 if image:
                     if WebInterface.download_image(image, episode.source):
-                        log.debug(f'Downloaded {episode.source.name} for {self} '
-                                f'from {source_interface}')
+                        log.debug(
+                            'Downloaded %s for %s from %s to %s',
+                            episode.source.name,
+                            self,
+                            source_interface,
+                            episode.source,
+                        )
                     else:
                         log.error(f'Unable to download image '
                                   f'{episode.source.name} for {self} from '
