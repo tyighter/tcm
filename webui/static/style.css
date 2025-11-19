@@ -653,27 +653,30 @@ button:disabled:hover {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(8, 9, 12, 0.7);
+  background: radial-gradient(circle at 20% 20%, rgba(59, 120, 231, 0.08), transparent 35%),
+    radial-gradient(circle at 80% 30%, rgba(26, 115, 232, 0.08), transparent 32%),
+    rgba(16, 21, 29, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 100;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(10px);
 }
 
 .modal {
-  background: rgba(26, 27, 33, 0.95);
-  border-radius: 18px;
-  padding: 1.5rem;
+  background: linear-gradient(180deg, #ffffff, #f7f7f7);
+  border-radius: 16px;
+  padding: 1.5rem 1.75rem;
   width: min(780px, 90vw);
   max-height: 85vh;
   overflow-y: auto;
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  color: var(--text);
 }
 
 .modal > div {
@@ -685,26 +688,28 @@ button:disabled:hover {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #e5e5e5;
 }
 
 .modal header h2 {
   margin: 0;
+  font-size: 1.35rem;
 }
 
 .modal-close {
   width: 2.75rem;
   height: 2.75rem;
   border-radius: 999px;
-  border: 1px solid rgba(227, 107, 107, 0.3);
-  background: radial-gradient(circle at 30% 30%, rgba(227, 107, 107, 0.6), rgba(227, 107, 107, 0.25));
-  color: #fff5f5;
+  border: 1px solid #c7c7c7;
+  background: linear-gradient(180deg, #ffffff, #f0f0f0);
+  color: var(--muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 8px 18px rgba(227, 107, 107, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), var(--shadow-sm);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  backdrop-filter: blur(4px);
 }
 
 .modal-close svg {
@@ -722,7 +727,8 @@ button:disabled:hover {
 
 .modal-close:hover {
   transform: translateY(-1px) scale(1.02);
-  box-shadow: 0 14px 22px rgba(227, 107, 107, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), var(--shadow-md);
+  background: linear-gradient(180deg, #ffffff, #eaeaea);
 }
 
 .modal footer {
@@ -744,10 +750,11 @@ button:disabled:hover {
 }
 
 .field-group {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--panel-strong);
   padding: 0.5rem 0.75rem 0.75rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .field-group__summary {
