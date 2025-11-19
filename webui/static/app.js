@@ -25,6 +25,97 @@ document.body.appendChild(toastContainer);
 
 const CLIENT_LOG_ENDPOINT = '/api/client-log';
 
+const cardTypePreviewElement = document.createElement('div');
+cardTypePreviewElement.className = 'card-type-preview';
+cardTypePreviewElement.style.left = '0px';
+cardTypePreviewElement.style.top = '0px';
+const cardTypePreviewImage = document.createElement('img');
+cardTypePreviewImage.alt = 'Card type preview';
+cardTypePreviewElement.appendChild(cardTypePreviewImage);
+document.body.appendChild(cardTypePreviewElement);
+
+let cardTypePreviewVisible = false;
+const hoverMediaQuery =
+  typeof window.matchMedia === 'function'
+    ? window.matchMedia('(hover: hover)')
+    : null;
+
+function canShowCardTypePreview() {
+  if (!hoverMediaQuery) {
+    return true;
+  }
+  return hoverMediaQuery.matches;
+}
+
+function positionCardTypePreview(event) {
+  if (!event) {
+    return;
+  }
+  const offset = 18;
+  const estimatedWidth =
+    cardTypePreviewElement.offsetWidth ||
+    cardTypePreviewImage.naturalWidth ||
+    320;
+  const estimatedHeight =
+    cardTypePreviewElement.offsetHeight ||
+    cardTypePreviewImage.naturalHeight ||
+    180;
+  let left = event.clientX + offset;
+  let top = event.clientY + offset;
+  const maxLeft = window.innerWidth - estimatedWidth - 12;
+  const maxTop = window.innerHeight - estimatedHeight - 12;
+  if (left > maxLeft) {
+    left = Math.max(12, event.clientX - estimatedWidth - offset);
+  }
+  if (top > maxTop) {
+    top = Math.max(12, event.clientY - estimatedHeight - offset);
+  }
+  cardTypePreviewElement.style.left = `${Math.max(12, left)}px`;
+  cardTypePreviewElement.style.top = `${Math.max(12, top)}px`;
+}
+
+function showCardTypePreview(src, label, event) {
+  if (!src || !canShowCardTypePreview()) {
+    return;
+  }
+  cardTypePreviewImage.src = src;
+  cardTypePreviewImage.alt = label ? `${label} preview` : 'Card type preview';
+  positionCardTypePreview(event);
+  cardTypePreviewElement.classList.add('visible');
+  cardTypePreviewVisible = true;
+}
+
+function moveCardTypePreview(event) {
+  if (!cardTypePreviewVisible) {
+    return;
+  }
+  positionCardTypePreview(event);
+}
+
+function hideCardTypePreview() {
+  cardTypePreviewVisible = false;
+  cardTypePreviewElement.classList.remove('visible');
+}
+
+function enableCardTypePreview(wrapper) {
+  if (!wrapper) {
+    return;
+  }
+  if (wrapper.dataset.previewHandlers === 'true') {
+    return;
+  }
+  wrapper.dataset.previewHandlers = 'true';
+  wrapper.addEventListener('mouseenter', (event) => {
+    const src = wrapper.dataset.previewSrc;
+    if (!src) {
+      return;
+    }
+    showCardTypePreview(src, wrapper.dataset.previewLabel, event);
+  });
+  wrapper.addEventListener('mousemove', moveCardTypePreview);
+  wrapper.addEventListener('mouseleave', hideCardTypePreview);
+}
+
 function logToServer(level, message, context = {}) {
   try {
     fetch(CLIENT_LOG_ENDPOINT, {
@@ -540,6 +631,7 @@ function cardTypeImageCandidates(choice) {
 function createCardTypeThumbnail(choice) {
   const wrapper = document.createElement('div');
   wrapper.className = 'card-type-thumbnail';
+  wrapper.dataset.previewLabel = choice.label || choice.value || 'Card type';
 
   const fallback = document.createElement('span');
   fallback.className = 'card-type-thumbnail-fallback';
@@ -598,6 +690,7 @@ function createCardTypeThumbnail(choice) {
     wrapper.classList.add('card-type-thumbnail-loaded');
     wrapper.prepend(img);
     fallback.remove();
+    wrapper.dataset.previewSrc = img.currentSrc || img.src;
   });
 
   img.addEventListener('error', (event) => {
@@ -610,6 +703,8 @@ function createCardTypeThumbnail(choice) {
   });
   wrapper.prepend(img);
   tryNext();
+
+  enableCardTypePreview(wrapper);
 
   return wrapper;
 }
@@ -652,6 +747,7 @@ function openCardTypeModal(field, currentValue, onSelect) {
   const renderResults = () => {
     const term = search.value.trim().toLowerCase();
     results.innerHTML = '';
+    hideCardTypePreview();
 
     const matches = choices.filter((choice) => {
       const label = (choice.label || '').toLowerCase();
@@ -1551,6 +1647,7 @@ function closeButton(onClick) {
 }
 
 function closeModal(element) {
+  hideCardTypePreview();
   element.remove();
 }
 
