@@ -198,6 +198,8 @@ def prepare_thumbnail_from_config(slug: str) -> Path | None:
             try:
                 if path.exists():
                     source_paths.append(path)
+            except OSError:
+                pass
         try:
             for candidate in root.iterdir():
                 try:
