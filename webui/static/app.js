@@ -949,14 +949,7 @@ function createCardTypeThumbnail(choice) {
 
 function openCardTypeModal(field, currentValue, onSelect) {
   const modal = buildModal('Select card type');
-
-  const dismissButton = document.createElement('button');
-  dismissButton.type = 'button';
-  dismissButton.className = 'modal-close';
-  dismissButton.setAttribute('aria-label', 'Close card type selector');
-  dismissButton.innerHTML = '&times;';
-  dismissButton.addEventListener('click', () => closeModal(modal.element));
-  modal.modal.appendChild(dismissButton);
+  addFloatingCloseButton(modal, 'Close card type selector');
 
   const wrapper = document.createElement('div');
   wrapper.className = 'card-type-modal';
@@ -1473,39 +1466,226 @@ function deleteValue(object, path) {
 // -----------------------------------------------------------------------------
 // Additional UI components
 // -----------------------------------------------------------------------------
+const BASICS_FIELDS = new Set([
+  'library',
+  'card_type',
+  'episode_text_format',
+  'episode_data_source',
+  'watched_style',
+  'unwatched_style',
+]);
+
+const ID_FIELDS = new Set([
+  'tmdb_id',
+  'tvdb_id',
+  'imdb_id',
+  'tvrage_id',
+  'emby_id',
+  'jellyfin_id',
+  'sonarr_id',
+]);
+
+const SYNC_FIELDS = new Set([
+  'refresh_titles',
+  'sync_specials',
+  'sonarr_sync',
+  'tmdb_sync',
+  'tmdb_skip_localized_images',
+]);
+
+const OUTPUT_FIELDS = new Set([
+  'archive',
+  'archive_all_variations',
+  'archive_name',
+  'library_override',
+  'filename_format',
+  'image_source_priority',
+]);
+
+const TEXT_FIELDS = new Set(['translation']);
+
+const FIELD_GROUP_DEFINITIONS = [
+  {
+    id: 'basics',
+    label: 'Getting started',
+    matcher: (field) => BASICS_FIELDS.has(field.id),
+  },
+  {
+    id: 'identifiers',
+    label: 'Metadata IDs',
+    matcher: (field) => ID_FIELDS.has(field.id),
+  },
+  {
+    id: 'sync',
+    label: 'Sync & automation',
+    matcher: (field) => SYNC_FIELDS.has(field.id),
+  },
+  {
+    id: 'output',
+    label: 'Output & archiving',
+    matcher: (field) => OUTPUT_FIELDS.has(field.id),
+  },
+  {
+    id: 'text',
+    label: 'Text & localization',
+    matcher: (field) => TEXT_FIELDS.has(field.id),
+  },
+  {
+    id: 'font',
+    label: 'Font & typography',
+    matcher: (field) => field.path?.[0] === 'font',
+  },
+  {
+    id: 'extras',
+    label: 'Advanced card options',
+    matcher: (field) => field.id === 'extras',
+  },
+  {
+    id: 'seasons',
+    label: 'Seasons & episodes',
+    matcher: (field) => field.path?.[0] === 'seasons' || field.id === 'episode_ranges',
+  },
+];
+
+const DEFAULT_FIELD_GROUP = { id: 'other', label: 'Other fields' };
+
+function resolveFieldGroup(field) {
+  const match = FIELD_GROUP_DEFINITIONS.find((group) => group.matcher(field));
+  return match || DEFAULT_FIELD_GROUP;
+}
+
+function createFieldOption(field, onSelect) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'field-option';
+
+  const title = document.createElement('span');
+  title.className = 'field-option__title';
+  title.textContent = field.label;
+
+  const meta = document.createElement('span');
+  meta.className = 'field-option__meta';
+  const fragments = [];
+  if (field.type) {
+    fragments.push(field.type);
+  }
+  if (field.path?.length) {
+    fragments.push(field.path.join(' › '));
+  }
+  meta.textContent = fragments.join(' • ');
+
+  button.append(title, meta);
+  button.addEventListener('click', () => onSelect(field));
+  return button;
+}
+
+function renderFieldGroups(container, fields, onSelect) {
+  container.innerHTML = '';
+  if (fields.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'helper-text';
+    empty.textContent = 'No fields match your search.';
+    container.appendChild(empty);
+    return;
+  }
+
+  const grouped = new Map();
+  fields.forEach((field) => {
+    const groupMeta = resolveFieldGroup(field);
+    if (!grouped.has(groupMeta.id)) {
+      grouped.set(groupMeta.id, { ...groupMeta, fields: [] });
+    }
+    grouped.get(groupMeta.id).fields.push(field);
+  });
+
+  const orderedGroups = FIELD_GROUP_DEFINITIONS.map((definition) => grouped.get(definition.id)).filter(
+    Boolean
+  );
+  if (grouped.has(DEFAULT_FIELD_GROUP.id)) {
+    orderedGroups.push(grouped.get(DEFAULT_FIELD_GROUP.id));
+  }
+
+  orderedGroups.forEach((group) => {
+    if (!group) {
+      return;
+    }
+    const section = document.createElement('details');
+    section.className = 'field-group';
+    section.open = true;
+
+    const summary = document.createElement('summary');
+    summary.className = 'field-group__summary';
+    const label = document.createElement('span');
+    label.textContent = group.label;
+    const count = document.createElement('span');
+    count.className = 'field-group__count';
+    count.textContent = group.fields.length;
+    summary.append(label, count);
+
+    const list = document.createElement('div');
+    list.className = 'field-group__list';
+    group.fields
+      .sort((a, b) =>
+        (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' })
+      )
+      .forEach((field) => list.appendChild(createFieldOption(field, onSelect)));
+
+    section.append(summary, list);
+    container.appendChild(section);
+  });
+}
+
 function openFieldSelector(entry) {
   const modal = buildModal('Add field');
+  addFloatingCloseButton(modal, 'Close add field dialog');
 
-  const available = state.fields.filter(
-    (field) => getValue(entry.config, field.path) === undefined
-  );
+  const available = state.fields
+    .filter((field) => getValue(entry.config, field.path) === undefined)
+    .sort((a, b) =>
+      (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' })
+    );
 
   if (available.length === 0) {
     const message = document.createElement('p');
     message.textContent = 'All available options are already configured.';
     modal.content.appendChild(message);
   } else {
-    const list = document.createElement('div');
-    list.className = 'search-results';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'field-selector';
 
-    available.forEach((field) => {
-      const item = document.createElement('div');
-      item.className = 'search-result';
-      const title = document.createElement('div');
-      title.innerHTML = `<h3>${field.label}</h3>`;
-      const add = document.createElement('button');
-      add.textContent = 'Add';
-      add.addEventListener('click', () => {
+    const search = document.createElement('input');
+    search.type = 'search';
+    search.placeholder = 'Search fields...';
+    search.className = 'modal-search';
+
+    const groupsContainer = document.createElement('div');
+    groupsContainer.className = 'field-groups';
+
+    const render = () => {
+      const term = search.value.trim().toLowerCase();
+      const filtered = available.filter((field) => {
+        if (!term) {
+          return true;
+        }
+        const haystack = [field.label, field.type, field.path?.join(' ') || '']
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(term);
+      });
+      renderFieldGroups(groupsContainer, filtered, (field) => {
         const defaultValue = defaultValueForField(field);
         updateField(entry, field, defaultValue);
         closeModal(modal.element);
         renderEntries();
       });
-      item.append(title, add);
-      list.appendChild(item);
-    });
+    };
 
-    modal.content.appendChild(list);
+    search.addEventListener('input', render);
+    render();
+
+    wrapper.append(search, groupsContainer);
+    modal.content.appendChild(wrapper);
   }
 
   modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
@@ -1871,6 +2051,18 @@ function buildModal(title) {
   dom.modals.appendChild(backdrop);
 
   return { element: backdrop, modal, header, content, footer };
+}
+
+function addFloatingCloseButton(modal, label = 'Close dialog') {
+  const dismissButton = document.createElement('button');
+  dismissButton.type = 'button';
+  dismissButton.className = 'modal-close modal-close--floating';
+  dismissButton.setAttribute('aria-label', label);
+  dismissButton.innerHTML =
+    '<svg viewBox="0 0 24 24" role="presentation" aria-hidden="true"><path d="M6.4 6.4a1 1 0 0 1 1.42 0L12 10.6l4.18-4.2a1 1 0 0 1 1.42 1.42L13.42 12l4.18 4.18a1 1 0 0 1-1.42 1.42L12 13.42l-4.18 4.18a1 1 0 0 1-1.42-1.42L10.6 12 6.4 7.82a1 1 0 0 1 0-1.42z" /></svg>';
+  dismissButton.addEventListener('click', () => closeModal(modal.element));
+  modal.modal.insertBefore(dismissButton, modal.modal.firstChild);
+  return dismissButton;
 }
 
 function closeButton(onClick) {
