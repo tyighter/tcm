@@ -178,7 +178,7 @@ SERIES_FIELD_TEMPLATE = [
         "id": "font.color",
         "label": "Font color",
         "path": ["font", "color"],
-        "type": "text",
+        "type": "color",
     },
     {
         "id": "font.case",
