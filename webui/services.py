@@ -240,6 +240,47 @@ def run_builder_for_series(
     _run_manager_job(_run)
 
 
+def download_logo_for_series(
+    context: AppContext,
+    tv_manager: TvYamlManager,
+    series_name: str,
+    series_config: dict[str, Any] | None = None,
+) -> None:
+    """Ensure the specified series has an up-to-date logo on disk."""
+
+    config = _prepare_series_context(tv_manager, series_name, series_config)
+
+    runtime_config = merge_series_configuration(
+        context,
+        tv_manager,
+        series_name,
+        config,
+    )
+
+    show = Show(
+        series_name,
+        runtime_config,
+        context.preference_parser.source_directory,
+        context.preference_parser,
+    )
+
+    if not show.valid:
+        raise RuntimeError("Series configuration is invalid; check required fields")
+
+    def _run(manager: Manager) -> None:
+        manager.sync_series_files()
+        show.assign_interfaces(
+            manager.emby_interface,
+            manager.jellyfin_interface,
+            manager.plex_interface,
+            manager.sonarr_interfaces,
+            manager.tmdb_interface,
+        )
+        show.download_logo()
+
+    _run_manager_job(_run)
+
+
 def _run_fixer_command(arguments: list[str]) -> None:
     """Execute fixer.py with the supplied arguments, ensuring exclusivity."""
 

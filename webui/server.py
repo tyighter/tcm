@@ -20,6 +20,7 @@ from .config import AppContext, create_app_context
 from .options import build_series_fields
 from .services import (
     ActionInProgressError,
+    download_logo_for_series,
     forget_series_cards,
     generate_preview,
     run_asset_downloads,
@@ -132,7 +133,34 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         if logo_path.exists() and logo_path.is_file():
             return logo_path
 
-        logger.info("Logo not found for series %s", series_name)
+        logger.info("Logo not found for series %s; attempting download", series_name)
+
+        try:
+            download_logo_for_series(
+                self.context,
+                self.tv_manager,
+                series_name,
+            )
+        except ActionInProgressError:
+            logger.info(
+                "Logo download already in progress; skipping forced download for %s",
+                series_name,
+            )
+            return None
+        except ValueError:
+            logger.warning(
+                "Unable to resolve configuration for series %s when downloading logo",
+                series_name,
+            )
+            return None
+        except Exception:  # pylint: disable=broad-except
+            logger.exception("Failed to download logo for series %s", series_name)
+            return None
+
+        if logo_path.exists() and logo_path.is_file():
+            return logo_path
+
+        logger.info("Logo download completed but file still missing for series %s", series_name)
         return None
 
     def _resolve_card_type_thumbnail(self, requested_name: str) -> Path | None:
