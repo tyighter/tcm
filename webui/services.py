@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import random
 import re
 import subprocess
 import sys
@@ -133,7 +134,7 @@ def generate_preview(
     if not show.episodes:
         raise RuntimeError("No episodes are available for preview")
 
-    episode = next(iter(show.episodes.values()))
+    episode = random.choice(list(show.episodes.values()))
     show.select_source_images(select_only=episode)
 
     if not episode.source.exists():
