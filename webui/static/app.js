@@ -332,6 +332,7 @@ async function init() {
     registerEvents();
     setSearchVisibility(false);
     renderEntries();
+    requestEntryPreviews();
   } catch (error) {
     showToast(`Failed to load configuration: ${error.message}`, 'error');
   }
@@ -477,6 +478,8 @@ function renderEntries() {
       state.pendingEntryId = null;
     });
   }
+
+  requestEntryPreviews(filtered);
 }
 
 function renderEntry(entry) {
@@ -518,6 +521,32 @@ function renderEntry(entry) {
     logo.removeAttribute('src');
   });
 
+  const preview = document.createElement('div');
+  preview.className = 'entry-preview';
+  preview.dataset.entryId = entry.id;
+
+  const previewImage = document.createElement('img');
+  previewImage.className = 'entry-preview__image';
+  previewImage.alt = `${entry.name} preview`;
+
+  const previewPlaceholder = document.createElement('span');
+  previewPlaceholder.className = 'entry-preview__placeholder';
+  previewPlaceholder.textContent = 'Generating preview...';
+
+  if (entry.previewSrc) {
+    previewImage.src = entry.previewSrc;
+    preview.classList.add('entry-preview--loaded');
+  } else if (entry.previewError) {
+    previewPlaceholder.textContent = entry.previewError;
+    preview.classList.add('entry-preview--error');
+  }
+
+  preview.append(previewImage, previewPlaceholder);
+
+  const media = document.createElement('div');
+  media.className = 'entry-media';
+  media.append(logo, preview);
+
   const titleInput = document.createElement('input');
   titleInput.type = 'text';
   titleInput.value = entry.name;
@@ -534,7 +563,7 @@ function renderEntry(entry) {
   titleContainer.className = 'entry-title';
   titleContainer.appendChild(titleInput);
 
-  summary.append(toggleButton, logo, titleContainer);
+  summary.append(toggleButton, media, titleContainer);
   syncToggleAppearance();
 
   const actions = document.createElement('div');
@@ -613,6 +642,80 @@ function renderEntry(entry) {
 
   container.append(header, body);
   return container;
+}
+
+function updateEntryPreview(entry) {
+  const wrapper = dom.entries.querySelector(
+    `[data-entry-id="${entry.id}"] .entry-preview`
+  );
+  if (!wrapper) {
+    return;
+  }
+
+  const image = wrapper.querySelector('.entry-preview__image');
+  const placeholder = wrapper.querySelector('.entry-preview__placeholder');
+
+  wrapper.classList.remove('entry-preview--error', 'entry-preview--loaded');
+
+  if (entry.previewSrc && image) {
+    image.src = entry.previewSrc;
+    image.alt = `${entry.name} preview`;
+    wrapper.classList.add('entry-preview--loaded');
+    if (placeholder) {
+      placeholder.textContent = '';
+    }
+    return;
+  }
+
+  if (entry.previewError && placeholder) {
+    placeholder.textContent = entry.previewError;
+    wrapper.classList.add('entry-preview--error');
+  }
+}
+
+async function loadEntryPreview(entry) {
+  if (!entry || entry.previewSrc || entry.previewLoading) {
+    return;
+  }
+
+  entry.previewLoading = true;
+  entry.previewError = null;
+
+  try {
+    const response = await fetch('/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: entry.name, config: entry.config }),
+    });
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || 'Preview request failed');
+    }
+
+    const data = await response.json();
+    if (!data?.mime || !data?.data) {
+      throw new Error('Preview payload was missing image data');
+    }
+
+    entry.previewSrc = `data:${data.mime};base64,${data.data}`;
+  } catch (error) {
+    entry.previewError = error.message || 'Preview unavailable';
+    clientLog('preview-generation-failed', {
+      event: 'preview-generation-failed',
+      name: entry.name,
+      error: entry.previewError,
+    });
+  } finally {
+    entry.previewLoading = false;
+    updateEntryPreview(entry);
+  }
+}
+
+function requestEntryPreviews(entries = state.entries) {
+  entries.forEach((entry) => {
+    void loadEntryPreview(entry);
+  });
 }
 
 function isEntryCollapsed(entryId) {
