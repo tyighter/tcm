@@ -143,6 +143,26 @@ button:disabled:hover {
   min-width: 0;
 }
 
+.entry-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.entry--collapsed .entry-toggle {
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .entry-logo {
   width: 96px;
   height: 96px;
@@ -188,6 +208,10 @@ button:disabled:hover {
   padding: 1rem 1.5rem 1.5rem;
   display: grid;
   gap: 1rem;
+}
+
+.entry--collapsed .entry-body {
+  display: none;
 }
 
 .field-row {
