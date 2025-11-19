@@ -1343,7 +1343,7 @@ function translationEditor(entry, field, value) {
     container.innerHTML = '';
     translations.forEach((translation, index) => {
       const row = document.createElement('div');
-      row.className = 'multi-row-item';
+      row.className = 'multi-row-item item-card';
 
       const language = document.createElement('input');
       language.type = 'text';
@@ -1364,7 +1364,10 @@ function translationEditor(entry, field, value) {
       });
 
       const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'item-remove';
       remove.textContent = '×';
+      remove.setAttribute('aria-label', 'Remove translation');
       remove.addEventListener('click', () => {
         translations.splice(index, 1);
         updateTranslations();
@@ -1483,7 +1486,7 @@ function replacementEditor(entry, field, value) {
     list.innerHTML = '';
     rows.forEach((row, index) => {
       const line = document.createElement('div');
-      line.className = 'table-list-row';
+      line.className = 'table-list-row item-card';
 
       const find = document.createElement('input');
       find.type = 'text';
@@ -1504,7 +1507,10 @@ function replacementEditor(entry, field, value) {
       });
 
       const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'item-remove';
       remove.textContent = '×';
+      remove.setAttribute('aria-label', 'Remove replacement');
       remove.addEventListener('click', () => {
         rows.splice(index, 1);
         updateReplacements();
@@ -1579,7 +1585,10 @@ function mapEditor(entry, field, value, keyLabel, valueLabel, onUpdate) {
       });
 
       const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'item-remove';
       remove.textContent = '×';
+      remove.setAttribute('aria-label', `Remove ${keyLabel.toLowerCase()}`);
       remove.addEventListener('click', () => {
         rows.splice(index, 1);
         update();

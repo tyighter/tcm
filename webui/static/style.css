@@ -473,19 +473,48 @@ button:disabled:hover {
 
 .field-row .multi-row {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .multi-row-item {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 0.5rem;
-  align-items: center;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  align-items: flex-start;
 }
 
 .multi-row-item button {
   padding: 0.4rem 0.6rem;
   border-radius: 8px;
+}
+
+.item-card {
+  position: relative;
+  padding: 1rem 1rem 0.85rem;
+  padding-right: 3rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: var(--surface-elevated);
+}
+
+.item-remove {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.item-remove:hover {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .helper-text {
@@ -1002,14 +1031,14 @@ fieldset legend {
 
 .table-list {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .table-list-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) auto;
-  gap: 0.5rem;
-  align-items: center;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  align-items: flex-start;
 }
 
 .table-list-row input {
