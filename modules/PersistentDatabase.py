@@ -1,4 +1,5 @@
 from pathlib import Path
+from threading import RLock
 from time import sleep
 from typing import Callable
 
@@ -20,6 +21,7 @@ class PersistentDatabase:
     """
 
     MAX_DB_RETRY_COUNT: int = 5
+    _locks: dict[Path, RLock] = {}
 
 
     def __init__(self, filename: str) -> None:
@@ -34,6 +36,7 @@ class PersistentDatabase:
         # Path to the file itself
         self.file: Path = global_objects.pp.database_directory / filename
         self.file.parent.mkdir(exist_ok=True, parents=True)
+        self._lock = self._locks.setdefault(self.file.resolve(), RLock())
 
         # Initialize TinyDB from file
         try:
@@ -66,7 +69,8 @@ class PersistentDatabase:
         def wrapper(*args, __retries: int = 0, **kwargs) -> None:
             try:
                 kwargs.pop('__retries', None)
-                return getattr(self.db, database_func)(*args, **kwargs)
+                with self._lock:
+                    return getattr(self.db, database_func)(*args, **kwargs)
             except (ValueError, JSONDecodeError) as e:
                 # If this function has been attempted too many times, just raise
                 if __retries > self.MAX_DB_RETRY_COUNT:
@@ -98,11 +102,12 @@ class PersistentDatabase:
         # recreating the backing file directory, and then recreating the
         # TinyDB instance. This avoids leaving a partially written or empty
         # database file behind after conflicts.
-        try:
-            self.db.close()
-        except Exception:
-            pass
+        with self._lock:
+            try:
+                self.db.close()
+            except Exception:
+                pass
 
-        self.file.unlink(missing_ok=True)
-        self.file.parent.mkdir(exist_ok=True, parents=True)
-        self.db = TinyDB(self.file)
+            self.file.unlink(missing_ok=True)
+            self.file.parent.mkdir(exist_ok=True, parents=True)
+            self.db = TinyDB(self.file)
