@@ -159,7 +159,12 @@ def generate_preview(
     if not valid:
         raise RuntimeError("The selected font is missing characters for the preview")
 
-    title_card.create()
+    created = title_card.create()
+    if not created or not destination.exists():
+        episode.destination = original_destination
+        rmtree(temp_dir, ignore_errors=True)
+        raise RuntimeError("Failed to generate preview image")
+
     data = destination.read_bytes()
 
     # Reset and cleanup
