@@ -25,6 +25,152 @@ document.body.appendChild(toastContainer);
 
 const CLIENT_LOG_ENDPOINT = '/api/client-log';
 
+const EPISODE_TEXT_FORMAT_GROUPS = [
+  {
+    label: 'Series',
+    options: [
+      { label: 'Series Name', value: '{series_name}', example: 'The Mandalorian' },
+      { label: 'Series Year', value: '{series_year}', example: '2019' },
+    ],
+  },
+  {
+    label: 'Season',
+    options: [
+      { label: 'Season Number', value: '{season_number}', example: '3' },
+      { label: 'Cardinal Season Number', value: '{season_number_cardinal}', example: 'three' },
+      {
+        label: 'Cardinal Season Number (Title Case)',
+        value: '{season_number_cardinal_title}',
+        example: 'Three',
+      },
+      { label: 'Ordinal Season Number', value: '{season_number_ordinal}', example: 'third' },
+      {
+        label: 'Ordinal Season Number (Title Case)',
+        value: '{season_number_ordinal_title}',
+        example: 'Third',
+      },
+    ],
+  },
+  {
+    label: 'Episode',
+    options: [
+      { label: 'Episode Number', value: '{episode_number}', example: '10' },
+      { label: 'Cardinal Episode Number', value: '{episode_number_cardinal}', example: 'ten' },
+      {
+        label: 'Cardinal Episode Number (Title Case)',
+        value: '{episode_number_cardinal_title}',
+        example: 'Ten',
+      },
+      { label: 'Ordinal Episode Number', value: '{episode_number_ordinal}', example: 'tenth' },
+      {
+        label: 'Ordinal Episode Number (Title Case)',
+        value: '{episode_number_ordinal_title}',
+        example: 'Tenth',
+      },
+    ],
+  },
+  {
+    label: 'Absolute Numbering',
+    options: [
+      { label: 'Absolute Episode Number', value: '{abs_number}', example: '47' },
+      {
+        label: 'Cardinal Absolute Episode Number',
+        value: '{absolute_number_cardinal}',
+        example: 'forty-seven',
+      },
+      {
+        label: 'Cardinal Absolute Episode Number (Title Case)',
+        value: '{absolute_number_cardinal_title}',
+        example: 'Forty-Seven',
+      },
+      {
+        label: 'Ordinal Absolute Episode Number',
+        value: '{absolute_number_ordinal}',
+        example: 'forty-seventh',
+      },
+      {
+        label: 'Ordinal Absolute Episode Number (Title Case)',
+        value: '{absolute_number_ordinal_title}',
+        example: 'Forty-Seventh',
+      },
+    ],
+  },
+  {
+    label: 'Counts & Maximums',
+    options: [
+      { label: 'Season Episode Count', value: '{season_episode_count}', example: '12' },
+      { label: 'Season Episode Max', value: '{season_episode_max}', example: '12' },
+      { label: 'Season Absolute Max', value: '{season_absolute_max}', example: '132' },
+      { label: 'Series Episode Count', value: '{series_episode_count}', example: '120' },
+      { label: 'Series Episode Max', value: '{series_episode_max}', example: '24' },
+      { label: 'Series Absolute Max', value: '{series_absolute_max}', example: '250' },
+    ],
+  },
+  {
+    label: 'Multi-episode Ranges',
+    options: [
+      { label: 'Episode Range Start', value: '{episode_start}', example: '3' },
+      { label: 'Episode Range End', value: '{episode_end}', example: '4' },
+      {
+        label: 'Episode Range Start (Cardinal)',
+        value: '{episode_start_cardinal}',
+        example: 'three',
+      },
+      {
+        label: 'Episode Range End (Cardinal)',
+        value: '{episode_end_cardinal}',
+        example: 'four',
+      },
+      {
+        label: 'Episode Range Start (Ordinal)',
+        value: '{episode_start_ordinal}',
+        example: 'third',
+      },
+      {
+        label: 'Episode Range End (Ordinal)',
+        value: '{episode_end_ordinal}',
+        example: 'fourth',
+      },
+      {
+        label: 'Absolute Range Start',
+        value: '{abs_start}',
+        example: '46',
+      },
+      { label: 'Absolute Range End', value: '{abs_end}', example: '47' },
+      {
+        label: 'Absolute Range Start (Ordinal)',
+        value: '{abs_start_ordinal}',
+        example: 'forty-sixth',
+      },
+      {
+        label: 'Absolute Range End (Ordinal)',
+        value: '{abs_end_ordinal}',
+        example: 'forty-seventh',
+      },
+    ],
+  },
+  {
+    label: 'Dates',
+    options: [
+      {
+        label: 'Airdate (Month Day, Year)',
+        value: '{airdate:%B %d, %Y}',
+        example: 'January 15, 2024',
+      },
+      {
+        label: 'Airdate (Weekday, Month Day, Year)',
+        value: '{airdate:%A %B %d, %Y}',
+        example: 'Monday January 15, 2024',
+      },
+      {
+        label: 'Airdate (ISO 8601)',
+        value: '{airdate:%Y-%m-%d}',
+        example: '2024-01-15',
+      },
+    ],
+  },
+];
+
 const cardTypePreviewElement = document.createElement('div');
 cardTypePreviewElement.className = 'card-type-preview';
 cardTypePreviewElement.style.left = '0px';
@@ -34,11 +180,16 @@ cardTypePreviewImage.alt = 'Card type preview';
 cardTypePreviewElement.appendChild(cardTypePreviewImage);
 document.body.appendChild(cardTypePreviewElement);
 
+const episodeTextHelperElement = createEpisodeTextFormatHelper();
+document.body.appendChild(episodeTextHelperElement);
+
 let cardTypePreviewVisible = false;
 const hoverMediaQuery =
   typeof window.matchMedia === 'function'
     ? window.matchMedia('(hover: hover)')
     : null;
+
+let activeEpisodeTextInput = null;
 
 function canShowCardTypePreview() {
   if (!hoverMediaQuery) {
@@ -115,6 +266,155 @@ function enableCardTypePreview(wrapper) {
   wrapper.addEventListener('mousemove', moveCardTypePreview);
   wrapper.addEventListener('mouseleave', hideCardTypePreview);
 }
+
+// -----------------------------------------------------------------------------
+// Episode text helper
+// -----------------------------------------------------------------------------
+function createEpisodeTextFormatHelper() {
+  const helper = document.createElement('div');
+  helper.className = 'episode-text-helper';
+  helper.setAttribute('role', 'dialog');
+  helper.setAttribute('aria-label', 'Episode text format helper');
+
+  const header = document.createElement('div');
+  header.className = 'episode-text-helper__header';
+  const title = document.createElement('strong');
+  title.textContent = 'Episode text helper';
+  const hint = document.createElement('span');
+  hint.textContent = 'Click a placeholder to insert it where your cursor is.';
+  header.append(title, hint);
+  helper.appendChild(header);
+
+  const groupsContainer = document.createElement('div');
+  groupsContainer.className = 'episode-text-helper__groups';
+
+  EPISODE_TEXT_FORMAT_GROUPS.forEach((group) => {
+    const groupElement = document.createElement('div');
+    groupElement.className = 'episode-text-helper__group';
+
+    const groupTitle = document.createElement('div');
+    groupTitle.className = 'episode-text-helper__group-title';
+    groupTitle.textContent = group.label;
+    groupElement.appendChild(groupTitle);
+
+    const optionsList = document.createElement('div');
+    optionsList.className = 'episode-text-helper__options';
+
+    group.options.forEach((option) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'episode-text-helper__option';
+      button.textContent = option.example
+        ? `${option.label} (${option.example})`
+        : option.label;
+      button.addEventListener('click', () => insertEpisodeTextFormatValue(option.value));
+      optionsList.appendChild(button);
+    });
+
+    groupElement.appendChild(optionsList);
+    groupsContainer.appendChild(groupElement);
+  });
+
+  helper.appendChild(groupsContainer);
+  return helper;
+}
+
+function enableEpisodeTextFormatHelper(input) {
+  if (!input || input.dataset.episodeTextHelper === 'true') {
+    return;
+  }
+  input.dataset.episodeTextHelper = 'true';
+  input.addEventListener('focus', () => showEpisodeTextFormatHelper(input));
+  input.addEventListener('keyup', () => positionEpisodeTextFormatHelper());
+}
+
+function showEpisodeTextFormatHelper(input) {
+  activeEpisodeTextInput = input;
+  episodeTextHelperElement.classList.add('visible');
+  positionEpisodeTextFormatHelper();
+}
+
+function hideEpisodeTextFormatHelper() {
+  activeEpisodeTextInput = null;
+  episodeTextHelperElement.classList.remove('visible');
+}
+
+function positionEpisodeTextFormatHelper() {
+  if (!activeEpisodeTextInput || !episodeTextHelperElement.classList.contains('visible')) {
+    return;
+  }
+  const rect = activeEpisodeTextInput.getBoundingClientRect();
+  const viewportPadding = 12;
+  const helperWidth = episodeTextHelperElement.offsetWidth || 0;
+  const helperHeight = episodeTextHelperElement.offsetHeight || 0;
+  let left = window.scrollX + rect.left;
+  let top = window.scrollY + rect.bottom + 8;
+  const maxLeft = window.scrollX + window.innerWidth - helperWidth - viewportPadding;
+  if (left > maxLeft) {
+    left = Math.max(window.scrollX + viewportPadding, maxLeft);
+  }
+  if (top + helperHeight > window.scrollY + window.innerHeight - viewportPadding) {
+    top = window.scrollY + rect.top - helperHeight - 8;
+  }
+  if (top < window.scrollY + viewportPadding) {
+    top = window.scrollY + rect.bottom + 8;
+  }
+  episodeTextHelperElement.style.left = `${Math.max(window.scrollX + viewportPadding, left)}px`;
+  episodeTextHelperElement.style.top = `${Math.max(window.scrollY + viewportPadding, top)}px`;
+}
+
+function insertEpisodeTextFormatValue(value) {
+  if (!activeEpisodeTextInput) {
+    return;
+  }
+  const input = activeEpisodeTextInput;
+  const start = typeof input.selectionStart === 'number' ? input.selectionStart : input.value.length;
+  const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+  const newValue = `${input.value.slice(0, start)}${value}${input.value.slice(end)}`;
+  input.value = newValue;
+  const cursorPosition = start + value.length;
+  input.setSelectionRange(cursorPosition, cursorPosition);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.focus();
+  positionEpisodeTextFormatHelper();
+}
+
+function episodeTextHelperContains(target) {
+  return (
+    target === activeEpisodeTextInput ||
+    (activeEpisodeTextInput && activeEpisodeTextInput.contains(target)) ||
+    episodeTextHelperElement.contains(target)
+  );
+}
+
+document.addEventListener('mousedown', (event) => {
+  if (!episodeTextHelperElement.classList.contains('visible')) {
+    return;
+  }
+  if (episodeTextHelperContains(event.target)) {
+    return;
+  }
+  hideEpisodeTextFormatHelper();
+});
+
+document.addEventListener('focusin', (event) => {
+  if (!episodeTextHelperElement.classList.contains('visible')) {
+    return;
+  }
+  if (episodeTextHelperContains(event.target)) {
+    return;
+  }
+  hideEpisodeTextFormatHelper();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && episodeTextHelperElement.classList.contains('visible')) {
+    hideEpisodeTextFormatHelper();
+  }
+});
+
+window.addEventListener('scroll', () => positionEpisodeTextFormatHelper(), true);
+window.addEventListener('resize', () => positionEpisodeTextFormatHelper(), true);
 
 function logToServer(level, message, context = {}) {
   try {
@@ -456,6 +756,9 @@ function textInput(entry, field, value) {
   input.addEventListener('input', (event) => {
     updateField(entry, field, event.target.value || undefined);
   });
+  if (field.id === 'episode_text_format') {
+    enableEpisodeTextFormatHelper(input);
+  }
   return input;
 }
 
