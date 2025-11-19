@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TitleCardMaker Web Interface</title>
     <link rel="stylesheet" href="/static/style.css" />
   </head>
@@ -12,6 +13,15 @@
         <p class="subtitle">TV configuration editor</p>
       </div>
       <div class="header-actions">
+        <button
+          id="toggle-search"
+          class="icon-button"
+          type="button"
+          aria-label="Search"
+          aria-expanded="false"
+        >
+          🔍
+        </button>
         <div class="search-group">
           <input
             id="series-search"
@@ -19,13 +29,39 @@
             placeholder="Search series..."
             aria-label="Search series"
           />
+          <button
+            id="close-search"
+            class="icon-button search-close"
+            type="button"
+            aria-label="Hide search"
+          >
+            ✕
+          </button>
         </div>
-        <button id="download-sources">Download sources</button>
-        <button id="run-builder">Run builder</button>
-        <button id="expand-all-entries">Expand all</button>
-        <button id="collapse-all-entries">Collapse All</button>
-        <button id="add-entry" class="primary">Add entry</button>
-        <button id="save-config" class="accent">Save changes</button>
+        <button id="download-sources">
+          <span aria-hidden="true">⬇</span>
+          <span class="button-label">Sources</span>
+        </button>
+        <button id="run-builder">
+          <span aria-hidden="true">▶</span>
+          <span class="button-label">Build</span>
+        </button>
+        <button id="expand-all-entries">
+          <span aria-hidden="true">⤢</span>
+          <span class="button-label">Expand</span>
+        </button>
+        <button id="collapse-all-entries">
+          <span aria-hidden="true">⤡</span>
+          <span class="button-label">Collapse</span>
+        </button>
+        <button id="add-entry" class="primary">
+          <span aria-hidden="true">➕</span>
+          <span class="button-label">Entry</span>
+        </button>
+        <button id="save-config" class="accent">
+          <span aria-hidden="true">💾</span>
+          <span class="button-label">Save</span>
+        </button>
       </div>
     </header>
 
