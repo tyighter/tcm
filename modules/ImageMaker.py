@@ -206,24 +206,9 @@ class ImageMaker(ABC):
             global_objects.pp.imagemagick_timeout,
         )
 
-        # Command to convert file to PNG
-        command = ' '.join([
-            f'convert',
-            f'-density 512',
-            f'-resize "{min_dimension}x{min_dimension}"',
-            f'-background None',
-            f'"{image.resolve()}"',
-            f'"{destination.resolve()}"',
-        ])
-
-        image_magick_interface.run(command)
-
-        # Print command history if conversion failed
-        if destination.exists():
-            return destination
-
-        image_magick_interface.print_command_history()
-        return None
+        return image_magick_interface.convert_svg_to_png(
+            image, destination, min_dimension
+        )
 
 
     @abstractmethod

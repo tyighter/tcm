@@ -7,6 +7,7 @@ from string import hexdigits
 from subprocess import Popen, PIPE, TimeoutExpired
 from typing import Iterable, Literal, NamedTuple, Optional, overload
 
+from cairosvg import svg2png
 from imagesize import get as im_get
 
 from modules.Debug import log
@@ -405,6 +406,20 @@ class ImageMagickInterface:
             return destination
 
         self.print_command_history()
+
+        try:
+            svg2png(
+                url=image.as_posix(),
+                write_to=destination,
+                output_width=min_dimension,
+            )
+        except Exception:  # pylint: disable=broad-except
+            log.exception('CairoSVG conversion failed for %s', image)
+            return None
+
+        if destination.exists():
+            return destination
+
         return None
 
 
