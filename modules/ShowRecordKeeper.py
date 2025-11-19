@@ -69,7 +69,11 @@ class ShowRecordKeeper:
         version_file.write_text(str(global_objects.pp.version))
 
         # Read and log length
-        log.info(f'Read {len(self.records)} show records')
+        log.info(
+            'Loaded %s cached show records from %s',
+            len(self.records),
+            self.records.file,
+        )
 
 
     def __get_record_hash(self, hash_obj: Any, record: Any) -> None:
