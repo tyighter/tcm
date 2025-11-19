@@ -931,6 +931,14 @@ function cardTypeImageCandidates(choice) {
   return [`/api/card-types/thumbnail?slug=${encodeURIComponent(slug)}`];
 }
 
+function cardTypePreviewSource(choice) {
+  const slug = choice.slug || slugifyCardType(choice.value || choice.label || '');
+  if (!slug) {
+    return undefined;
+  }
+  return `/api/card-types/preview?slug=${encodeURIComponent(slug)}`;
+}
+
 function createCardTypeThumbnail(choice) {
   const wrapper = document.createElement('div');
   wrapper.className = 'card-type-thumbnail';
@@ -942,6 +950,7 @@ function createCardTypeThumbnail(choice) {
   wrapper.appendChild(fallback);
 
   const candidates = cardTypeImageCandidates(choice);
+  const previewSrc = cardTypePreviewSource(choice);
   console.debug('Card type thumbnail candidates', {
     choice: choice.value,
     candidates,
@@ -993,7 +1002,7 @@ function createCardTypeThumbnail(choice) {
     wrapper.classList.add('card-type-thumbnail-loaded');
     wrapper.prepend(img);
     fallback.remove();
-    wrapper.dataset.previewSrc = img.currentSrc || img.src;
+    wrapper.dataset.previewSrc = previewSrc || img.currentSrc || img.src;
   });
 
   img.addEventListener('error', (event) => {
@@ -1073,37 +1082,32 @@ function openCardTypeModal(field, currentValue, onSelect) {
     }
 
     matches.forEach((choice) => {
-      const item = document.createElement('div');
-      item.className = 'search-result';
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.className = 'card-type-option';
+      option.setAttribute('aria-pressed', choice.value === currentValue ? 'true' : 'false');
       if (choice.value === currentValue) {
-        item.classList.add('active');
+        option.classList.add('selected');
       }
-
-      const summary = document.createElement('div');
-      summary.className = 'card-type-summary';
 
       const thumbnail = createCardTypeThumbnail(choice);
 
-      const details = document.createElement('div');
-      details.className = 'card-type-details';
-      details.innerHTML = `<h3>${choice.label}</h3><p class="helper-text">${choice.value}</p>`;
+      const title = document.createElement('span');
+      title.className = 'card-type-option-title';
+      title.textContent = choice.label || choice.value || 'Card type';
 
-      const selectButton = document.createElement('button');
-      selectButton.textContent =
-        choice.value === currentValue ? 'Selected' : 'Use card type';
-      if (choice.value === currentValue) {
-        selectButton.disabled = true;
-      }
-      selectButton.addEventListener('click', () => {
+      const identifier = document.createElement('span');
+      identifier.className = 'card-type-option-value helper-text';
+      identifier.textContent = choice.value;
+
+      option.append(thumbnail, title, identifier);
+
+      option.addEventListener('click', () => {
         onSelect(choice.value);
         closeModal(modal.element);
       });
 
-      summary.prepend(thumbnail);
-      summary.appendChild(details);
-
-      item.append(summary, selectButton);
-      results.appendChild(item);
+      results.appendChild(option);
     });
   };
 
