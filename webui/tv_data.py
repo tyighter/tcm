@@ -80,7 +80,12 @@ class TvYamlManager:
             current["libraries"] = _to_commented(libraries)
 
         series_map = CommentedMap()
-        for entry in series_payload:
+        sorted_series = sorted(
+            series_payload,
+            key=lambda item: str(item.get("name", "")).casefold(),
+        )
+
+        for entry in sorted_series:
             name = entry.get("name")
             config = entry.get("config", {})
             if not name:

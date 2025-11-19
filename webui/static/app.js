@@ -5,6 +5,7 @@ const state = {
   fontDirectory: '/config/fonts',
   filter: '',
   pendingEntryId: null,
+  collapsedEntries: new Set(),
 };
 
 const dom = {
@@ -12,8 +13,8 @@ const dom = {
   search: document.getElementById('series-search'),
   addEntry: document.getElementById('add-entry'),
   save: document.getElementById('save-config'),
-  alphabetize: document.getElementById('alphabetize-entries'),
-  runSync: document.getElementById('run-metadata-sync'),
+  expandAll: document.getElementById('expand-all-entries'),
+  collapseAll: document.getElementById('collapse-all-entries'),
   downloadSources: document.getElementById('download-sources'),
   runBuilder: document.getElementById('run-builder'),
   modals: document.getElementById('modals'),
@@ -27,28 +28,11 @@ const CLIENT_LOG_ENDPOINT = '/api/client-log';
 
 const EPISODE_TEXT_FORMAT_GROUPS = [
   {
-    label: 'Series',
-    options: [
-      { label: 'Series Name', value: '{series_name}', example: 'The Mandalorian' },
-      { label: 'Series Year', value: '{series_year}', example: '2019' },
-    ],
-  },
-  {
     label: 'Season',
     options: [
       { label: 'Season Number', value: '{season_number}', example: '3' },
       { label: 'Cardinal Season Number', value: '{season_number_cardinal}', example: 'three' },
-      {
-        label: 'Cardinal Season Number (Title Case)',
-        value: '{season_number_cardinal_title}',
-        example: 'Three',
-      },
       { label: 'Ordinal Season Number', value: '{season_number_ordinal}', example: 'third' },
-      {
-        label: 'Ordinal Season Number (Title Case)',
-        value: '{season_number_ordinal_title}',
-        example: 'Third',
-      },
     ],
   },
   {
@@ -56,17 +40,7 @@ const EPISODE_TEXT_FORMAT_GROUPS = [
     options: [
       { label: 'Episode Number', value: '{episode_number}', example: '10' },
       { label: 'Cardinal Episode Number', value: '{episode_number_cardinal}', example: 'ten' },
-      {
-        label: 'Cardinal Episode Number (Title Case)',
-        value: '{episode_number_cardinal_title}',
-        example: 'Ten',
-      },
       { label: 'Ordinal Episode Number', value: '{episode_number_ordinal}', example: 'tenth' },
-      {
-        label: 'Ordinal Episode Number (Title Case)',
-        value: '{episode_number_ordinal_title}',
-        example: 'Tenth',
-      },
     ],
   },
   {
@@ -79,93 +53,9 @@ const EPISODE_TEXT_FORMAT_GROUPS = [
         example: 'forty-seven',
       },
       {
-        label: 'Cardinal Absolute Episode Number (Title Case)',
-        value: '{absolute_number_cardinal_title}',
-        example: 'Forty-Seven',
-      },
-      {
         label: 'Ordinal Absolute Episode Number',
         value: '{absolute_number_ordinal}',
         example: 'forty-seventh',
-      },
-      {
-        label: 'Ordinal Absolute Episode Number (Title Case)',
-        value: '{absolute_number_ordinal_title}',
-        example: 'Forty-Seventh',
-      },
-    ],
-  },
-  {
-    label: 'Counts & Maximums',
-    options: [
-      { label: 'Season Episode Count', value: '{season_episode_count}', example: '12' },
-      { label: 'Season Episode Max', value: '{season_episode_max}', example: '12' },
-      { label: 'Season Absolute Max', value: '{season_absolute_max}', example: '132' },
-      { label: 'Series Episode Count', value: '{series_episode_count}', example: '120' },
-      { label: 'Series Episode Max', value: '{series_episode_max}', example: '24' },
-      { label: 'Series Absolute Max', value: '{series_absolute_max}', example: '250' },
-    ],
-  },
-  {
-    label: 'Multi-episode Ranges',
-    options: [
-      { label: 'Episode Range Start', value: '{episode_start}', example: '3' },
-      { label: 'Episode Range End', value: '{episode_end}', example: '4' },
-      {
-        label: 'Episode Range Start (Cardinal)',
-        value: '{episode_start_cardinal}',
-        example: 'three',
-      },
-      {
-        label: 'Episode Range End (Cardinal)',
-        value: '{episode_end_cardinal}',
-        example: 'four',
-      },
-      {
-        label: 'Episode Range Start (Ordinal)',
-        value: '{episode_start_ordinal}',
-        example: 'third',
-      },
-      {
-        label: 'Episode Range End (Ordinal)',
-        value: '{episode_end_ordinal}',
-        example: 'fourth',
-      },
-      {
-        label: 'Absolute Range Start',
-        value: '{abs_start}',
-        example: '46',
-      },
-      { label: 'Absolute Range End', value: '{abs_end}', example: '47' },
-      {
-        label: 'Absolute Range Start (Ordinal)',
-        value: '{abs_start_ordinal}',
-        example: 'forty-sixth',
-      },
-      {
-        label: 'Absolute Range End (Ordinal)',
-        value: '{abs_end_ordinal}',
-        example: 'forty-seventh',
-      },
-    ],
-  },
-  {
-    label: 'Dates',
-    options: [
-      {
-        label: 'Airdate (Month Day, Year)',
-        value: '{airdate:%B %d, %Y}',
-        example: 'January 15, 2024',
-      },
-      {
-        label: 'Airdate (Weekday, Month Day, Year)',
-        value: '{airdate:%A %B %d, %Y}',
-        example: 'Monday January 15, 2024',
-      },
-      {
-        label: 'Airdate (ISO 8601)',
-        value: '{airdate:%Y-%m-%d}',
-        example: '2024-01-15',
       },
     ],
   },
@@ -468,6 +358,7 @@ async function loadConfiguration() {
     config: entry.config || {},
   }));
   sortEntries();
+  state.collapsedEntries = new Set();
 }
 
 function registerEvents() {
@@ -480,20 +371,12 @@ function registerEvents() {
 
   dom.save.addEventListener('click', () => saveConfiguration());
 
-  if (dom.alphabetize) {
-    dom.alphabetize.addEventListener('click', () => {
-      sortEntries();
-      renderEntries();
-      showToast('Entries alphabetized. Save to update tv.yml.', 'success');
-    });
+  if (dom.expandAll) {
+    dom.expandAll.addEventListener('click', () => setAllEntriesCollapsed(false));
   }
 
-  if (dom.runSync) {
-    dom.runSync.addEventListener('click', () =>
-      triggerServerAction(dom.runSync, '/api/actions/sync', 'Metadata sync complete', {
-        workingLabel: 'Syncing...'
-      })
-    );
+  if (dom.collapseAll) {
+    dom.collapseAll.addEventListener('click', () => setAllEntriesCollapsed(true));
   }
 
   if (dom.downloadSources) {
@@ -571,6 +454,24 @@ function renderEntry(entry) {
   const summary = document.createElement('div');
   summary.className = 'entry-summary';
 
+  const toggleButton = document.createElement('button');
+  toggleButton.type = 'button';
+  toggleButton.className = 'entry-toggle';
+
+  const syncToggleAppearance = () => {
+    const collapsed = isEntryCollapsed(entry.id);
+    toggleButton.textContent = collapsed ? '+' : '−';
+    toggleButton.setAttribute('aria-expanded', String(!collapsed));
+    toggleButton.setAttribute('aria-label', collapsed ? 'Expand entry' : 'Collapse entry');
+    container.classList.toggle('entry--collapsed', collapsed);
+  };
+
+  toggleButton.addEventListener('click', () => {
+    const nextState = !isEntryCollapsed(entry.id);
+    setEntryCollapsed(entry.id, nextState);
+    syncToggleAppearance();
+  });
+
   const logo = document.createElement('img');
   logo.className = 'entry-logo';
   logo.alt = `${entry.name} logo`;
@@ -597,7 +498,8 @@ function renderEntry(entry) {
   titleContainer.className = 'entry-title';
   titleContainer.appendChild(titleInput);
 
-  summary.append(logo, titleContainer);
+  summary.append(toggleButton, logo, titleContainer);
+  syncToggleAppearance();
 
   const actions = document.createElement('div');
   actions.className = 'entry-actions';
@@ -675,6 +577,30 @@ function renderEntry(entry) {
 
   container.append(header, body);
   return container;
+}
+
+function isEntryCollapsed(entryId) {
+  return state.collapsedEntries.has(entryId);
+}
+
+function setEntryCollapsed(entryId, collapsed) {
+  if (!entryId) {
+    return;
+  }
+  if (collapsed) {
+    state.collapsedEntries.add(entryId);
+  } else {
+    state.collapsedEntries.delete(entryId);
+  }
+}
+
+function setAllEntriesCollapsed(collapsed) {
+  if (collapsed) {
+    state.collapsedEntries = new Set(state.entries.map((entry) => entry.id));
+  } else {
+    state.collapsedEntries = new Set();
+  }
+  renderEntries();
 }
 
 function renderFieldRow(entry, field, value) {
@@ -1720,6 +1646,7 @@ function removeEntry(entry) {
     return;
   }
   state.entries = state.entries.filter((item) => item !== entry);
+  state.collapsedEntries.delete(entry.id);
   renderEntries();
 }
 
