@@ -623,7 +623,9 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 self._error(str(exc), status=HTTPStatus.BAD_REQUEST)
                 return
 
-            if not file_field or not getattr(file_field, "filename", None):
+            # cgi.FieldStorage cannot be evaluated for truthiness, so explicitly
+            # check for the missing field and an empty filename.
+            if file_field is None or not getattr(file_field, "filename", None):
                 self._error("Missing font file")
                 return
 
