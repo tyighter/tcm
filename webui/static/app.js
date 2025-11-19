@@ -1083,19 +1083,40 @@ function csvInput(entry, field, value) {
   return input;
 }
 
+function normalizeHideSeasonsValue(value) {
+  if (value === 'auto') {
+    return 'auto';
+  }
+  if (typeof value === 'string') {
+    const normalized = value.toLowerCase();
+    if (normalized === 'auto' || normalized === 'false') {
+      return normalized;
+    }
+    if (normalized === 'true') {
+      return 'true';
+    }
+  }
+  if (value === false) {
+    return 'false';
+  }
+  return 'true';
+}
+
 function hideSeasonsSelect(entry, field, value) {
   const select = document.createElement('select');
+  const normalizedValue = normalizeHideSeasonsValue(value);
+
   ['true', 'false', 'auto'].forEach((option) => {
     const opt = document.createElement('option');
     opt.value = option;
     opt.textContent = option;
-    if (String(value).toLowerCase() === option) {
+    if (normalizedValue === option) {
       opt.selected = true;
     }
     select.appendChild(opt);
   });
-  select.addEventListener('change', (event) => {
-    const selected = event.target.value;
+
+  const persistSelection = (selected) => {
     if (selected === 'true') {
       updateField(entry, field, true);
     } else if (selected === 'false') {
@@ -1103,7 +1124,16 @@ function hideSeasonsSelect(entry, field, value) {
     } else {
       updateField(entry, field, 'auto');
     }
+  };
+
+  if (value === undefined) {
+    persistSelection(normalizedValue);
+  }
+
+  select.addEventListener('change', (event) => {
+    persistSelection(event.target.value);
   });
+
   return select;
 }
 
