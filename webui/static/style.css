@@ -313,6 +313,24 @@ button:disabled:hover {
   color: var(--text);
 }
 
+.field-row select {
+  appearance: none;
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.field-row select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(255, 179, 71, 0.5);
+}
+
+.field-row select option {
+  background-color: #1e1f24;
+  color: var(--text);
+}
+
 .field-row textarea {
   min-height: 120px;
   resize: vertical;
