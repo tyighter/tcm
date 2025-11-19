@@ -134,8 +134,6 @@ def load_card_type_thumbnails(
         slugify_card_type(name) for name in TitleCard.BUILTIN_CARD_TYPES.keys()
     }
 
-    logger.debug("Loading card type thumbnails; manifest_path=%s", manifest_path)
-
     thumbnails: dict[str, str] = {}
     local_thumbnails = _load_local_thumbnails(known_slugs)
     for slug, source in local_thumbnails.items():
@@ -165,13 +163,6 @@ def load_card_type_thumbnails(
         slug = slugify_card_type(key)
         normalized = _normalize_thumbnail_url(slug, value)
         thumbnails.setdefault(slug, normalized)
-    logger.debug(
-        "Loaded %d thumbnails (%d from manifest, %d from local files)",
-        len(thumbnails),
-        len(manifest),
-        len(thumbnails) - len(manifest),
-    )
-
     # If a thumbnail exists for an alias but not its canonical card type,
     # reuse the alias image so every selectable card type shows a thumbnail.
     for alias, target in TitleCard.CARD_TYPE_ALIASES.items():
@@ -179,9 +170,8 @@ def load_card_type_thumbnails(
         target_slug = slugify_card_type(target)
         if alias_slug in thumbnails and target_slug not in thumbnails:
             thumbnails[target_slug] = thumbnails[alias_slug]
-            logger.debug(
-                "Mapped alias thumbnail %s -> %s", alias_slug, target_slug
-            )
+
+    logger.info("Loaded %d card type thumbnails successfully", len(thumbnails))
 
     return thumbnails
 
@@ -201,8 +191,6 @@ def prepare_thumbnail_from_config(slug: str) -> Path | None:
     """
 
     filename = DEFAULT_THUMBNAIL_SLUG_MAP.get(slug)
-    logger.debug("Preparing thumbnail for slug=%s; filename=%s", slug, filename)
-
     source_paths: list[Path] = []
     for root in (DOCKER_THUMBNAIL_ROOT, REPO_THUMBNAIL_ROOT):
         if filename:
@@ -210,8 +198,6 @@ def prepare_thumbnail_from_config(slug: str) -> Path | None:
             try:
                 if path.exists():
                     source_paths.append(path)
-            except OSError as exc:
-                logger.debug("Unable to inspect thumbnail candidate %s: %s", path, exc)
         try:
             for candidate in root.iterdir():
                 try:
@@ -222,42 +208,18 @@ def prepare_thumbnail_from_config(slug: str) -> Path | None:
 
                 if slugify_card_type(candidate.stem) != slug:
                     continue
-
-                logger.debug(
-                    "Matched thumbnail by stem for slug %s at %s", slug, candidate
-                )
                 if candidate not in source_paths:
                     source_paths.append(candidate)
         except FileNotFoundError:
-            logger.debug("Thumbnail root %s does not exist", root)
-        except OSError as exc:
-            logger.debug("Unable to inspect thumbnail root %s: %s", root, exc)
+            continue
+        except OSError:
+            continue
 
     if not source_paths:
-        if filename:
-            logger.debug(
-                "No source thumbnails found for slug %s in %s",
-                slug,
-                DOCKER_THUMBNAIL_ROOT,
-            )
-        else:
-            logger.debug(
-                "No thumbnail filename mapping or matching files found for slug %s", slug
-            )
         return None
 
     source = source_paths[0]
-    logger.debug("Selected source thumbnail %s for slug %s", source, slug)
     prepared = _prepare_resized_thumbnail(slug, source)
-    if prepared:
-        logger.debug(
-            "Prepared resized thumbnail for slug %s at %s (source=%s)",
-            slug,
-            prepared,
-            source,
-        )
-    else:
-        logger.debug("Failed to prepare resized thumbnail for slug %s", slug)
 
     return prepared
 
@@ -282,7 +244,6 @@ def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, Path]:
                 continue
 
             thumbnails[slug] = path
-            logger.debug("Found thumbnail for %s at %s", slug, path)
             break
 
     # Fill in any remaining slugs by matching filename stems.
@@ -300,11 +261,10 @@ def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, Path]:
                     continue
 
                 thumbnails[slug] = candidate
-                logger.debug("Found slug-matched thumbnail for %s at %s", slug, candidate)
         except FileNotFoundError:
-            logger.debug("Thumbnail root %s does not exist", root)
-        except OSError as exc:
-            logger.debug("Unable to inspect thumbnail root %s: %s", root, exc)
+            continue
+        except OSError:
+            continue
 
     return thumbnails
 

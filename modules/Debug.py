@@ -1,3 +1,4 @@
+import logging
 from logging import Logger, Formatter, getLogger, setLoggerClass, StreamHandler
 from logging.handlers import TimedRotatingFileHandler
 from logging import DEBUG, INFO, WARNING, ERROR, CRITICAL
@@ -121,6 +122,10 @@ file_handler.setFormatter(ErrorFormatterNoColor(
 ))
 file_handler.setLevel(DEBUG)
 log.addHandler(file_handler)
+
+# Quiet noisy third-party loggers that do not provide actionable information.
+for noisy_logger in ("tmdbapis", "urllib3"):
+    logging.getLogger(noisy_logger).setLevel(WARNING)
 
 def apply_no_color_formatter() -> None:
     """
