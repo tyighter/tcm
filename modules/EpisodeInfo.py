@@ -120,9 +120,9 @@ class EpisodeInfo(DatabaseInfoContainer):
 
     def __init__(self,
             title: Union[str, Title],
-            season_number: int,
-            episode_number: int,
-            abs_number: Optional[int] = None,
+            season_number: Union[int, str],
+            episode_number: Union[int, str],
+            abs_number: Optional[Union[int, str]] = None,
             *,
             emby_id: Optional[int] = None,
             imdb_id: Optional[str] = None,
@@ -142,6 +142,20 @@ class EpisodeInfo(DatabaseInfoContainer):
         ID's, airdate, and queried statuses.
         """
 
+        def _normalize_number(value: Any, label: str) -> Any:
+            if value is None:
+                return None
+
+            if isinstance(value, int):
+                return value
+
+            if isinstance(value, str):
+                return int(value) if value.isdigit() else value
+
+            raise TypeError(
+                f"{label} must be an int or digit-only string; got {type(value).__name__}"
+            )
+
         # Ensure title is Title object
         if isinstance(title, Title):
             self.title = title
@@ -149,9 +163,9 @@ class EpisodeInfo(DatabaseInfoContainer):
             self.title = Title(title)
 
         # Store arguments as attributes
-        self.season_number = int(season_number)
-        self.episode_number = int(episode_number)
-        self.abs_number = None if abs_number is None else int(abs_number)
+        self.season_number = _normalize_number(season_number, 'season_number')
+        self.episode_number = _normalize_number(episode_number, 'episode_number')
+        self.abs_number = _normalize_number(abs_number, 'abs_number')
         self.airdate = airdate
 
         # Store default database ID's
