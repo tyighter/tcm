@@ -617,6 +617,14 @@ function createCardTypeThumbnail(choice) {
 function openCardTypeModal(field, currentValue, onSelect) {
   const modal = buildModal('Select card type');
 
+  const dismissButton = document.createElement('button');
+  dismissButton.type = 'button';
+  dismissButton.className = 'modal-close';
+  dismissButton.setAttribute('aria-label', 'Close card type selector');
+  dismissButton.innerHTML = '&times;';
+  dismissButton.addEventListener('click', () => closeModal(modal.element));
+  modal.modal.appendChild(dismissButton);
+
   const wrapper = document.createElement('div');
   wrapper.className = 'card-type-modal';
 
@@ -740,7 +748,6 @@ function openCardTypeModal(field, currentValue, onSelect) {
   customWrapper.append(customLabel, customInput, customButton);
   modal.content.appendChild(customWrapper);
 
-  modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
 }
 
 function csvInput(entry, field, value) {
@@ -1533,7 +1540,7 @@ function buildModal(title) {
   backdrop.appendChild(modal);
   dom.modals.appendChild(backdrop);
 
-  return { element: backdrop, content, footer };
+  return { element: backdrop, modal, header, content, footer };
 }
 
 function closeButton(onClick) {
