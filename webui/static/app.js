@@ -165,6 +165,19 @@ function renderEntry(entry) {
   const header = document.createElement('div');
   header.className = 'entry-header';
 
+  const summary = document.createElement('div');
+  summary.className = 'entry-summary';
+
+  const logo = document.createElement('img');
+  logo.className = 'entry-logo';
+  logo.alt = `${entry.name} logo`;
+  logo.loading = 'lazy';
+  logo.src = `/api/series-logo?name=${encodeURIComponent(entry.name)}`;
+  logo.addEventListener('error', () => {
+    logo.classList.add('entry-logo--missing');
+    logo.removeAttribute('src');
+  });
+
   const titleInput = document.createElement('input');
   titleInput.type = 'text';
   titleInput.value = entry.name;
@@ -176,6 +189,12 @@ function renderEntry(entry) {
     state.pendingEntryId = entry.id;
     renderEntries();
   });
+
+  const titleContainer = document.createElement('div');
+  titleContainer.className = 'entry-title';
+  titleContainer.appendChild(titleInput);
+
+  summary.append(logo, titleContainer);
 
   const actions = document.createElement('div');
   actions.className = 'entry-actions';
@@ -231,7 +250,7 @@ function renderEntry(entry) {
     previewButton,
     deleteButton
   );
-  header.append(titleInput, actions);
+  header.append(summary, actions);
 
   const body = document.createElement('div');
   body.className = 'entry-body';
