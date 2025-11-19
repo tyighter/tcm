@@ -113,14 +113,21 @@ class EpisodeMap:
         """
 
         # Go through each season of mapping
-        for season_number, mapping in seasons.items():
+        for season_number_raw, mapping in seasons.items():
             # Skip hide key
-            if season_number == 'hide':
+            if season_number_raw == 'hide':
                 continue
 
-            # Ensure season number is a number
+            # Ensure season number is a number (accept stringified numbers)
+            season_number = season_number_raw
+            if isinstance(season_number_raw, str):
+                try:
+                    season_number = int(season_number_raw)
+                except ValueError:
+                    pass
+
             if not isinstance(season_number, int):
-                log.warning(f'Invalid season number "{season_number}"')
+                log.warning(f'Invalid season number "{season_number_raw}"')
                 self.valid = False
                 continue
 
