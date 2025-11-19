@@ -1323,7 +1323,7 @@ function hideSeasonsSelect(entry, field, value) {
 
 function translationEditor(entry, field, value) {
   const container = document.createElement('div');
-  container.className = 'multi-row';
+  container.className = 'multi-row sub-card-list';
 
   const translations = Array.isArray(value)
     ? value.map((item) => ({ ...item }))
@@ -1537,7 +1537,7 @@ function replacementEditor(entry, field, value) {
 
 function mapEditor(entry, field, value, keyLabel, valueLabel, onUpdate) {
   const container = document.createElement('div');
-  container.className = 'table-list';
+  container.className = 'table-list sub-card-list';
 
   const rows = Object.entries(value || {}).map(([key, val]) => ({
     key,
@@ -1564,7 +1564,7 @@ function mapEditor(entry, field, value, keyLabel, valueLabel, onUpdate) {
     list.innerHTML = '';
     rows.forEach((row, index) => {
       const line = document.createElement('div');
-      line.className = 'table-list-row';
+      line.className = 'table-list-row item-card';
 
       const keyInput = document.createElement('input');
       keyInput.type = 'text';

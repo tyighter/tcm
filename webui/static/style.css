@@ -540,6 +540,7 @@ button:disabled:hover {
   resize: vertical;
 }
 
+
 .field-row .multi-row {
   display: grid;
   gap: 0.75rem;
@@ -555,6 +556,24 @@ button:disabled:hover {
 .multi-row-item button {
   padding: 0.4rem 0.6rem;
   border-radius: 8px;
+}
+
+.sub-card-list {
+  position: relative;
+  width: 100%;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.field-controls .sub-card-list {
+  flex: 1;
+}
+
+.sub-card-list .item-card {
+  padding: 1rem 1rem 0.85rem;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+  border: 1px solid rgba(139, 179, 255, 0.16);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.24);
 }
 
 .item-card {
@@ -580,6 +599,13 @@ button:disabled:hover {
   justify-content: center;
   line-height: 1;
   box-shadow: none;
+}
+
+.sub-card-list .item-remove {
+  width: 36px;
+  height: 36px;
+  top: 0.6rem;
+  right: 0.6rem;
 }
 
 .item-remove:hover {
