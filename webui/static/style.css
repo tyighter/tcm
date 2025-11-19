@@ -100,19 +100,23 @@ button {
   font-size: 0.95rem;
 }
 
+
 .header-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
 }
 
 .header-actions button {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.35rem;
   font-weight: 600;
   letter-spacing: 0.01em;
+  padding: 0.45rem 0.65rem;
+  flex: 0 0 auto;
 }
 
 .header-actions .button-label {
@@ -1208,21 +1212,27 @@ fieldset legend {
   }
 
   .header-actions {
-    width: 100%;
-    column-gap: 0.45rem;
-    row-gap: 0.35rem;
+    width: auto;
+    column-gap: 0.35rem;
+    row-gap: 0;
     justify-content: flex-start;
+    flex-wrap: nowrap;
+  }
+
+  .header-actions .button-label {
+    display: none;
   }
 
   .header-actions button {
-    flex: 1 1 44%;
+    flex: 0 0 auto;
     justify-content: center;
-    min-width: 120px;
+    min-width: auto;
+    padding: 0.4rem;
   }
 
   .header-actions .icon-button {
     flex: 0 0 auto;
-    min-width: 38px;
+    min-width: 36px;
   }
 
   .header-actions .search-group {
@@ -1254,7 +1264,8 @@ fieldset legend {
   }
 
   .header-actions button {
-    flex-basis: 48%;
+    flex-basis: auto;
+    padding: 0.35rem;
   }
 
   .header-actions .button-label {
