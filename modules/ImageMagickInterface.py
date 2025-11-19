@@ -7,7 +7,10 @@ from string import hexdigits
 from subprocess import Popen, PIPE, TimeoutExpired
 from typing import Iterable, Literal, NamedTuple, Optional, overload
 
-from cairosvg import svg2png
+try:
+    from cairosvg import svg2png
+except ModuleNotFoundError:
+    svg2png = None
 from imagesize import get as im_get
 
 from modules.Debug import log
@@ -406,6 +409,10 @@ class ImageMagickInterface:
             return destination
 
         self.print_command_history()
+
+        if svg2png is None:
+            log.error('Unable to convert SVG without cairosvg installed')
+            return None
 
         try:
             svg2png(
