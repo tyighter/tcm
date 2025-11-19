@@ -614,7 +614,10 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                file_field = form.get("file")
+                try:
+                    file_field = form["file"]
+                except KeyError:
+                    file_field = None
             except Exception as exc:  # pylint: disable=broad-except
                 logger.exception("Unable to read uploaded font data")
                 self._error(str(exc), status=HTTPStatus.BAD_REQUEST)
