@@ -7,6 +7,7 @@ const state = {
   pendingEntryId: null,
   collapsedEntries: new Set(),
   lastSavedEntries: new Map(),
+  previewCache: {},
 };
 
 const dom = {
@@ -29,6 +30,7 @@ toastContainer.className = 'toast-container';
 document.body.appendChild(toastContainer);
 
 const CLIENT_LOG_ENDPOINT = '/api/client-log';
+const PREVIEW_CACHE_STORAGE_KEY = 'tcm-preview-cache';
 
 const EPISODE_TEXT_FORMAT_GROUPS = [
   {
@@ -408,6 +410,7 @@ function logToServer(level, message, context = {}) {
 // -----------------------------------------------------------------------------
 async function init() {
   try {
+    loadPreviewCache();
     await loadMetadata();
     await loadConfiguration();
     registerEvents();
@@ -446,6 +449,7 @@ async function loadConfiguration() {
   sortEntries();
   state.collapsedEntries = new Set(state.entries.map((entry) => entry.id));
   syncSavedEntrySnapshots();
+  state.entries.forEach(restoreCachedPreview);
 }
 
 function setSearchVisibility(isVisible) {
@@ -772,6 +776,7 @@ function invalidateEntryPreview(entry) {
   entry.previewSrc = null;
   entry.previewError = null;
   entry.previewLoading = false;
+  clearPreviewCacheEntry(entry);
   updateEntryPreview(entry);
 }
 
@@ -804,6 +809,7 @@ async function loadEntryPreview(entry) {
 
     if (entry.previewRequestId === requestId) {
       entry.previewSrc = `data:${data.mime};base64,${data.data}`;
+      updatePreviewCache(entry);
     }
   } catch (error) {
     if (entry.previewRequestId === requestId) {
@@ -2200,6 +2206,10 @@ function openPreview(entry) {
       const img = document.createElement('img');
       img.className = 'preview-image';
       img.src = `data:${data.mime};base64,${data.data}`;
+      entry.previewSrc = img.src;
+      entry.previewError = null;
+      updatePreviewCache(entry);
+      updateEntryPreview(entry);
       modal.content.appendChild(img);
     })
     .catch((error) => {
@@ -2414,6 +2424,64 @@ function syncSavedEntrySnapshots() {
   );
 }
 
+function loadPreviewCache() {
+  try {
+    const cached = localStorage.getItem(PREVIEW_CACHE_STORAGE_KEY);
+    state.previewCache = cached ? JSON.parse(cached) : {};
+  } catch (error) {
+    console.warn('Failed to load preview cache', error);
+    state.previewCache = {};
+  }
+}
+
+function persistPreviewCache() {
+  try {
+    localStorage.setItem(
+      PREVIEW_CACHE_STORAGE_KEY,
+      JSON.stringify(state.previewCache)
+    );
+  } catch (error) {
+    console.warn('Failed to persist preview cache', error);
+  }
+}
+
+function previewCacheKey(entry) {
+  return entry?.name || null;
+}
+
+function restoreCachedPreview(entry) {
+  const key = previewCacheKey(entry);
+  if (!key) {
+    return;
+  }
+  const cached = state.previewCache[key];
+  const snapshot = JSON.stringify(snapshotEntry(entry));
+  if (cached && cached.snapshot === snapshot && cached.src) {
+    entry.previewSrc = cached.src;
+  }
+}
+
+function updatePreviewCache(entry) {
+  const key = previewCacheKey(entry);
+  if (!key || !entry.previewSrc) {
+    return;
+  }
+  state.previewCache[key] = {
+    snapshot: JSON.stringify(snapshotEntry(entry)),
+    src: entry.previewSrc,
+  };
+  persistPreviewCache();
+}
+
+function clearPreviewCacheEntry(entry) {
+  const key = previewCacheKey(entry);
+  if (!key || !state.previewCache[key]) {
+    return;
+  }
+  delete state.previewCache[key];
+  persistPreviewCache();
+}
+
 async function saveConfiguration() {
   try {
     sortEntries();
@@ -2441,6 +2509,7 @@ async function saveConfiguration() {
     showToast('Configuration saved', 'success');
 
     changedEntries.forEach((entry) => {
+      clearPreviewCacheEntry(entry);
       invalidateEntryPreview(entry);
       recordEntrySaveSnapshot(entry);
     });
