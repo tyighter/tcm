@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from copy import deepcopy
 from pathlib import Path
 from shutil import rmtree
@@ -245,6 +246,9 @@ def download_logo_for_series(
     tv_manager: TvYamlManager,
     series_name: str,
     series_config: dict[str, Any] | None = None,
+    *,
+    max_wait_attempts: int = 6,
+    wait_interval: float = 0.5,
 ) -> None:
     """Ensure the specified series has an up-to-date logo on disk."""
 
@@ -267,6 +271,10 @@ def download_logo_for_series(
     if not show.valid:
         raise RuntimeError("Series configuration is invalid; check required fields")
 
+    logo_path = (
+        context.preference_parser.source_directory / series_name / "logo.png"
+    )
+
     def _run(manager: Manager) -> None:
         manager.sync_series_files()
         show.assign_interfaces(
@@ -278,7 +286,20 @@ def download_logo_for_series(
         )
         show.download_logo()
 
-    _run_manager_job(_run)
+    attempts = 0
+    while True:
+        try:
+            _run_manager_job(_run)
+            return
+        except ActionInProgressError:
+            attempts += 1
+            if attempts > max_wait_attempts:
+                raise
+
+            time.sleep(wait_interval)
+
+            if not _action_lock.locked() and logo_path.exists() and logo_path.is_file():
+                return
 
 
 def _run_fixer_command(arguments: list[str]) -> None:

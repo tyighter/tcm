@@ -7,6 +7,7 @@ from cgi import FieldStorage
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import time
 from typing import Callable
 from urllib.parse import parse_qs, urlparse
 
@@ -116,6 +117,17 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _wait_for_logo(self, logo_path: Path, attempts: int = 6, delay: float = 0.5) -> Path | None:
+        """Wait briefly for a logo file to appear on disk."""
+
+        for _ in range(attempts):
+            if logo_path.exists() and logo_path.is_file():
+                return logo_path
+
+            time.sleep(delay)
+
+        return None
+
     def _resolve_series_logo(self, series_name: str) -> Path | None:
         """Return the logo.png for a given series if it exists."""
 
@@ -143,10 +155,27 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             )
         except ActionInProgressError:
             logger.info(
-                "Logo download already in progress; skipping forced download for %s",
+                "Logo download already in progress; waiting for completion for %s",
                 series_name,
             )
-            return None
+            waited_logo = self._wait_for_logo(logo_path)
+            if waited_logo:
+                return waited_logo
+
+            try:
+                download_logo_for_series(
+                    self.context,
+                    self.tv_manager,
+                    series_name,
+                    max_wait_attempts=2,
+                    wait_interval=0.5,
+                )
+            except ActionInProgressError:
+                logger.info(
+                    "Logo download still in progress after waiting; skipping %s",
+                    series_name,
+                )
+                return None
         except ValueError:
             logger.warning(
                 "Unable to resolve configuration for series %s when downloading logo",
