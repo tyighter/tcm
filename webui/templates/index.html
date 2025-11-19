@@ -4,13 +4,24 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TitleCardMaker Web Interface</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Rounded:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
     <header class="app-header">
       <div class="header-left">
-        <h1>TitleCardMaker</h1>
-        <p class="subtitle">TV configuration editor</p>
+        <div class="brand">
+          <span class="brand-icon material-symbols-rounded" aria-hidden="true">dashboard_customize</span>
+          <div>
+            <h1>TitleCardMaker</h1>
+            <p class="subtitle">TV configuration editor</p>
+          </div>
+        </div>
       </div>
       <div class="header-actions">
         <button
@@ -20,7 +31,7 @@
           aria-label="Search"
           aria-expanded="false"
         >
-          🔍
+          <span class="material-symbols-rounded" aria-hidden="true">search</span>
         </button>
         <div class="search-group">
           <input
@@ -35,31 +46,31 @@
             type="button"
             aria-label="Hide search"
           >
-            ✕
+            <span class="material-symbols-rounded" aria-hidden="true">close</span>
           </button>
         </div>
         <button id="download-sources">
-          <span aria-hidden="true">⬇</span>
+          <span class="material-symbols-rounded" aria-hidden="true">download</span>
           <span class="button-label">Sources</span>
         </button>
         <button id="run-builder">
-          <span aria-hidden="true">▶</span>
+          <span class="material-symbols-rounded" aria-hidden="true">play_arrow</span>
           <span class="button-label">Build</span>
         </button>
         <button id="expand-all-entries">
-          <span aria-hidden="true">⤢</span>
+          <span class="material-symbols-rounded" aria-hidden="true">unfold_more_horizontal</span>
           <span class="button-label">Expand</span>
         </button>
         <button id="collapse-all-entries">
-          <span aria-hidden="true">⤡</span>
+          <span class="material-symbols-rounded" aria-hidden="true">unfold_less_horizontal</span>
           <span class="button-label">Collapse</span>
         </button>
         <button id="add-entry" class="primary">
-          <span aria-hidden="true">➕</span>
+          <span class="material-symbols-rounded" aria-hidden="true">add</span>
           <span class="button-label">Entry</span>
         </button>
         <button id="save-config" class="accent">
-          <span aria-hidden="true">💾</span>
+          <span class="material-symbols-rounded" aria-hidden="true">save</span>
           <span class="button-label">Save</span>
         </button>
       </div>
