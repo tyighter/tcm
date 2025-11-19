@@ -11,6 +11,9 @@ const state = {
 const dom = {
   entries: document.getElementById('entries'),
   search: document.getElementById('series-search'),
+  toggleSearch: document.getElementById('toggle-search'),
+  closeSearch: document.getElementById('close-search'),
+  header: document.querySelector('.app-header'),
   addEntry: document.getElementById('add-entry'),
   save: document.getElementById('save-config'),
   expandAll: document.getElementById('expand-all-entries'),
@@ -327,6 +330,7 @@ async function init() {
     await loadMetadata();
     await loadConfiguration();
     registerEvents();
+    setSearchVisibility(false);
     renderEntries();
   } catch (error) {
     showToast(`Failed to load configuration: ${error.message}`, 'error');
@@ -361,11 +365,43 @@ async function loadConfiguration() {
   state.collapsedEntries = new Set(state.entries.map((entry) => entry.id));
 }
 
+function setSearchVisibility(isVisible) {
+  if (!dom.header) {
+    return;
+  }
+  dom.header.classList.toggle('search-active', isVisible);
+  if (dom.toggleSearch) {
+    dom.toggleSearch.setAttribute('aria-expanded', String(isVisible));
+  }
+}
+
 function registerEvents() {
-  dom.search.addEventListener('input', (event) => {
-    state.filter = event.target.value.toLowerCase();
-    renderEntries();
-  });
+  if (dom.search) {
+    dom.search.addEventListener('input', (event) => {
+      state.filter = event.target.value.toLowerCase();
+      renderEntries();
+    });
+
+    dom.search.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        setSearchVisibility(false);
+      }
+    });
+  }
+
+  if (dom.toggleSearch && dom.header) {
+    dom.toggleSearch.addEventListener('click', () => {
+      const isActive = !dom.header.classList.contains('search-active');
+      setSearchVisibility(isActive);
+      if (isActive && dom.search) {
+        dom.search.focus();
+      }
+    });
+  }
+
+  if (dom.closeSearch) {
+    dom.closeSearch.addEventListener('click', () => setSearchVisibility(false));
+  }
 
   dom.addEntry.addEventListener('click', () => openAddEntryModal());
 
