@@ -22,6 +22,7 @@ from .services import (
     ActionInProgressError,
     forget_series_cards,
     generate_preview,
+    run_asset_downloads,
     run_builder,
     run_builder_for_series,
     run_metadata_sync,
@@ -399,6 +400,10 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/actions/build":
             self._run_manager_action(run_builder, context="build-all")
+            return
+
+        if parsed.path == "/api/actions/download-sources":
+            self._run_manager_action(run_asset_downloads, context="download-sources")
             return
 
         if parsed.path == "/api/actions/build-series":
