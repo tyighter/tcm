@@ -597,18 +597,29 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 )
                 return
 
-            form = FieldStorage(
-                fp=self.rfile,
-                headers=self.headers,
-                environ={
-                    "REQUEST_METHOD": "POST",
-                    "CONTENT_TYPE": content_type,
-                    "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
-                },
-                keep_blank_values=True,
-            )
+            try:
+                form = FieldStorage(
+                    fp=self.rfile,
+                    headers=self.headers,
+                    environ={
+                        "REQUEST_METHOD": "POST",
+                        "CONTENT_TYPE": content_type,
+                        "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
+                    },
+                    keep_blank_values=True,
+                )
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.exception("Unable to parse uploaded font data")
+                self._error(str(exc), status=HTTPStatus.BAD_REQUEST)
+                return
 
-            file_field = form.get("file")
+            try:
+                file_field = form.get("file")
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.exception("Unable to read uploaded font data")
+                self._error(str(exc), status=HTTPStatus.BAD_REQUEST)
+                return
+
             if not file_field or not getattr(file_field, "filename", None):
                 self._error("Missing font file")
                 return
