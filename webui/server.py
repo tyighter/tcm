@@ -186,8 +186,9 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             logger.exception("Failed to download logo for series %s", series_name)
             return None
 
-        if logo_path.exists() and logo_path.is_file():
-            return logo_path
+        waited_logo = self._wait_for_logo(logo_path)
+        if waited_logo:
+            return waited_logo
 
         logger.info("Logo download completed but file still missing for series %s", series_name)
         return None
