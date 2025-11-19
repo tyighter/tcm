@@ -6,6 +6,7 @@ const state = {
   filter: '',
   pendingEntryId: null,
   collapsedEntries: new Set(),
+  lastSavedEntries: new Map(),
 };
 
 const dom = {
@@ -73,6 +74,15 @@ cardTypePreviewImage.alt = 'Card type preview';
 cardTypePreviewElement.appendChild(cardTypePreviewImage);
 document.body.appendChild(cardTypePreviewElement);
 
+const entryPreviewHoverElement = document.createElement('div');
+entryPreviewHoverElement.className = 'entry-preview-hover';
+entryPreviewHoverElement.style.left = '0px';
+entryPreviewHoverElement.style.top = '0px';
+const entryPreviewHoverImage = document.createElement('img');
+entryPreviewHoverImage.alt = 'Entry preview';
+entryPreviewHoverElement.appendChild(entryPreviewHoverImage);
+document.body.appendChild(entryPreviewHoverElement);
+
 const episodeTextHelperElement = createEpisodeTextFormatHelper();
 document.body.appendChild(episodeTextHelperElement);
 
@@ -82,6 +92,7 @@ const hoverMediaQuery =
     ? window.matchMedia('(hover: hover)')
     : null;
 
+let entryPreviewHoverVisible = false;
 let activeEpisodeTextInput = null;
 
 function canShowCardTypePreview() {
@@ -158,6 +169,76 @@ function enableCardTypePreview(wrapper) {
   });
   wrapper.addEventListener('mousemove', moveCardTypePreview);
   wrapper.addEventListener('mouseleave', hideCardTypePreview);
+}
+
+function canShowEntryPreviewHover() {
+  if (!hoverMediaQuery) {
+    return true;
+  }
+  return hoverMediaQuery.matches;
+}
+
+function positionEntryPreviewHover(event) {
+  if (!event) {
+    return;
+  }
+  const offset = 18;
+  const estimatedWidth =
+    entryPreviewHoverElement.offsetWidth ||
+    entryPreviewHoverImage.naturalWidth ||
+    640;
+  const estimatedHeight =
+    entryPreviewHoverElement.offsetHeight ||
+    entryPreviewHoverImage.naturalHeight ||
+    360;
+  let left = event.clientX + offset;
+  let top = event.clientY + offset;
+  const maxLeft = window.innerWidth - estimatedWidth - 12;
+  const maxTop = window.innerHeight - estimatedHeight - 12;
+  if (left > maxLeft) {
+    left = Math.max(12, event.clientX - estimatedWidth - offset);
+  }
+  if (top > maxTop) {
+    top = Math.max(12, event.clientY - estimatedHeight - offset);
+  }
+  entryPreviewHoverElement.style.left = `${Math.max(12, left)}px`;
+  entryPreviewHoverElement.style.top = `${Math.max(12, top)}px`;
+}
+
+function showEntryPreviewHover(src, label, event) {
+  if (!src || !canShowEntryPreviewHover()) {
+    return;
+  }
+  entryPreviewHoverImage.src = src;
+  entryPreviewHoverImage.alt = label ? `${label} preview` : 'Entry preview';
+  positionEntryPreviewHover(event);
+  entryPreviewHoverElement.classList.add('visible');
+  entryPreviewHoverVisible = true;
+}
+
+function moveEntryPreviewHover(event) {
+  if (!entryPreviewHoverVisible) {
+    return;
+  }
+  positionEntryPreviewHover(event);
+}
+
+function hideEntryPreviewHover() {
+  entryPreviewHoverVisible = false;
+  entryPreviewHoverElement.classList.remove('visible');
+}
+
+function enableEntryPreviewHover(wrapper, entry) {
+  if (!wrapper || wrapper.dataset.previewHoverHandlers === 'true') {
+    return;
+  }
+  wrapper.dataset.previewHoverHandlers = 'true';
+  wrapper.addEventListener('mouseenter', (event) => {
+    const src = entry?.previewSrc || wrapper.dataset.previewSrc;
+    showEntryPreviewHover(src, entry?.name, event);
+  });
+  wrapper.addEventListener('mousemove', moveEntryPreviewHover);
+  wrapper.addEventListener('mouseleave', hideEntryPreviewHover);
 }
 
 // -----------------------------------------------------------------------------
@@ -364,6 +445,7 @@ async function loadConfiguration() {
   }));
   sortEntries();
   state.collapsedEntries = new Set(state.entries.map((entry) => entry.id));
+  syncSavedEntrySnapshots();
 }
 
 function setSearchVisibility(isVisible) {
@@ -536,12 +618,15 @@ function renderEntry(entry) {
   if (entry.previewSrc) {
     previewImage.src = entry.previewSrc;
     preview.classList.add('entry-preview--loaded');
+    preview.dataset.previewSrc = entry.previewSrc;
   } else if (entry.previewError) {
     previewPlaceholder.textContent = entry.previewError;
     preview.classList.add('entry-preview--error');
   }
 
   preview.append(previewImage, previewPlaceholder);
+
+  enableEntryPreviewHover(preview, entry);
 
   const media = document.createElement('div');
   media.className = 'entry-media';
@@ -656,15 +741,25 @@ function updateEntryPreview(entry) {
   const placeholder = wrapper.querySelector('.entry-preview__placeholder');
 
   wrapper.classList.remove('entry-preview--error', 'entry-preview--loaded');
+  wrapper.dataset.previewSrc = entry.previewSrc || '';
 
   if (entry.previewSrc && image) {
     image.src = entry.previewSrc;
     image.alt = `${entry.name} preview`;
     wrapper.classList.add('entry-preview--loaded');
+    wrapper.dataset.previewSrc = entry.previewSrc;
     if (placeholder) {
       placeholder.textContent = '';
     }
     return;
+  }
+
+  if (image) {
+    image.removeAttribute('src');
+  }
+
+  if (!entry.previewError && placeholder) {
+    placeholder.textContent = 'Generating preview...';
   }
 
   if (entry.previewError && placeholder) {
@@ -673,12 +768,21 @@ function updateEntryPreview(entry) {
   }
 }
 
+function invalidateEntryPreview(entry) {
+  entry.previewSrc = null;
+  entry.previewError = null;
+  entry.previewLoading = false;
+  updateEntryPreview(entry);
+}
+
 async function loadEntryPreview(entry) {
   if (!entry || entry.previewSrc || entry.previewLoading) {
     return;
   }
 
   entry.previewLoading = true;
+  const requestId = (entry.previewRequestId || 0) + 1;
+  entry.previewRequestId = requestId;
   entry.previewError = null;
 
   try {
@@ -698,17 +802,23 @@ async function loadEntryPreview(entry) {
       throw new Error('Preview payload was missing image data');
     }
 
-    entry.previewSrc = `data:${data.mime};base64,${data.data}`;
+    if (entry.previewRequestId === requestId) {
+      entry.previewSrc = `data:${data.mime};base64,${data.data}`;
+    }
   } catch (error) {
-    entry.previewError = error.message || 'Preview unavailable';
-    clientLog('preview-generation-failed', {
-      event: 'preview-generation-failed',
-      name: entry.name,
-      error: entry.previewError,
-    });
+    if (entry.previewRequestId === requestId) {
+      entry.previewError = error.message || 'Preview unavailable';
+      clientLog('preview-generation-failed', {
+        event: 'preview-generation-failed',
+        name: entry.name,
+        error: entry.previewError,
+      });
+    }
   } finally {
-    entry.previewLoading = false;
-    updateEntryPreview(entry);
+    if (entry.previewRequestId === requestId) {
+      entry.previewLoading = false;
+      updateEntryPreview(entry);
+    }
   }
 }
 
@@ -2106,6 +2216,7 @@ function removeEntry(entry) {
   }
   state.entries = state.entries.filter((item) => item !== entry);
   state.collapsedEntries.delete(entry.id);
+  state.lastSavedEntries.delete(entry.id);
   renderEntries();
 }
 
@@ -2273,10 +2384,41 @@ function selectDefaultLibrary(result) {
 // -----------------------------------------------------------------------------
 // Saving configuration
 // -----------------------------------------------------------------------------
+function cloneData(value) {
+  return JSON.parse(JSON.stringify(value ?? {}));
+}
+
+function snapshotEntry(entry) {
+  return { name: entry.name, config: cloneData(entry.config) };
+}
+
+function deepEqualEntrySnapshots(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function hasEntryChangedSinceLastSave(entry) {
+  const previous = state.lastSavedEntries.get(entry.id);
+  if (!previous) {
+    return true;
+  }
+  return !deepEqualEntrySnapshots(previous, snapshotEntry(entry));
+}
+
+function recordEntrySaveSnapshot(entry) {
+  state.lastSavedEntries.set(entry.id, snapshotEntry(entry));
+}
+
+function syncSavedEntrySnapshots() {
+  state.lastSavedEntries = new Map(
+    state.entries.map((entry) => [entry.id, snapshotEntry(entry)])
+  );
+}
+
 async function saveConfiguration() {
   try {
     sortEntries();
     renderEntries();
+    const changedEntries = state.entries.filter(hasEntryChangedSinceLastSave);
     const payload = {
       libraries: state.libraries,
       series: state.entries.map((entry) => ({
@@ -2297,6 +2439,12 @@ async function saveConfiguration() {
     }
 
     showToast('Configuration saved', 'success');
+
+    changedEntries.forEach((entry) => {
+      invalidateEntryPreview(entry);
+      recordEntrySaveSnapshot(entry);
+    });
+    requestEntryPreviews(changedEntries);
   } catch (error) {
     showToast(error.message, 'error');
   }
