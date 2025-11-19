@@ -94,10 +94,15 @@ class PersistentDatabase:
         and  recreates a new TinyDB.
         """
 
-        # Attempt to remove all records; if that fails delete and remake file
+        # Always start from a clean slate by closing any existing handle,
+        # recreating the backing file directory, and then recreating the
+        # TinyDB instance. This avoids leaving a partially written or empty
+        # database file behind after conflicts.
         try:
-            self.db.truncate()
+            self.db.close()
         except Exception:
-            self.file.unlink(missing_ok=True)
-            self.file.parent.mkdir(exist_ok=True, parents=True)
-            self.db = TinyDB(self.file)
+            pass
+
+        self.file.unlink(missing_ok=True)
+        self.file.parent.mkdir(exist_ok=True, parents=True)
+        self.db = TinyDB(self.file)
