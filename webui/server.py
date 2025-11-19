@@ -114,6 +114,26 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _resolve_series_logo(self, series_name: str) -> Path | None:
+        """Return the logo.png for a given series if it exists."""
+
+        base = Path("/config/source").resolve()
+        try:
+            series_dir = (base / series_name).resolve()
+        except OSError:
+            return None
+
+        if not str(series_dir).startswith(str(base)):
+            logger.warning("Attempted logo access outside of source directory: %s", series_dir)
+            return None
+
+        logo_path = series_dir / "logo.png"
+        if logo_path.exists() and logo_path.is_file():
+            return logo_path
+
+        logger.info("Logo not found for series %s", series_name)
+        return None
+
     def _resolve_card_type_thumbnail(self, requested_name: str) -> Path | None:
         """Return a thumbnail file matching the requested card type image."""
 
@@ -206,6 +226,21 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     return
 
             self.send_error(HTTPStatus.NOT_FOUND.value)
+            return
+
+        if parsed.path == "/api/series-logo":
+            params = parse_qs(parsed.query)
+            name = params.get("name", [""])[0].strip()
+            if not name:
+                self._error("Missing series name")
+                return
+
+            match = self._resolve_series_logo(name)
+            if match is None:
+                self.send_error(HTTPStatus.NOT_FOUND.value)
+                return
+
+            self._serve_file(match)
             return
 
         if parsed.path == "/api/card-types/thumbnail":
