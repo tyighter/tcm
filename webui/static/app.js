@@ -663,13 +663,23 @@ function renderEntry(entry) {
   logo.className = 'entry-logo';
   logo.alt = `${entry.name} logo`;
   logo.loading = 'lazy';
-  logo.src = `/api/series-logo?name=${encodeURIComponent(entry.name)}`;
-  logo.addEventListener('load', () => applyLogoStroke(logo));
-  logo.addEventListener('error', () => {
+  const handleLogoError = () => {
     logo.classList.add('entry-logo--missing');
     logo.classList.remove('entry-logo--light', 'entry-logo--dark');
     logo.removeAttribute('src');
-  });
+  };
+
+  logo.addEventListener('load', () => applyLogoStroke(logo));
+  logo.addEventListener('error', handleLogoError);
+  logo.src = `/api/series-logo?name=${encodeURIComponent(entry.name)}`;
+
+  if (logo.complete) {
+    if (logo.naturalWidth > 0 && logo.naturalHeight > 0) {
+      applyLogoStroke(logo);
+    } else {
+      handleLogoError();
+    }
+  }
 
   const preview = document.createElement('div');
   preview.className = 'entry-preview';
