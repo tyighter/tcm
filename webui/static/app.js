@@ -8,6 +8,7 @@ const state = {
   collapsedEntries: new Set(),
   lastSavedEntries: new Map(),
   previewCache: {},
+  cardTypeExtras: {},
 };
 
 const dom = {
@@ -432,6 +433,7 @@ async function loadMetadata() {
   const data = await response.json();
   state.fields = data.fields || [];
   state.fontDirectory = data.fontDirectory || state.fontDirectory;
+  state.cardTypeExtras = data.cardTypeExtras || {};
 }
 
 async function loadConfiguration() {
@@ -923,7 +925,7 @@ function renderFieldRow(entry, field, value) {
       controls.appendChild(replacementEditor(entry, field, value));
       break;
     case 'extras':
-      controls.appendChild(mapEditor(entry, field, value, 'Key', 'Value'));
+      controls.appendChild(extrasEditor(entry, field, value));
       break;
     case 'season-map':
       controls.appendChild(seasonEditor(entry, field, value));
@@ -1665,7 +1667,7 @@ function replacementEditor(entry, field, value) {
   return container;
 }
 
-function mapEditor(entry, field, value, keyLabel, valueLabel, onUpdate) {
+function mapEditor(entry, field, value, keyLabel, valueLabel, onUpdate, options = {}) {
   const container = document.createElement('div');
   container.className = 'table-list sub-card-list';
 
@@ -1732,6 +1734,10 @@ function mapEditor(entry, field, value, keyLabel, valueLabel, onUpdate) {
     const add = document.createElement('button');
     add.textContent = `+ Add ${keyLabel.toLowerCase()}`;
     add.addEventListener('click', () => {
+      if (options.onAddRow) {
+        options.onAddRow({ rows, render: renderRows, update });
+        return;
+      }
       rows.push({ key: '', value: '' });
       renderRows();
     });
@@ -1741,6 +1747,119 @@ function mapEditor(entry, field, value, keyLabel, valueLabel, onUpdate) {
   renderRows();
   container.appendChild(list);
   return container;
+}
+
+function getDefaultCardType() {
+  const cardTypeField = state.fields.find((item) => item.id === 'card_type');
+  if (cardTypeField && cardTypeField.default) {
+    return cardTypeField.default;
+  }
+  return 'standard';
+}
+
+function normalizeCardType(value) {
+  return (value || '').toString().trim().toLowerCase();
+}
+
+function extrasForCardType(cardType) {
+  const normalized = normalizeCardType(cardType);
+  const availableExtras = state.cardTypeExtras || {};
+  if (availableExtras[normalized]) {
+    return availableExtras[normalized];
+  }
+
+  const match = Object.keys(availableExtras).find(
+    (key) => normalizeCardType(key) === normalized
+  );
+
+  return match ? availableExtras[match] : [];
+}
+
+function openExtrasPicker(cardType, rows, renderRows, updateRows) {
+  const modal = buildModal('Add extra option');
+  addFloatingCloseButton(modal, 'Close extra option selector');
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'card-type-modal';
+
+  const helper = document.createElement('p');
+  helper.className = 'helper-text';
+  helper.textContent = `Available extras for ${cardType || 'selected card type'}`;
+
+  const optionsWrapper = document.createElement('div');
+  optionsWrapper.className = 'search-results card-type-results';
+
+  const available = extrasForCardType(cardType);
+  const existingKeys = rows.map((row) => normalizeCardType(row.key)).filter(Boolean);
+  const remaining = available.filter((key) => !existingKeys.includes(normalizeCardType(key)));
+
+  if (remaining.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'helper-text';
+    empty.textContent =
+      available.length === 0
+        ? 'No documented extras for this card type. You can still add a custom key.'
+        : 'All available extras have already been added.';
+    optionsWrapper.appendChild(empty);
+  }
+
+  remaining.forEach((key) => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'card-type-option';
+    option.textContent = key;
+    option.addEventListener('click', () => {
+      rows.push({ key, value: '' });
+      updateRows();
+      renderRows();
+      closeModal(modal.element);
+    });
+    optionsWrapper.appendChild(option);
+  });
+
+  const customWrapper = document.createElement('div');
+  customWrapper.className = 'card-type-custom';
+
+  const customLabel = document.createElement('p');
+  customLabel.className = 'helper-text';
+  customLabel.textContent = 'Need something else? Provide a custom extra key.';
+
+  const customInput = document.createElement('input');
+  customInput.type = 'text';
+  customInput.placeholder = 'Custom extra key';
+
+  const customButton = document.createElement('button');
+  customButton.textContent = 'Add custom key';
+  customButton.disabled = true;
+
+  customInput.addEventListener('input', () => {
+    customButton.disabled = customInput.value.trim() === '';
+  });
+
+  customButton.addEventListener('click', () => {
+    const customValue = customInput.value.trim();
+    if (!customValue) {
+      return;
+    }
+    rows.push({ key: customValue, value: '' });
+    updateRows();
+    renderRows();
+    closeModal(modal.element);
+  });
+
+  customWrapper.append(customLabel, customInput, customButton);
+
+  wrapper.append(helper, optionsWrapper, customWrapper);
+  modal.content.appendChild(wrapper);
+}
+
+function extrasEditor(entry, field, value) {
+  const cardType = getValue(entry.config, ['card_type']) || getDefaultCardType();
+  return mapEditor(entry, field, value, 'Key', 'Value', undefined, {
+    onAddRow: ({ rows, render, update }) => {
+      openExtrasPicker(cardType, rows, render, update);
+    },
+  });
 }
 
 function seasonEditor(entry, field, value) {
