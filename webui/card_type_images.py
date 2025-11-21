@@ -20,7 +20,7 @@ CARD_TYPE_STATIC_ROOT = Path(__file__).resolve().parent / "static" / "card-types
 REPO_THUMBNAIL_ROOT = Path(__file__).resolve().parent.parent / "config" / "thumbnails"
 DOCKER_THUMBNAIL_ROOT = Path("/config/thumbnails")
 MANIFEST_FILENAME = "manifest.json"
-THUMBNAIL_SIZE = (150, 84)
+THUMBNAIL_SIZE = (320, 180)
 
 # Mapping of card type names to their expected thumbnail filenames in /config/thumbnails.
 DEFAULT_THUMBNAIL_MAP = {
@@ -322,9 +322,21 @@ def _prepare_resized_thumbnail(slug: str, source: Path) -> Path | None:
         return None
 
     try:
-        if destination.exists() and destination.stat().st_mtime >= source.stat().st_mtime:
-            logger.debug("Using cached resized thumbnail for %s at %s", slug, destination)
-            return destination
+        if destination.exists():
+            regenerate = destination.stat().st_mtime < source.stat().st_mtime
+
+            if not regenerate:
+                try:
+                    with Image.open(destination) as existing:
+                        regenerate = existing.size != THUMBNAIL_SIZE
+                except OSError:
+                    regenerate = True
+
+            if not regenerate:
+                logger.debug(
+                    "Using cached resized thumbnail for %s at %s", slug, destination
+                )
+                return destination
     except OSError:
         # Fall through to attempt regenerating the thumbnail
         pass
