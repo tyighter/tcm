@@ -18,7 +18,7 @@ from .card_type_images import (
     slugify_card_type,
 )
 from .config import AppContext, create_app_context
-from .options import build_series_fields
+from .options import build_card_type_extras, build_series_fields
 from .services import (
     ActionInProgressError,
     download_logo_for_series,
@@ -425,6 +425,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 {
                     "fields": fields,
                     "cardTypes": card_types,
+                    "cardTypeExtras": build_card_type_extras(),
                     "fontDirectory": self.font_directory.as_posix(),
                 }
             )

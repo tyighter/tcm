@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 from modules.BaseCardType import BaseCardType
@@ -304,3 +305,50 @@ def build_series_fields(libraries: dict[str, Any]) -> list[dict[str, Any]]:
         fields.append(filled)
 
     return fields
+
+
+def build_card_type_extras() -> dict[str, list[str]]:
+    """Return a mapping of card types to supported extra options."""
+
+    base_parameters = {
+        "source_file",
+        "card_file",
+        "title_text",
+        "season_text",
+        "episode_text",
+        "hide_season_text",
+        "hide_episode_text",
+        "blur",
+        "grayscale",
+        "watched",
+        "preferences",
+        "unused",
+        "font_color",
+        "font_file",
+        "font_interline_spacing",
+        "font_interword_spacing",
+        "font_kerning",
+        "font_size",
+        "font_stroke_width",
+        "font_vertical_shift",
+        "font_replacements",
+        "title_text_format",
+        "episode_text_format",
+        "season_number",
+        "episode_number",
+        "library",
+    }
+
+    extras: dict[str, list[str]] = {}
+    for identifier, card_type in TitleCard.BUILTIN_CARD_TYPES.items():
+        parameters = list(inspect.signature(card_type.__init__).parameters.values())[1:]
+        supported = sorted(
+            {
+                parameter.name
+                for parameter in parameters
+                if parameter.name not in base_parameters
+            }
+        )
+        extras[identifier] = supported
+
+    return extras
