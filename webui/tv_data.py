@@ -4,6 +4,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from modules.Show import Show
+
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
@@ -60,7 +62,7 @@ class TvYamlManager:
             series_entries.append(
                 {
                     "name": name,
-                    "config": _to_builtin(config),
+                    "config": _apply_series_defaults(name, _to_builtin(config)),
                 }
             )
 
@@ -138,3 +140,38 @@ def _to_commented(value: Any) -> Any:
             seq.append(_to_commented(item))
         return seq
     return value
+
+
+def _apply_series_defaults(name: str, config: dict[str, Any]) -> dict[str, Any]:
+    """Apply runtime defaults so they surface in the web UI."""
+
+    card_type = config.get("card_type")
+
+    extras = config.get("extras") if isinstance(config.get("extras"), dict) else {}
+    translations_raw = config.get("translation")
+
+    translations: list[dict[str, Any]] = []
+    if isinstance(translations_raw, dict) and translations_raw.keys() == {"language", "key"}:
+        translations = [translations_raw]
+    elif isinstance(translations_raw, list):
+        translations = [
+            translation
+            for translation in translations_raw
+            if isinstance(translation, dict) and translation.keys() >= {"language", "key"}
+        ]
+
+    if card_type == "anime" and not translations:
+        translations = [dict(Show.DEFAULT_ANIME_TRANSLATION)]
+
+    if card_type in Show.DEFAULT_LOGO_CARD_TYPES and "logo" not in extras:
+        extras["logo"] = f"/config/source/{name}/logo.png"
+
+    if translations:
+        config["translation"] = translations
+    elif translations_raw is not None:
+        config["translation"] = []
+
+    if extras:
+        config["extras"] = extras
+
+    return config

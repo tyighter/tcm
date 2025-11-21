@@ -60,6 +60,21 @@ class Show(YamlReader):
         'image_source_priority', '_auto_hide_seasons',
     )
 
+    # Card types that should receive a default logo when none is supplied
+    DEFAULT_LOGO_CARD_TYPES = {
+        'calligraphy',
+        'fade',
+        'logo',
+        'music',
+        'poster',
+    }
+
+    # Default translation to apply for anime cards
+    DEFAULT_ANIME_TRANSLATION = {
+        'language': 'JA',
+        'key': 'Kanji',
+    }
+
     def __init__(self,
             name: str,
             yaml_dict: dict,
@@ -373,14 +388,6 @@ class Show(YamlReader):
     def _apply_default_extras(self) -> None:
         """Apply default extras for card types that require them."""
 
-        default_logo_card_types = {
-            'calligraphy',
-            'fade',
-            'logo',
-            'music',
-            'poster',
-        }
-
         card_type_identifier = next(
             (
                 identifier
@@ -390,11 +397,15 @@ class Show(YamlReader):
             None,
         )
 
-        if (card_type_identifier in default_logo_card_types
+        if (card_type_identifier in self.DEFAULT_LOGO_CARD_TYPES
                 and 'logo' not in self.extras):
             self.extras['logo'] = (
                 f"/config/source/{self.series_info.full_name}/logo.png"
             )
+
+        if (card_type_identifier == 'anime' and not self.title_languages
+                and 'translation' not in self._base_yaml):
+            self.title_languages = [self.DEFAULT_ANIME_TRANSLATION]
 
 
     def assign_interfaces(self,
