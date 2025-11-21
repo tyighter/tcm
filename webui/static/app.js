@@ -574,6 +574,62 @@ function renderEntries() {
   requestEntryPreviews(filtered);
 }
 
+function classifyLogoTone(image) {
+  if (!image || !image.complete || image.naturalWidth === 0 || image.naturalHeight === 0) {
+    return null;
+  }
+
+  const maxDimension = 96;
+  const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) {
+    return null;
+  }
+
+  context.drawImage(image, 0, 0, width, height);
+  const { data } = context.getImageData(0, 0, width, height);
+
+  let totalLuminance = 0;
+  let countedPixels = 0;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const alpha = data[index + 3];
+    if (alpha < 16) {
+      continue;
+    }
+
+    const luminance = 0.2126 * data[index] + 0.7152 * data[index + 1] + 0.0722 * data[index + 2];
+    totalLuminance += luminance;
+    countedPixels += 1;
+  }
+
+  if (countedPixels === 0) {
+    return null;
+  }
+
+  const averageLuminance = totalLuminance / countedPixels;
+  return averageLuminance >= 150 ? 'light' : 'dark';
+}
+
+function applyLogoStroke(logoElement) {
+  const tone = classifyLogoTone(logoElement);
+  logoElement.classList.remove('entry-logo--light', 'entry-logo--dark');
+
+  if (!tone) {
+    return;
+  }
+
+  const logoToneClass = tone === 'light' ? 'entry-logo--light' : 'entry-logo--dark';
+  logoElement.classList.add(logoToneClass);
+}
+
 function renderEntry(entry) {
   const container = document.createElement('article');
   container.className = 'entry';
@@ -608,8 +664,10 @@ function renderEntry(entry) {
   logo.alt = `${entry.name} logo`;
   logo.loading = 'lazy';
   logo.src = `/api/series-logo?name=${encodeURIComponent(entry.name)}`;
+  logo.addEventListener('load', () => applyLogoStroke(logo));
   logo.addEventListener('error', () => {
     logo.classList.add('entry-logo--missing');
+    logo.classList.remove('entry-logo--light', 'entry-logo--dark');
     logo.removeAttribute('src');
   });
 
