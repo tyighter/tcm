@@ -44,7 +44,7 @@ ENV TCM_PREFERENCES=/config/preferences.yml \
 
 # Delete setup files
 # Create user and group to run the container
-# Install runtime dependencies (ImageMagick + extras)
+# Install runtime dependencies (ImageMagick + extras + CairoSVG deps)
 # Override default ImageMagick policy XML file
 RUN set -eux; \
     rm -f Pipfile Pipfile.lock; \
@@ -55,7 +55,13 @@ RUN set -eux; \
         ca-certificates \
         fonts-dejavu-core \
         ghostscript \
-        imagemagick; \
+        imagemagick \
+        libcairo2 \
+        libcairo2-dev \
+        libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+        librsvg2-2; \
+    pip3 install --no-cache-dir cairosvg; \
     for package in libmagickcore-6.q16-8-extra \
                    libmagickcore-6.q16-7-extra \
                    libmagickcore-6.q16-6-extra; do \
