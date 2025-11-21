@@ -367,6 +367,35 @@ class Show(YamlReader):
         if self._is_specified('extras'):
             self.extras = self.get('extras', type_=dict)
 
+        self._apply_default_extras()
+
+
+    def _apply_default_extras(self) -> None:
+        """Apply default extras for card types that require them."""
+
+        default_logo_card_types = {
+            'calligraphy',
+            'fade',
+            'logo',
+            'music',
+            'poster',
+        }
+
+        card_type_identifier = next(
+            (
+                identifier
+                for identifier, card_type in TitleCard.BUILTIN_CARD_TYPES.items()
+                if card_type is self.card_class
+            ),
+            None,
+        )
+
+        if (card_type_identifier in default_logo_card_types
+                and 'logo' not in self.extras):
+            self.extras['logo'] = (
+                f"/config/source/{self.series_info.full_name}/logo.png"
+            )
+
 
     def assign_interfaces(self,
             emby_interface: Optional[EmbyInterface] = None,
