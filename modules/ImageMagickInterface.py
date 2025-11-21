@@ -417,7 +417,7 @@ class ImageMagickInterface:
         try:
             svg2png(
                 url=image.as_posix(),
-                write_to=destination,
+                write_to=destination.as_posix(),
                 output_width=min_dimension,
             )
         except Exception:  # pylint: disable=broad-except
