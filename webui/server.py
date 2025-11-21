@@ -98,7 +98,13 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except BrokenPipeError:
+            logger.warning(
+                "Client disconnected before JSON response could be sent for %s",
+                self.path,
+            )
 
     def _error(self, message: str, status: HTTPStatus = HTTPStatus.BAD_REQUEST) -> None:
         self._json_response({"error": message}, status=status)
