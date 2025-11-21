@@ -11,6 +11,7 @@ import time
 from typing import Callable
 from urllib.parse import parse_qs, urlparse
 
+from modules.CleanPath import CleanPath
 from .card_type_images import (
     DEFAULT_THUMBNAIL_SLUG_MAP,
     REPO_THUMBNAIL_ROOT,
@@ -139,8 +140,10 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         """Return the logo.png for a given series if it exists."""
 
         base = Path("/config/source").resolve()
+        safe_series_name = CleanPath.sanitize_name(series_name)
+
         try:
-            series_dir = (base / series_name).resolve()
+            series_dir = (base / safe_series_name).resolve()
         except OSError:
             return None
 

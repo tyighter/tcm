@@ -15,6 +15,7 @@ from shutil import rmtree
 from threading import Lock
 from typing import Any, Callable
 
+from modules.CleanPath import CleanPath
 from modules.Manager import Manager
 from modules.Show import Show
 from modules.ShowArchive import ShowArchive
@@ -326,8 +327,9 @@ def download_logo_for_series(
     if not show.valid:
         raise RuntimeError("Series configuration is invalid; check required fields")
 
+    safe_series_dir = CleanPath.sanitize_name(series_name)
     logo_path = (
-        context.preference_parser.source_directory / series_name / "logo.png"
+        context.preference_parser.source_directory / safe_series_dir / "logo.png"
     )
 
     def _run(manager: Manager) -> None:
