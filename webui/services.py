@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
 import random
 import re
 import subprocess
@@ -27,6 +29,8 @@ class ActionInProgressError(RuntimeError):
 
 
 _action_lock = Lock()
+_preview_cache_lock = Lock()
+_preview_cache: dict[str, tuple[str, str]] = {}
 
 
 def merge_series_configuration(
@@ -85,6 +89,51 @@ def search_plex(context: AppContext, query: str, limit: int = 10) -> list[dict[s
         serialised.append(entry)
 
     return serialised
+
+
+def _preview_cache_key(show_name: str, series_config: dict[str, Any]) -> str:
+    serialised = json.dumps(_to_builtin(series_config), sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(serialised.encode("utf-8")).hexdigest()
+    return f"{show_name}:{digest}"
+
+
+def invalidate_preview_cache(series_name: str | None = None) -> None:
+    """Invalidate cached previews, optionally only for a specific series."""
+
+    with _preview_cache_lock:
+        if series_name is None:
+            _preview_cache.clear()
+            return
+
+        prefix = f"{series_name}:"
+        stale_keys = [key for key in _preview_cache if key.startswith(prefix)]
+        for key in stale_keys:
+            del _preview_cache[key]
+
+
+def get_or_generate_preview(
+    context: AppContext,
+    tv_manager: TvYamlManager,
+    show_name: str,
+    series_config: dict[str, Any],
+    *,
+    force: bool = False,
+) -> tuple[str, str]:
+    """Return a cached preview or generate and cache a new one."""
+
+    cache_key = _preview_cache_key(show_name, series_config)
+    if not force:
+        with _preview_cache_lock:
+            cached = _preview_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+    mime, data = generate_preview(context, tv_manager, show_name, series_config)
+
+    with _preview_cache_lock:
+        _preview_cache[cache_key] = (mime, data)
+
+    return mime, data
 
 
 def generate_preview(
