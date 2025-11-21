@@ -519,7 +519,11 @@ function registerEvents() {
         dom.runBuilder,
         '/api/actions/build',
         'Builder run complete',
-        { workingLabel: 'Building...', refresh: true }
+        {
+          workingLabel: 'Building...',
+          refresh: true,
+          onSuccess: () => refreshEntryPreviews(),
+        }
       )
     );
   }
@@ -667,7 +671,12 @@ function renderEntry(entry) {
       buildButton,
       '/api/actions/build-series',
       `Built cards for ${entry.name}`,
-      { workingLabel: 'Building...', refresh: false, payload: entryPayload() }
+      {
+        workingLabel: 'Building...',
+        refresh: false,
+        payload: entryPayload(),
+        onSuccess: () => refreshEntryPreviews([entry]),
+      }
     )
   );
 
@@ -832,6 +841,11 @@ function requestEntryPreviews(entries = state.entries) {
   entries.forEach((entry) => {
     void loadEntryPreview(entry);
   });
+}
+
+function refreshEntryPreviews(entries = state.entries) {
+  entries.forEach((entry) => invalidateEntryPreview(entry));
+  requestEntryPreviews(entries);
 }
 
 function isEntryCollapsed(entryId) {
@@ -2192,7 +2206,7 @@ function openPreview(entry) {
   fetch('/api/preview', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: entry.name, config: entry.config }),
+    body: JSON.stringify({ name: entry.name, config: entry.config, force: true }),
   })
     .then(async (response) => {
       if (!response.ok) {
@@ -2589,7 +2603,7 @@ async function triggerServerAction(
   button,
   endpoint,
   successMessage,
-  { workingLabel = 'Working...', refresh = true, payload } = {}
+  { workingLabel = 'Working...', refresh = true, payload, onSuccess } = {}
 ) {
   if (!button) {
     return;
@@ -2621,6 +2635,9 @@ async function triggerServerAction(
     if (refresh) {
       await loadConfiguration();
       renderEntries();
+    }
+    if (typeof onSuccess === 'function') {
+      onSuccess(responsePayload);
     }
     showToast(successMessage, 'success');
   } catch (error) {

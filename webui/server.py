@@ -23,7 +23,8 @@ from .services import (
     ActionInProgressError,
     download_logo_for_series,
     forget_series_cards,
-    generate_preview,
+    get_or_generate_preview,
+    invalidate_preview_cache,
     run_asset_downloads,
     run_builder,
     run_builder_for_series,
@@ -529,16 +530,18 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
             show_name = payload.get("name")
             config = payload.get("config")
+            force_refresh = bool(payload.get("force"))
             if not show_name or not isinstance(config, dict):
                 self._error("Preview requires a series name and configuration")
                 return
 
             try:
-                mime, data = generate_preview(
+                mime, data = get_or_generate_preview(
                     self.context,
                     self.tv_manager,
                     show_name,
                     config,
+                    force=force_refresh,
                 )
             except Exception as exc:  # pylint: disable=broad-except
                 self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
@@ -552,6 +555,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/actions/build":
+            invalidate_preview_cache()
             self._run_manager_action(run_builder, context="build-all")
             return
 
@@ -574,6 +578,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             series_config = payload.get("config") if isinstance(payload, dict) else None
             logger.info("Build requested for %s", series_name)
             logger.debug("Series config: %s", series_config)
+            invalidate_preview_cache(series_name)
             self._run_manager_action(
                 lambda: run_builder_for_series(
                     self.context, self.tv_manager, series_name, series_config
