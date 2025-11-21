@@ -208,7 +208,6 @@ class OlivierTitleCard(BaseCardType):
         kerning = 19 * self.episode_text_font_size
         size = 60 * self.episode_text_font_size
         stroke_width = 7 * self.episode_text_font_size
-        vertical_shift = -150 + self.episode_text_vertical_shift
 
         # Get variable horizontal offset based of episode prefix
         text_offset = {'EPISODE': 425, 'CHAPTER': 425, 'PART': 275}
@@ -222,6 +221,9 @@ class OlivierTitleCard(BaseCardType):
             offset = offset_per_char * len(self.episode_prefix) * 1.10\
                 * self.episode_text_font_size
 
+        horizontal_offset = 325 + float(offset)
+        vertical_shift = -150 + float(self.episode_text_vertical_shift)
+
         return [
             f'-gravity west',
             f'-font "{self.EPISODE_NUMBER_FONT.resolve()}"',
@@ -230,11 +232,11 @@ class OlivierTitleCard(BaseCardType):
             f'-fill black',
             f'-stroke black',
             f'-strokewidth {stroke_width}',
-            f'-annotate +{325+offset}{vertical_shift:+} "{self.episode_text}"',
+            f'-annotate +{horizontal_offset:g}{vertical_shift:+g} "{self.episode_text}"',
             f'-fill "{self.episode_text_color}"',
             f'-stroke "{self.episode_text_color}"',
             f'-strokewidth 1',
-            f'-annotate {325+offset:+}{vertical_shift:+} "{self.episode_text}"',
+            f'-annotate {horizontal_offset:+g}{vertical_shift:+g} "{self.episode_text}"',
         ]
 
 
