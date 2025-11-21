@@ -628,6 +628,55 @@ button:disabled:hover {
   font-size: 0.8rem;
 }
 
+.modal-section {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.modal-section--muted {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.modal-section__header {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.modal-section h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.modal-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  display: grid;
+  gap: 0.25rem;
+}
+
+.modal-list li {
+  line-height: 1.4;
+}
+
+.field-selector__controls {
+  display: grid;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.field-selector__status {
+  margin: 0;
+}
+
+.field-selector__empty {
+  margin-top: 1rem;
+}
+
 .add-line {
   margin-top: 0.5rem;
 }

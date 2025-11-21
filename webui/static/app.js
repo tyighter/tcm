@@ -1833,9 +1833,27 @@ function openExtrasPicker(cardType, rows, renderRows, updateRows) {
   const wrapper = document.createElement('div');
   wrapper.className = 'card-type-modal';
 
+  const overview = document.createElement('div');
+  overview.className = 'modal-section modal-section--muted';
+
+  const heading = document.createElement('h3');
+  heading.textContent = 'Choose an extra option';
+
   const helper = document.createElement('p');
   helper.className = 'helper-text';
-  helper.textContent = `Available extras for ${cardType || 'selected card type'}`;
+  helper.textContent = `Pick from documented extras for ${cardType || 'the selected card type'} or add your own.`;
+
+  const helperList = document.createElement('ul');
+  helperList.className = 'modal-list';
+  ['Avoid duplicates—the list only shows options not already added.', 'Extras are added with an empty value so you can fill them in next.', 'You can always add another custom key if you need it.'].forEach(
+    (tip) => {
+      const item = document.createElement('li');
+      item.textContent = tip;
+      helperList.appendChild(item);
+    }
+  );
+
+  overview.append(heading, helper, helperList);
 
   const optionsWrapper = document.createElement('div');
   optionsWrapper.className = 'search-results card-type-results';
@@ -1869,7 +1887,19 @@ function openExtrasPicker(cardType, rows, renderRows, updateRows) {
   });
 
   const customWrapper = document.createElement('div');
-  customWrapper.className = 'card-type-custom';
+  customWrapper.className = 'card-type-custom modal-section';
+
+  const customHeader = document.createElement('div');
+  customHeader.className = 'modal-section__header';
+
+  const customTitle = document.createElement('h3');
+  customTitle.textContent = 'Add a custom extra';
+
+  const customCopy = document.createElement('p');
+  customCopy.className = 'helper-text';
+  customCopy.textContent = 'Use a descriptive key so you and others know what it represents.';
+
+  customHeader.append(customTitle, customCopy);
 
   const customLabel = document.createElement('p');
   customLabel.className = 'helper-text';
@@ -1898,9 +1928,9 @@ function openExtrasPicker(cardType, rows, renderRows, updateRows) {
     closeModal(modal.element);
   });
 
-  customWrapper.append(customLabel, customInput, customButton);
+  customWrapper.append(customHeader, customLabel, customInput, customButton);
 
-  wrapper.append(helper, optionsWrapper, customWrapper);
+  wrapper.append(overview, optionsWrapper, customWrapper);
   modal.content.appendChild(wrapper);
 }
 
@@ -2197,13 +2227,47 @@ function openFieldSelector(entry) {
     const wrapper = document.createElement('div');
     wrapper.className = 'field-selector';
 
+    const intro = document.createElement('div');
+    intro.className = 'modal-section modal-section--muted';
+
+    const introHeading = document.createElement('h3');
+    introHeading.textContent = 'Add a new line to this entry';
+
+    const introCopy = document.createElement('p');
+    introCopy.className = 'helper-text';
+    introCopy.textContent = 'Search by name or description to quickly find the field you need.';
+
+    const introList = document.createElement('ul');
+    introList.className = 'modal-list';
+    ['Each category is collapsible so you can focus on what matters.', 'Searching filters across labels, types, and nested paths.', 'Select a field to add it with sensible defaults—you can edit it right after.'].forEach(
+      (tip) => {
+        const item = document.createElement('li');
+        item.textContent = tip;
+        introList.appendChild(item);
+      }
+    );
+
+    intro.append(introHeading, introCopy, introList);
+
     const search = document.createElement('input');
     search.type = 'search';
     search.placeholder = 'Search fields...';
     search.className = 'modal-search';
 
+    const status = document.createElement('p');
+    status.className = 'helper-text field-selector__status';
+
+    const controls = document.createElement('div');
+    controls.className = 'field-selector__controls';
+    controls.append(search, status);
+
     const groupsContainer = document.createElement('div');
     groupsContainer.className = 'field-groups';
+
+    const emptyState = document.createElement('div');
+    emptyState.className = 'empty-state field-selector__empty';
+    emptyState.textContent = 'No fields match your search. Try a different term or clear the filter.';
+    emptyState.hidden = true;
 
     const render = () => {
       const term = search.value.trim().toLowerCase();
@@ -2217,6 +2281,12 @@ function openFieldSelector(entry) {
           .toLowerCase();
         return haystack.includes(term);
       });
+      status.textContent = `${filtered.length} of ${available.length} fields shown`;
+      groupsContainer.innerHTML = '';
+      emptyState.hidden = filtered.length > 0;
+      if (filtered.length === 0) {
+        return;
+      }
       renderFieldGroups(groupsContainer, filtered, (field) => {
         const defaultValue = defaultValueForField(field);
         updateField(entry, field, defaultValue);
@@ -2228,7 +2298,7 @@ function openFieldSelector(entry) {
     search.addEventListener('input', render);
     render();
 
-    wrapper.append(search, groupsContainer);
+    wrapper.append(intro, controls, groupsContainer, emptyState);
     modal.content.appendChild(wrapper);
   }
 
