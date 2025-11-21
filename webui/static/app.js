@@ -969,6 +969,14 @@ function isValidHexColor(value) {
   return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value.trim());
 }
 
+function isColorFieldKey(key) {
+  if (!key) {
+    return false;
+  }
+  const normalised = key.toString().toLowerCase();
+  return normalised.includes('color') || normalised.includes('colour');
+}
+
 function colorInput(entry, field, value) {
   const wrapper = document.createElement('div');
   wrapper.className = 'inline-actions color-input';
@@ -1703,18 +1711,61 @@ function mapEditor(entry, field, value, keyLabel, valueLabel, onUpdate, options 
       keyInput.placeholder = keyLabel;
       keyInput.value = row.key;
       keyInput.addEventListener('input', (event) => {
+        const wasColorField = isColorFieldKey(row.key);
         row.key = event.target.value;
         update();
+        const isNowColorField = isColorFieldKey(row.key);
+        if (wasColorField !== isNowColorField) {
+          renderRows();
+        }
       });
 
-      const valueInput = document.createElement('input');
-      valueInput.type = 'text';
-      valueInput.placeholder = valueLabel;
-      valueInput.value = row.value ?? '';
-      valueInput.addEventListener('input', (event) => {
-        row.value = event.target.value;
-        update();
-      });
+      const renderColorValue = isColorFieldKey(row.key);
+      let valueInput;
+      if (renderColorValue) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'inline-actions color-input';
+
+        const color = document.createElement('input');
+        color.type = 'color';
+        color.value = isValidHexColor(row.value) ? row.value : '#ffffff';
+
+        const text = document.createElement('input');
+        text.type = 'text';
+        text.placeholder = '#RRGGBB';
+        text.value = row.value ?? '';
+
+        const setValue = (newValue) => {
+          row.value = newValue;
+          update();
+        };
+
+        color.addEventListener('input', (event) => {
+          const selected = event.target.value;
+          text.value = selected;
+          setValue(selected);
+        });
+
+        text.addEventListener('input', (event) => {
+          const rawValue = event.target.value.trim();
+          setValue(rawValue);
+          if (isValidHexColor(rawValue)) {
+            color.value = rawValue;
+          }
+        });
+
+        wrapper.append(color, text);
+        valueInput = wrapper;
+      } else {
+        valueInput = document.createElement('input');
+        valueInput.type = 'text';
+        valueInput.placeholder = valueLabel;
+        valueInput.value = row.value ?? '';
+        valueInput.addEventListener('input', (event) => {
+          row.value = event.target.value;
+          update();
+        });
+      }
 
       const remove = document.createElement('button');
       remove.type = 'button';
