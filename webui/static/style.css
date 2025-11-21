@@ -1028,11 +1028,11 @@ button:disabled:hover {
   min-width: 320px;
   max-width: min(460px, calc(100vw - 2rem));
   max-height: min(360px, calc(100vh - 2rem));
-  background: rgba(16, 17, 25, 0.97);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0.85rem 1rem 1rem;
-  box-shadow: 0 22px 45px rgba(0, 0, 0, 0.55);
+  background: linear-gradient(180deg, #ffffff, #f7f7f7);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  padding: 1rem 1.1rem 1.1rem;
+  box-shadow: var(--shadow-lg);
   opacity: 0;
   visibility: hidden;
   transform: translateY(6px);
@@ -1050,11 +1050,14 @@ button:disabled:hover {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  margin-bottom: 0.6rem;
+  padding-bottom: 0.65rem;
+  margin-bottom: 0.65rem;
+  border-bottom: 1px solid #e5e5e5;
 }
 
 .episode-text-helper__header strong {
   font-size: 0.95rem;
+  letter-spacing: -0.01em;
 }
 
 .episode-text-helper__header span {
@@ -1073,6 +1076,11 @@ button:disabled:hover {
 .episode-text-helper__group {
   display: grid;
   gap: 0.35rem;
+  padding: 0.05rem 0.35rem 0.35rem;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #ededed;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .episode-text-helper__group-title {
@@ -1080,6 +1088,7 @@ button:disabled:hover {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
+  padding: 0.35rem 0.2rem 0;
 }
 
 .episode-text-helper__options {
@@ -1091,16 +1100,21 @@ button:disabled:hover {
 .episode-text-helper__option {
   padding: 0.4rem 0.75rem;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, #ffffff, #f1f1f1);
+  border: 1px solid var(--border);
   font-size: 0.8rem;
   text-align: left;
   line-height: 1.35;
   white-space: normal;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), var(--shadow-sm);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
 .episode-text-helper__option:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, #ffffff, #eaeaea);
+  border-color: var(--accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 .preview-image {
