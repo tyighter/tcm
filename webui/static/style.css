@@ -424,6 +424,36 @@ button:disabled:hover {
   background: var(--panel);
 }
 
+.entry-section {
+  border: 1px solid #d7d7d7;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.entry-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.entry-section__title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.entry-section__fields {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.entry-section__empty {
+  margin: 0;
+}
+
 .entry--collapsed .entry-body {
   display: none;
 }
@@ -687,6 +717,10 @@ button:disabled:hover {
 
 .add-line {
   margin-top: 0.5rem;
+}
+
+.add-line--inline {
+  margin-top: 0;
 }
 
 .empty-state {
