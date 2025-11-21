@@ -794,19 +794,72 @@ function renderEntry(entry) {
   body.className = 'entry-body';
 
   const usedFields = new Set();
+  const fontFieldRows = [];
   state.fields.forEach((field) => {
     const value = getValue(entry.config, field.path);
     if (value !== undefined) {
       usedFields.add(field.id);
-      body.appendChild(renderFieldRow(entry, field, value));
+      if (field.path?.[0] === 'font') {
+        fontFieldRows.push(renderFieldRow(entry, field, value));
+      } else {
+        body.appendChild(renderFieldRow(entry, field, value));
+      }
     }
   });
 
   const addLineButton = document.createElement('button');
   addLineButton.className = 'add-line';
   addLineButton.textContent = '+ Add line';
-  addLineButton.addEventListener('click', () => openFieldSelector(entry));
+  addLineButton.addEventListener('click', () =>
+    openFieldSelector(entry, {
+      availableFilter: (field) => field.path?.[0] !== 'font',
+    })
+  );
   body.appendChild(addLineButton);
+
+  const fontSection = document.createElement('section');
+  fontSection.className = 'entry-section entry-section--font';
+
+  const fontHeader = document.createElement('div');
+  fontHeader.className = 'entry-section__header';
+
+  const fontTitle = document.createElement('h3');
+  fontTitle.className = 'entry-section__title';
+  fontTitle.textContent = 'Font';
+
+  const addFontLineButton = document.createElement('button');
+  addFontLineButton.className = 'add-line add-line--inline';
+  addFontLineButton.textContent = '+ Add font line';
+  addFontLineButton.addEventListener('click', () =>
+    openFieldSelector(entry, {
+      title: 'Add font line',
+      introHeadingText: 'Add a new font option',
+      introCopyText: 'Search across font settings to adjust typography for this card.',
+      tips: [
+        'Font file controls the typeface used for the card.',
+        'Size, color, spacing, and casing let you fine-tune typography.',
+        'You can revisit this menu anytime to add more font controls.',
+      ],
+      emptyMessage: 'All font options are already configured for this entry.',
+      availableFilter: (field) => field.path?.[0] === 'font',
+    })
+  );
+
+  fontHeader.append(fontTitle, addFontLineButton);
+
+  const fontFieldsContainer = document.createElement('div');
+  fontFieldsContainer.className = 'entry-section__fields';
+  if (fontFieldRows.length === 0) {
+    const helper = document.createElement('p');
+    helper.className = 'helper-text entry-section__empty';
+    helper.textContent = 'No font options added yet. Add lines to configure typography.';
+    fontFieldsContainer.appendChild(helper);
+  } else {
+    fontFieldRows.forEach((row) => fontFieldsContainer.appendChild(row));
+  }
+
+  fontSection.append(fontHeader, fontFieldsContainer);
+  body.appendChild(fontSection);
 
   container.append(header, body);
   return container;
@@ -2277,11 +2330,26 @@ function renderFieldGroups(container, fields, onSelect) {
   });
 }
 
-function openFieldSelector(entry) {
-  const modal = buildModal('Add field');
+function openFieldSelector(
+  entry,
+  {
+    title = 'Add field',
+    introHeadingText = 'Add a new line to this entry',
+    introCopyText = 'Search by name or description to quickly find the field you need.',
+    tips = [
+      'Each category is collapsible so you can focus on what matters.',
+      'Searching filters across labels, types, and nested paths.',
+      'Select a field to add it with sensible defaults—you can edit it right after.',
+    ],
+    emptyMessage = 'All available options are already configured.',
+    availableFilter,
+  } = {}
+) {
+  const modal = buildModal(title);
   addFloatingCloseButton(modal, 'Close add field dialog');
 
   const available = state.fields
+    .filter((field) => !availableFilter || availableFilter(field))
     .filter((field) => getValue(entry.config, field.path) === undefined)
     .sort((a, b) =>
       (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' })
@@ -2289,7 +2357,7 @@ function openFieldSelector(entry) {
 
   if (available.length === 0) {
     const message = document.createElement('p');
-    message.textContent = 'All available options are already configured.';
+    message.textContent = emptyMessage;
     modal.content.appendChild(message);
   } else {
     const wrapper = document.createElement('div');
@@ -2299,21 +2367,19 @@ function openFieldSelector(entry) {
     intro.className = 'modal-section modal-section--muted';
 
     const introHeading = document.createElement('h3');
-    introHeading.textContent = 'Add a new line to this entry';
+    introHeading.textContent = introHeadingText;
 
     const introCopy = document.createElement('p');
     introCopy.className = 'helper-text';
-    introCopy.textContent = 'Search by name or description to quickly find the field you need.';
+    introCopy.textContent = introCopyText;
 
     const introList = document.createElement('ul');
     introList.className = 'modal-list';
-    ['Each category is collapsible so you can focus on what matters.', 'Searching filters across labels, types, and nested paths.', 'Select a field to add it with sensible defaults—you can edit it right after.'].forEach(
-      (tip) => {
-        const item = document.createElement('li');
-        item.textContent = tip;
-        introList.appendChild(item);
-      }
-    );
+    tips.forEach((tip) => {
+      const item = document.createElement('li');
+      item.textContent = tip;
+      introList.appendChild(item);
+    });
 
     intro.append(introHeading, introCopy, introList);
 
