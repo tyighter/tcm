@@ -293,6 +293,13 @@ button:disabled:hover {
   flex-shrink: 0;
 }
 
+.entry-logo-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: center;
+}
+
 
 .entry-toggle {
   width: 36px;
@@ -326,12 +333,27 @@ button:disabled:hover {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), var(--shadow-sm);
 }
 
+.entry-logo--dark-surface {
+  background: #0f172a;
+  border-color: #1e293b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), var(--shadow-sm);
+}
+
 .entry-logo--light {
   filter: drop-shadow(0 0 0 rgba(23, 36, 64, 0.7)) drop-shadow(0 0 2px rgba(23, 36, 64, 0.35));
 }
 
 .entry-logo--dark {
   filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0.9)) drop-shadow(0 0 2px rgba(255, 255, 255, 0.65));
+}
+
+.entry-logo-toggle {
+  padding: 0.2rem 0.55rem;
+  font-size: 0.8rem;
+  border-radius: 999px;
+  border: 1px solid #c7c7c7;
+  background: linear-gradient(180deg, #ffffff, #f5f5f5);
+  box-shadow: var(--shadow-sm);
 }
 
 .entry-preview {
