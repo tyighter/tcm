@@ -9,6 +9,7 @@ const state = {
   lastSavedEntries: new Map(),
   previewCache: {},
   cardTypeExtras: {},
+  logoBackgrounds: new Map(),
 };
 
 const dom = {
@@ -32,6 +33,7 @@ document.body.appendChild(toastContainer);
 
 const CLIENT_LOG_ENDPOINT = '/api/client-log';
 const PREVIEW_CACHE_STORAGE_KEY = 'tcm-preview-cache';
+const LOGO_BACKGROUND_STORAGE_KEY = 'tcm-logo-backgrounds';
 
 const EPISODE_TEXT_FORMAT_GROUPS = [
   {
@@ -412,6 +414,7 @@ function logToServer(level, message, context = {}) {
 async function init() {
   try {
     loadPreviewCache();
+    loadLogoBackgroundPreferences();
     await loadMetadata();
     await loadConfiguration();
     registerEvents();
@@ -659,6 +662,9 @@ function renderEntry(entry) {
     syncToggleAppearance();
   });
 
+  const logoWrapper = document.createElement('div');
+  logoWrapper.className = 'entry-logo-wrapper';
+
   const logo = document.createElement('img');
   logo.className = 'entry-logo';
   logo.alt = `${entry.name} logo`;
@@ -680,6 +686,31 @@ function renderEntry(entry) {
       handleLogoError();
     }
   }
+
+  const logoBackgroundToggle = document.createElement('button');
+  logoBackgroundToggle.type = 'button';
+  logoBackgroundToggle.className = 'entry-logo-toggle';
+
+  const syncLogoBackground = () => {
+    const isDarkBackground = getLogoBackgroundPreference(entry.name) === 'dark';
+    logo.classList.toggle('entry-logo--dark-surface', isDarkBackground);
+    logoBackgroundToggle.textContent = isDarkBackground ? 'Light bg' : 'Dark bg';
+    logoBackgroundToggle.setAttribute('aria-pressed', String(isDarkBackground));
+    logoBackgroundToggle.setAttribute(
+      'aria-label',
+      isDarkBackground ? 'Switch logo background to light' : 'Switch logo background to dark'
+    );
+  };
+
+  logoBackgroundToggle.addEventListener('click', () => {
+    const nextMode = getLogoBackgroundPreference(entry.name) === 'dark' ? 'light' : 'dark';
+    setLogoBackgroundPreference(entry.name, nextMode);
+    syncLogoBackground();
+  });
+
+  syncLogoBackground();
+
+  logoWrapper.append(logo, logoBackgroundToggle);
 
   const preview = document.createElement('div');
   preview.className = 'entry-preview';
@@ -708,7 +739,7 @@ function renderEntry(entry) {
 
   const media = document.createElement('div');
   media.className = 'entry-media';
-  media.append(logo, preview);
+  media.append(logoWrapper, preview);
 
   const titleInput = document.createElement('input');
   titleInput.type = 'text';
@@ -716,7 +747,15 @@ function renderEntry(entry) {
   titleInput.addEventListener('input', (event) => {
     entry.name = event.target.value;
   });
+  titleInput.addEventListener('focus', () => {
+    titleInput.dataset.originalName = entry.name;
+  });
   titleInput.addEventListener('blur', () => {
+    const originalName = titleInput.dataset.originalName;
+    if (originalName && originalName !== entry.name) {
+      moveLogoBackgroundPreference(originalName, entry.name);
+      syncLogoBackground();
+    }
     sortEntries();
     state.pendingEntryId = entry.id;
     renderEntries();
@@ -993,6 +1032,51 @@ function setAllEntriesCollapsed(collapsed) {
     state.collapsedEntries = new Set();
   }
   renderEntries();
+}
+
+function loadLogoBackgroundPreferences() {
+  try {
+    const stored = localStorage.getItem(LOGO_BACKGROUND_STORAGE_KEY);
+    const parsed = stored ? JSON.parse(stored) : {};
+    state.logoBackgrounds = new Map(Object.entries(parsed));
+  } catch (error) {
+    state.logoBackgrounds = new Map();
+  }
+}
+
+function persistLogoBackgroundPreferences() {
+  try {
+    const serialized = JSON.stringify(Object.fromEntries(state.logoBackgrounds));
+    localStorage.setItem(LOGO_BACKGROUND_STORAGE_KEY, serialized);
+  } catch (error) {
+    // Ignore storage errors
+  }
+}
+
+function getLogoBackgroundPreference(entryName) {
+  return state.logoBackgrounds.get(entryName) || 'light';
+}
+
+function setLogoBackgroundPreference(entryName, preference) {
+  if (!entryName) {
+    return;
+  }
+  const mode = preference === 'dark' ? 'dark' : 'light';
+  state.logoBackgrounds.set(entryName, mode);
+  persistLogoBackgroundPreferences();
+}
+
+function moveLogoBackgroundPreference(oldName, newName) {
+  if (!oldName || !newName || oldName === newName) {
+    return;
+  }
+  const existing = state.logoBackgrounds.get(oldName);
+  if (!existing) {
+    return;
+  }
+  state.logoBackgrounds.delete(oldName);
+  state.logoBackgrounds.set(newName, existing);
+  persistLogoBackgroundPreferences();
 }
 
 function renderFieldRow(entry, field, value) {
@@ -2615,6 +2699,8 @@ function removeEntry(entry) {
   state.entries = state.entries.filter((item) => item !== entry);
   state.collapsedEntries.delete(entry.id);
   state.lastSavedEntries.delete(entry.id);
+  state.logoBackgrounds.delete(entry.name);
+  persistLogoBackgroundPreferences();
   renderEntries();
 }
 
