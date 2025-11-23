@@ -217,18 +217,26 @@ def _preview_from_existing_sources(
 ) -> tuple[str, str] | None:
     if preferred_episode_key:
         episode = show.episodes.get(preferred_episode_key)
-        if episode is None or not episode.source.exists():
+        if (
+            episode is None
+            or episode.destination is None
+            or not episode.destination.exists()
+        ):
             return None
     else:
-        available = [episode for episode in show.episodes.values() if episode.source.exists()]
+        available = [
+            episode
+            for episode in show.episodes.values()
+            if episode.destination is not None and episode.destination.exists()
+        ]
         if not available:
             return None
 
         episode = random.choice(available)
 
-    mime, _ = mimetypes.guess_type(episode.source.name)
+    mime, _ = mimetypes.guess_type(episode.destination.name)
     mime = mime or "image/jpeg"
-    data = base64.b64encode(episode.source.read_bytes()).decode("ascii")
+    data = base64.b64encode(episode.destination.read_bytes()).decode("ascii")
     return mime, data
 
 
