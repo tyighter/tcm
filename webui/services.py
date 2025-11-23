@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import mimetypes
 import random
 import re
 import subprocess
@@ -18,6 +19,7 @@ from typing import Any, Callable
 from ruamel.yaml.comments import CommentedMap
 
 from modules.CleanPath import CleanPath
+from modules.Episode import Episode
 from modules.Manager import Manager
 from modules.Show import Show
 from modules.ShowArchive import ShowArchive
@@ -162,52 +164,12 @@ def invalidate_preview_cache(series_name: str | None = None) -> None:
             del _preview_cache[key]
 
 
-def get_or_generate_preview(
+def _load_show_for_preview(
     context: AppContext,
     tv_manager: TvYamlManager,
     show_name: str,
     series_config: dict[str, Any],
-    *,
-    force: bool = False,
-    preview_episode_key: str | None = None,
-) -> tuple[str, str]:
-    """Return a cached preview or generate and cache a new one."""
-
-    cache_key = _preview_cache_key(
-        show_name,
-        series_config,
-        preview_episode_key=preview_episode_key,
-    )
-    if not force:
-        with _preview_cache_lock:
-            cached = _preview_cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-    mime, data = generate_preview(
-        context,
-        tv_manager,
-        show_name,
-        series_config,
-        preferred_episode_key=preview_episode_key,
-    )
-
-    with _preview_cache_lock:
-        _preview_cache[cache_key] = (mime, data)
-
-    return mime, data
-
-
-def generate_preview(
-    context: AppContext,
-    tv_manager: TvYamlManager,
-    show_name: str,
-    series_config: dict[str, Any],
-    *,
-    preferred_episode_key: str | None = None,
-) -> tuple[str, str]:
-    """Generate a title card preview, returning (mime, base64_data)."""
-
+) -> Show:
     runtime_config = merge_series_configuration(
         context,
         tv_manager,
@@ -246,6 +208,90 @@ def generate_preview(
 
     if not show.episodes:
         raise RuntimeError("No episodes are available for preview")
+
+    return show
+
+
+def _preview_from_existing_sources(
+    show: Show, preferred_episode_key: str | None
+) -> tuple[str, str] | None:
+    if preferred_episode_key:
+        episode = show.episodes.get(preferred_episode_key)
+        if episode is None or not episode.source.exists():
+            return None
+    else:
+        available = [episode for episode in show.episodes.values() if episode.source.exists()]
+        if not available:
+            return None
+
+        episode = random.choice(available)
+
+    mime, _ = mimetypes.guess_type(episode.source.name)
+    mime = mime or "image/jpeg"
+    data = base64.b64encode(episode.source.read_bytes()).decode("ascii")
+    return mime, data
+
+
+def get_or_generate_preview(
+    context: AppContext,
+    tv_manager: TvYamlManager,
+    show_name: str,
+    series_config: dict[str, Any],
+    *,
+    force: bool = False,
+    preview_episode_key: str | None = None,
+) -> tuple[str, str]:
+    """Return a cached preview or generate and cache a new one."""
+
+    cache_key = _preview_cache_key(
+        show_name,
+        series_config,
+        preview_episode_key=preview_episode_key,
+    )
+    if not force:
+        with _preview_cache_lock:
+            cached = _preview_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+    show = _load_show_for_preview(context, tv_manager, show_name, series_config)
+
+    preview_from_source = _preview_from_existing_sources(show, preview_episode_key)
+    if preview_from_source is not None:
+        mime, data = preview_from_source
+    else:
+        mime, data = generate_preview(
+            context,
+            tv_manager,
+            show_name,
+            series_config,
+            preferred_episode_key=preview_episode_key,
+            preloaded_show=show,
+        )
+
+    with _preview_cache_lock:
+        _preview_cache[cache_key] = (mime, data)
+
+    return mime, data
+
+
+def generate_preview(
+    context: AppContext,
+    tv_manager: TvYamlManager,
+    show_name: str,
+    series_config: dict[str, Any],
+    *,
+    preferred_episode_key: str | None = None,
+    preloaded_show: Show | None = None,
+) -> tuple[str, str]:
+    """Generate a title card preview, returning (mime, base64_data)."""
+
+    show = preloaded_show or _load_show_for_preview(
+        context,
+        tv_manager,
+        show_name,
+        series_config,
+    )
 
     episode = (
         show.episodes.get(preferred_episode_key)
@@ -308,42 +354,7 @@ def list_preview_episodes(
         except (TypeError, ValueError):
             return 0
 
-    runtime_config = merge_series_configuration(
-        context,
-        tv_manager,
-        show_name,
-        series_config,
-    )
-
-    show = Show(
-        show_name,
-        runtime_config,
-        context.preference_parser.source_directory,
-        context.preference_parser,
-    )
-    if not show.valid:
-        raise RuntimeError("Series configuration is invalid; check required fields")
-
-    manager = Manager(check_tautulli=False)
-    manager.sync_series_files()
-    show.assign_interfaces(
-        manager.emby_interface,
-        manager.jellyfin_interface,
-        manager.plex_interface,
-        manager.sonarr_interfaces,
-        manager.tmdb_interface,
-    )
-
-    show.set_series_ids()
-    show.read_source()
-    show.find_multipart_episodes()
-
-    if not show.episodes:
-        show.add_new_episodes()
-        show.find_multipart_episodes()
-
-    if not show.episodes:
-        raise RuntimeError("No episodes are available for preview")
+    show = _load_show_for_preview(context, tv_manager, show_name, series_config)
 
     sorted_episodes = sorted(
         show.episodes.values(),
