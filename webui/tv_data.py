@@ -8,6 +8,7 @@ from modules.Show import Show
 
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
+from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
 
 class TvYamlManager:
@@ -99,7 +100,8 @@ class TvYamlManager:
             config = entry.get("config", {})
             if not name:
                 continue
-            series_map[name] = _to_commented(config)
+            quoted_name = DoubleQuotedScalarString(str(name))
+            series_map[quoted_name] = _to_commented(config)
 
         current["series"] = series_map
 
