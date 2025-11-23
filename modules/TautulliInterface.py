@@ -1,6 +1,7 @@
 from json import dumps
 import time
 from pathlib import Path
+from re import IGNORECASE, compile as re_compile
 from sys import exit as sys_exit
 from typing import Any, Iterable, Optional
 
@@ -85,6 +86,7 @@ class TautulliInterface(WebInterface):
     def get_recent_activity(
         self,
         series_names: set[str],
+        tmdb_ids: set[int],
         limit: int = 10,
         days: int = 7,
         username: Optional[str] = None,
@@ -93,6 +95,7 @@ class TautulliInterface(WebInterface):
 
         Args:
             series_names: Names of the series present in tv.yml.
+            tmdb_ids: TMDb IDs present in tv.yml.
             limit: Maximum number of results per category to return.
             days: Restrict results to activity that occurred within this many days.
 
@@ -142,11 +145,38 @@ class TautulliInterface(WebInterface):
         def _episode_title(entry: dict) -> str:
             return entry.get('title') or entry.get('episode_title') or entry.get('full_title') or ''
 
+        tmdb_regex = re_compile(r'tmdb[^0-9]*([0-9]+)', IGNORECASE)
+
+        def _extract_tmdb_id(entry: dict[str, Any]) -> Optional[int]:
+            guid_fields = (
+                entry.get('grandparent_guid'),
+                entry.get('parent_guid'),
+                entry.get('guid'),
+            )
+
+            for guid in guid_fields:
+                if not guid:
+                    continue
+
+                try:
+                    guid_str = str(guid)
+                except Exception:
+                    continue
+
+                if (match := tmdb_regex.search(guid_str)) is not None:
+                    try:
+                        return int(match.group(1))
+                    except (TypeError, ValueError):
+                        continue
+
+            return None
+
         def _normalize(
             entries: list[dict],
             timestamp_fields: Iterable[str],
             apply_user_filter: bool = True,
             series_filter: Optional[set[str]] = None,
+            tmdb_filter: Optional[set[int]] = None,
             limit_results: Optional[int] = None,
         ) -> list[dict[str, Any]]:
             if series_filter is not None:
@@ -165,8 +195,17 @@ class TautulliInterface(WebInterface):
                 if not series:
                     continue
 
-                if series_filter is not None and series.casefold() not in series_filter:
-                    continue
+                tmdb_id = _extract_tmdb_id(entry)
+
+                if series_filter is not None or tmdb_filter is not None:
+                    matches_filter = False
+                    if tmdb_filter is not None and tmdb_id in tmdb_filter:
+                        matches_filter = True
+                    elif series_filter is not None and series.casefold() in series_filter:
+                        matches_filter = True
+
+                    if not matches_filter:
+                        continue
 
                 timestamp = _timestamp(entry, timestamp_fields)
                 if timestamp < cutoff:
@@ -177,6 +216,7 @@ class TautulliInterface(WebInterface):
                         'series': series,
                         'episode': _episode_title(entry),
                         'season': _season_label(entry),
+                        'tmdb_id': tmdb_id,
                         'timestamp': timestamp,
                     }
                 )
@@ -214,6 +254,7 @@ class TautulliInterface(WebInterface):
             ('watched_at', 'date', 'started', 'last_played'),
             apply_user_filter=True,
             series_filter=None,
+            tmdb_filter=None,
             limit_results=None,
         )
         raw_recently_added = _normalize(
@@ -221,6 +262,7 @@ class TautulliInterface(WebInterface):
             ('added_at', 'date', 'added'),
             apply_user_filter=False,
             series_filter=None,
+            tmdb_filter=None,
             limit_results=None,
         )
 
@@ -230,6 +272,7 @@ class TautulliInterface(WebInterface):
                 ('watched_at', 'date', 'started', 'last_played'),
                 apply_user_filter=True,
                 series_filter=series_names,
+                tmdb_filter=tmdb_ids,
                 limit_results=limit,
             ),
             'recently_added': _normalize(
@@ -237,6 +280,7 @@ class TautulliInterface(WebInterface):
                 ('added_at', 'date', 'added'),
                 apply_user_filter=False,
                 series_filter=series_names,
+                tmdb_filter=tmdb_ids,
                 limit_results=limit,
             ),
         }

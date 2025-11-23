@@ -443,14 +443,26 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             tv_data = self.tv_manager.load()
-            series_names = set(tv_data.get("series", {}).keys())
+            series_entries = tv_data.get("series", {})
+            series_names = set(series_entries.keys())
+            tmdb_ids = {
+                int(config.get("tmdb_id"))
+                for config in series_entries.values()
+                if isinstance(config, dict)
+                and str(config.get("tmdb_id", "")).isdigit()
+            }
 
             params = parse_qs(parsed.query)
             username = params.get("username", [None])[0]
 
             try:
                 tautulli = TautulliInterface(**self.context.preference_parser.tautulli_interface_args)
-                activity = tautulli.get_recent_activity(series_names, limit=10, username=username)
+                activity = tautulli.get_recent_activity(
+                    series_names,
+                    tmdb_ids,
+                    limit=10,
+                    username=username,
+                )
             except SystemExit:
                 self._error(
                     "Unable to connect to Tautulli with the current configuration",
@@ -638,17 +650,6 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/actions/sync":
             self._run_manager_action(run_metadata_sync, context="metadata-sync")
-            return
-
-        if parsed.path == "/api/actions/match-tmdb":
-            try:
-                result = backfill_tmdb_ids(self.context, self.tv_manager)
-            except Exception as exc:  # pylint: disable=broad-except
-                logger.exception("Failed to backfill TMDb IDs")
-                self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
-                return
-
-            self._json_response({"status": "ok"} | result)
             return
 
         if parsed.path == "/api/actions/build":
@@ -841,6 +842,17 @@ def run(port: int = 4343) -> None:
 
     context = create_app_context()
     tv_manager = TvYamlManager(context.default_tv_file)
+
+    if context.preference_parser.use_tmdb:
+        try:
+            result = backfill_tmdb_ids(context, tv_manager)
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning("Unable to backfill TMDb IDs on startup: %s", exc)
+        else:
+            updated = result.get("updated", 0)
+            total = result.get("total", 0)
+            if updated:
+                logger.info("Updated TMDb IDs for %s of %s series", updated, total)
 
     WebRequestHandler.context = context
     WebRequestHandler.tv_manager = tv_manager
