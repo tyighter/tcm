@@ -83,7 +83,11 @@ class TautulliInterface(WebInterface):
 
 
     def get_recent_activity(
-        self, series_names: set[str], limit: int = 10, days: int = 7
+        self,
+        series_names: set[str],
+        limit: int = 10,
+        days: int = 7,
+        username: Optional[str] = None,
     ) -> dict[str, list[dict[str, Any]]]:
         """Return recent watched and added items filtered to configured series.
 
@@ -102,6 +106,22 @@ class TautulliInterface(WebInterface):
             return {"watched": [], "recently_added": []}
 
         cutoff = max(0, int(time.time() - max(0, days) * 24 * 60 * 60))
+        filter_username = (username or self.username or "").casefold()
+
+        def _matches_username(entry: dict[str, Any]) -> bool:
+            if not filter_username:
+                return True
+
+            for key in ("username", "friendly_name", "user"):
+                value = entry.get(key)
+                if value is None:
+                    continue
+                try:
+                    if str(value).casefold() == filter_username:
+                        return True
+                except Exception:
+                    continue
+            return False
 
         def _timestamp(entry: dict, fields: Iterable[str]) -> int:
             for field in fields:
@@ -122,10 +142,17 @@ class TautulliInterface(WebInterface):
         def _episode_title(entry: dict) -> str:
             return entry.get('title') or entry.get('episode_title') or entry.get('full_title') or ''
 
-        def _normalize(entries: list[dict], timestamp_fields: Iterable[str]) -> list[dict[str, Any]]:
+        def _normalize(
+            entries: list[dict],
+            timestamp_fields: Iterable[str],
+            apply_user_filter: bool = True,
+        ) -> list[dict[str, Any]]:
             series_lookup = {name.casefold() for name in series_names if name}
             results: list[dict[str, Any]] = []
             for entry in entries:
+                if apply_user_filter and not _matches_username(entry):
+                    continue
+
                 series = (
                     entry.get('grandparent_title')
                     or entry.get('parent_title')
@@ -177,9 +204,52 @@ class TautulliInterface(WebInterface):
             recently_added_entries = []
 
         return {
-            'watched': _normalize(history_entries, ('watched_at', 'date', 'started', 'last_played')),
-            'recently_added': _normalize(recently_added_entries, ('added_at', 'date', 'added')),
+            'watched': _normalize(
+                history_entries,
+                ('watched_at', 'date', 'started', 'last_played'),
+                apply_user_filter=True,
+            ),
+            'recently_added': _normalize(
+                recently_added_entries,
+                ('added_at', 'date', 'added'),
+                apply_user_filter=False,
+            ),
         }
+
+
+    def get_users(self) -> list[dict[str, Any]]:
+        """Return a list of Plex users configured in Tautulli."""
+
+        response = self.get(self.url, self.__params | {'cmd': 'get_users'})
+        data = response.get('response', {}).get('data', [])
+
+        raw_entries = []
+        if isinstance(data, list):
+            raw_entries = data
+        elif isinstance(data, dict):
+            if isinstance(data.get('users'), list):
+                raw_entries = data.get('users', [])
+            elif isinstance(data.get('data'), list):
+                raw_entries = data.get('data', [])
+
+        users: list[dict[str, Any]] = []
+        for entry in raw_entries:
+            if not isinstance(entry, dict):
+                continue
+
+            username = entry.get('username') or entry.get('user') or entry.get('friendly_name')
+            if username is None:
+                continue
+
+            users.append(
+                {
+                    'id': entry.get('user_id') or entry.get('id'),
+                    'username': str(username),
+                    'friendly_name': entry.get('friendly_name') or str(username),
+                }
+            )
+
+        return users
 
 
     def is_integrated(self) -> tuple[bool, bool]:
