@@ -48,6 +48,12 @@ TEMPLATE_ROOT = Path(__file__).resolve().parent / "templates"
 LOG_FILE = Path("/config/webui.log")
 
 
+_TRAILING_YEAR_PATTERNS = (
+    re.compile(r"\s*\(\d{4}\)\s*$"),
+    re.compile(r"\s+\d{4}\s*$"),
+)
+
+
 def _configure_logging() -> None:
     """Configure logging to stdout and a fresh log file in /config."""
 
@@ -74,6 +80,28 @@ def _configure_logging() -> None:
 
     if any(isinstance(handler, logging.FileHandler) for handler in handlers):
         logger.info("Writing web UI logs to %s", LOG_FILE)
+
+
+def _series_aliases(title: str) -> list[str]:
+    aliases: list[str] = []
+    try:
+        normalized = str(title)
+    except Exception:
+        return aliases
+
+    normalized = normalized.strip()
+    if not normalized:
+        return aliases
+
+    aliases.append(normalized.casefold())
+    stripped = normalized
+    for pattern in _TRAILING_YEAR_PATTERNS:
+        stripped = pattern.sub("", stripped)
+    stripped = stripped.strip()
+    if stripped and stripped.casefold() not in aliases:
+        aliases.append(stripped.casefold())
+
+    return aliases
 
 
 def _resolve_font_directory(context: AppContext) -> Path:
