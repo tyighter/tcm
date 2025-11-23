@@ -12,6 +12,7 @@ from typing import Callable
 from urllib.parse import parse_qs, urlparse
 
 from modules.CleanPath import CleanPath
+from modules.TautulliInterface import TautulliInterface
 from .card_type_images import (
     DEFAULT_THUMBNAIL_SLUG_MAP,
     REPO_THUMBNAIL_ROOT,
@@ -432,6 +433,31 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     "fontDirectory": self.font_directory.as_posix(),
                 }
             )
+            return
+
+        if parsed.path == "/api/tautulli/recent":
+            if not self.context.preference_parser.use_tautulli:
+                self._error("Tautulli is not configured in preferences.yml", status=HTTPStatus.BAD_REQUEST)
+                return
+
+            tv_data = self.tv_manager.load()
+            series_names = set(tv_data.get("series", {}).keys())
+
+            try:
+                tautulli = TautulliInterface(**self.context.preference_parser.tautulli_interface_args)
+                activity = tautulli.get_recent_activity(series_names, limit=5)
+            except SystemExit:
+                self._error(
+                    "Unable to connect to Tautulli with the current configuration",
+                    status=HTTPStatus.BAD_GATEWAY,
+                )
+                return
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.exception("Failed to fetch recent Tautulli activity")
+                self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
+                return
+
+            self._json_response(activity)
             return
 
         if parsed.path == "/api/fonts":

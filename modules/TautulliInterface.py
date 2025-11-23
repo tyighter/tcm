@@ -1,7 +1,7 @@
 from json import dumps
 from pathlib import Path
 from sys import exit as sys_exit
-from typing import Optional
+from typing import Any, Iterable, Optional
 
 from modules.Debug import log
 from modules.WebInterface import WebInterface
@@ -79,6 +79,98 @@ class TautulliInterface(WebInterface):
         if self.script_timeout < 0:
             log.error(f'Script timeout must be >= 0 (seconds) - using 0')
             self.script_timeout = 0
+
+
+    def get_recent_activity(self, series_names: set[str], limit: int = 5) -> dict[str, list[dict[str, Any]]]:
+        """Return recent watched and added items filtered to configured series.
+
+        Args:
+            series_names: Names of the series present in tv.yml.
+            limit: Maximum number of results per category to return.
+
+        Returns:
+            Dictionary containing "watched" and "recently_added" lists with
+            normalized episode metadata.
+        """
+
+        limit = max(0, limit)
+        if limit == 0:
+            return {"watched": [], "recently_added": []}
+
+        def _timestamp(entry: dict, fields: Iterable[str]) -> int:
+            for field in fields:
+                value = entry.get(field)
+                if value is None:
+                    continue
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    continue
+            return 0
+
+        def _season_label(entry: dict) -> str:
+            if (season := entry.get('season')):
+                return f'Season {season}'
+            return entry.get('parent_title', '') or ''
+
+        def _episode_title(entry: dict) -> str:
+            return entry.get('title') or entry.get('episode_title') or entry.get('full_title') or ''
+
+        def _normalize(entries: list[dict], timestamp_fields: Iterable[str]) -> list[dict[str, Any]]:
+            series_lookup = {name.casefold() for name in series_names if name}
+            results: list[dict[str, Any]] = []
+            for entry in entries:
+                series = (
+                    entry.get('grandparent_title')
+                    or entry.get('parent_title')
+                    or entry.get('title')
+                    or ''
+                )
+                if not series or series.casefold() not in series_lookup:
+                    continue
+
+                results.append(
+                    {
+                        'series': series,
+                        'episode': _episode_title(entry),
+                        'season': _season_label(entry),
+                        'timestamp': _timestamp(entry, timestamp_fields),
+                    }
+                )
+
+                if len(results) >= limit:
+                    break
+            return results
+
+        history_params = self.__params | {
+            'cmd': 'get_history',
+            'media_type': 'episode',
+            'order_dir': 'desc',
+            'order_column': 'date',
+            'length': limit * 10,
+        }
+        history_response = self.get(self.url, history_params)
+        history_entries = history_response.get('response', {}).get('data', {}).get('data', [])
+        if not isinstance(history_entries, list):
+            history_entries = []
+
+        recently_added_params = self.__params | {
+            'cmd': 'get_recently_added',
+            'media_type': 'episode',
+            'order_dir': 'desc',
+            'length': limit * 10,
+        }
+        recently_added_response = self.get(self.url, recently_added_params)
+        recently_added_entries = recently_added_response.get('response', {}).get('data', {})
+        if isinstance(recently_added_entries, dict):
+            recently_added_entries = recently_added_entries.get('recently_added', [])
+        if not isinstance(recently_added_entries, list):
+            recently_added_entries = []
+
+        return {
+            'watched': _normalize(history_entries, ('watched_at', 'date', 'started', 'last_played')),
+            'recently_added': _normalize(recently_added_entries, ('added_at', 'date', 'added')),
+        }
 
 
     def is_integrated(self) -> tuple[bool, bool]:
