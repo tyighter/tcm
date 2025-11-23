@@ -324,9 +324,11 @@ class TautulliInterface(WebInterface):
                     formatted_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
                     season = entry.get('season')
                     season_label = f" - {season}" if season else ''
+                    tmdb_id = entry.get('tmdb_id')
+                    tmdb_label = f" [tmdb_id={tmdb_id}]" if tmdb_id is not None else " [tmdb_id=?]"
                     lines.append(
                         f"  {entry.get('series', '')}{season_label} - "
-                        f"{entry.get('episode', '')} @ {formatted_time}"
+                        f"{entry.get('episode', '')} @ {formatted_time}{tmdb_label}"
                     )
                 return lines
 
