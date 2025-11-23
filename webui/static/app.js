@@ -10,6 +10,10 @@ const state = {
   previewCache: {},
   cardTypeExtras: {},
   logoBackgrounds: new Map(),
+  services: {
+    tmdbEnabled: true,
+    plexEnabled: true,
+  },
 };
 
 const dom = {
@@ -25,6 +29,7 @@ const dom = {
   downloadSources: document.getElementById('download-sources'),
   runBuilder: document.getElementById('run-builder'),
   tautulliRecent: document.getElementById('tautulli-recent'),
+  unmatchedIssues: document.getElementById('unmatched-issues'),
   modals: document.getElementById('modals'),
 };
 
@@ -438,6 +443,7 @@ async function loadMetadata() {
   state.fields = data.fields || [];
   state.fontDirectory = data.fontDirectory || state.fontDirectory;
   state.cardTypeExtras = data.cardTypeExtras || {};
+  state.services = data.services || state.services;
 }
 
 function initializeEntryPreviewState(entry) {
@@ -546,6 +552,10 @@ function registerEvents() {
         }
       )
     );
+  }
+
+  if (dom.unmatchedIssues) {
+    dom.unmatchedIssues.addEventListener('click', () => openUnmatchedItemsModal());
   }
 
   if (dom.tautulliRecent) {
@@ -2983,6 +2993,287 @@ function removeEntry(entry) {
 // -----------------------------------------------------------------------------
 // Tautulli recent activity modal
 // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Unmatched metadata modal
+// -----------------------------------------------------------------------------
+const TMDB_ID_PATTERN = /^\d+$/;
+
+function isServiceEnabled(service) {
+  return state.services?.[service] !== false;
+}
+
+function hasValue(value) {
+  if (value === undefined || value === null) {
+    return false;
+  }
+  return String(value).trim().length > 0;
+}
+
+function isValidTmdbId(value) {
+  if (value === undefined || value === null) {
+    return false;
+  }
+  return TMDB_ID_PATTERN.test(String(value));
+}
+
+function isTmdbMissing(entry) {
+  if (!isServiceEnabled('tmdbEnabled')) {
+    return false;
+  }
+  return !isValidTmdbId(entry?.config?.tmdb_id);
+}
+
+function isPlexMissing(entry) {
+  if (!isServiceEnabled('plexEnabled')) {
+    return false;
+  }
+  const { config } = entry || {};
+  if (!config || !hasValue(config.library)) {
+    return true;
+  }
+  return !hasValue(config.rating_key);
+}
+
+function findUnmatchedEntries() {
+  return state.entries
+    .map((entry) => ({
+      entry,
+      tmdbMissing: isTmdbMissing(entry),
+      plexMissing: isPlexMissing(entry),
+    }))
+    .filter(({ tmdbMissing, plexMissing }) => tmdbMissing || plexMissing);
+}
+
+function statusPill(text, tone = 'muted') {
+  const pill = document.createElement('span');
+  pill.className = `status-pill status-pill--${tone}`;
+  pill.textContent = text;
+  return pill;
+}
+
+function applyLibraryValue(entry, value) {
+  if (!hasValue(value)) {
+    delete entry.config.library;
+    return;
+  }
+  entry.config.library = value;
+}
+
+function applyTmdbValue(entry, rawValue) {
+  const value = rawValue.trim();
+  if (!value) {
+    delete entry.config.tmdb_id;
+    return { valid: true };
+  }
+
+  if (!TMDB_ID_PATTERN.test(value)) {
+    return { valid: false, message: 'TMDb ID must be numeric' };
+  }
+
+  entry.config.tmdb_id = Number.parseInt(value, 10);
+  return { valid: true };
+}
+
+function applyRatingKeyValue(entry, rawValue) {
+  const value = rawValue.trim();
+  if (!value) {
+    delete entry.config.rating_key;
+    return;
+  }
+
+  const numeric = Number(value);
+  entry.config.rating_key = Number.isFinite(numeric) ? numeric : value;
+}
+
+function buildUnmatchedRow(entry, onResolved) {
+  const row = document.createElement('div');
+  row.className = 'unmatched-row';
+
+  const header = document.createElement('div');
+  header.className = 'unmatched-row__header';
+
+  const title = document.createElement('div');
+  title.className = 'unmatched-row__title';
+  title.textContent = entry.name;
+
+  const statuses = document.createElement('div');
+  statuses.className = 'unmatched-row__statuses';
+
+  const statusMessage = document.createElement('p');
+  statusMessage.className = 'helper-text unmatched-row__message';
+  statusMessage.hidden = true;
+
+  const refreshStatuses = () => {
+    statuses.innerHTML = '';
+    const tmdbPill = statusPill(
+      isTmdbMissing(entry) ? 'Missing TMDb match' : 'TMDb linked',
+      isTmdbMissing(entry) ? 'error' : 'success'
+    );
+    statuses.appendChild(tmdbPill);
+
+    const plexPill = statusPill(
+      isPlexMissing(entry) ? 'Missing Plex match' : 'Plex linked',
+      isPlexMissing(entry) ? 'error' : 'success'
+    );
+    statuses.appendChild(plexPill);
+
+    const isResolved = !isTmdbMissing(entry) && !isPlexMissing(entry);
+    if (isResolved && typeof onResolved === 'function') {
+      onResolved();
+    }
+  };
+
+  header.append(title, statuses);
+
+  const fields = document.createElement('div');
+  fields.className = 'unmatched-row__fields';
+
+  if (isServiceEnabled('tmdbEnabled')) {
+    const tmdbField = document.createElement('label');
+    tmdbField.className = 'unmatched-row__field';
+
+    const tmdbLabel = document.createElement('span');
+    tmdbLabel.className = 'unmatched-row__label';
+    tmdbLabel.textContent = 'TMDb ID';
+
+    const tmdbInput = document.createElement('input');
+    tmdbInput.type = 'text';
+    tmdbInput.inputMode = 'numeric';
+    tmdbInput.placeholder = 'e.g. 1399';
+    tmdbInput.value = entry.config?.tmdb_id ?? '';
+
+    tmdbInput.addEventListener('input', () => {
+      const result = applyTmdbValue(entry, tmdbInput.value);
+      statusMessage.hidden = true;
+      tmdbInput.classList.remove('input-error');
+      if (!result.valid) {
+        statusMessage.textContent = result.message;
+        statusMessage.hidden = false;
+        tmdbInput.classList.add('input-error');
+      }
+      refreshStatuses();
+    });
+
+    tmdbField.append(tmdbLabel, tmdbInput);
+    fields.appendChild(tmdbField);
+  }
+
+  if (isServiceEnabled('plexEnabled')) {
+    const libraryField = document.createElement('label');
+    libraryField.className = 'unmatched-row__field';
+
+    const libraryLabel = document.createElement('span');
+    libraryLabel.className = 'unmatched-row__label';
+    libraryLabel.textContent = 'Plex library';
+
+    const librarySelect = document.createElement('select');
+    librarySelect.innerHTML = '<option value="">Select library</option>';
+
+    Object.keys(state.libraries || {}).forEach((library) => {
+      const option = document.createElement('option');
+      option.value = library;
+      option.textContent = library;
+      librarySelect.appendChild(option);
+    });
+
+    librarySelect.value = entry.config?.library || '';
+    librarySelect.addEventListener('change', () => {
+      applyLibraryValue(entry, librarySelect.value);
+      refreshStatuses();
+    });
+
+    libraryField.append(libraryLabel, librarySelect);
+    fields.appendChild(libraryField);
+
+    const ratingField = document.createElement('label');
+    ratingField.className = 'unmatched-row__field';
+
+    const ratingLabel = document.createElement('span');
+    ratingLabel.className = 'unmatched-row__label';
+    ratingLabel.textContent = 'Plex rating key';
+
+    const ratingInput = document.createElement('input');
+    ratingInput.type = 'text';
+    ratingInput.placeholder = 'e.g. 12345';
+    ratingInput.value = entry.config?.rating_key ?? '';
+
+    ratingInput.addEventListener('input', () => {
+      applyRatingKeyValue(entry, ratingInput.value);
+      refreshStatuses();
+    });
+
+    ratingField.append(ratingLabel, ratingInput);
+    fields.appendChild(ratingField);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'unmatched-row__actions';
+
+  const editButton = document.createElement('button');
+  editButton.type = 'button';
+  editButton.textContent = 'Edit in list';
+  editButton.addEventListener('click', () => {
+    setEntryCollapsed(entry.id, false);
+    state.pendingEntryId = entry.id;
+    renderEntries();
+    const target = document.querySelector(`[data-entry-id="${entry.id}"]`);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+
+  actions.appendChild(editButton);
+
+  row.append(header, fields, statusMessage, actions);
+
+  refreshStatuses();
+
+  return row;
+}
+
+function openUnmatchedItemsModal() {
+  const modal = buildModal('Unmatched metadata');
+  addFloatingCloseButton(modal, 'Close unmatched metadata dialog');
+
+  const intro = document.createElement('div');
+  intro.className = 'modal-section modal-section--muted';
+  const introText = document.createElement('p');
+  introText.className = 'helper-text';
+  introText.textContent =
+    'These series could not be linked to TMDb or Plex. Provide IDs here or jump to the entry to make further edits.';
+  intro.appendChild(introText);
+
+  const list = document.createElement('div');
+  list.className = 'unmatched-list';
+
+  const renderList = () => {
+    list.innerHTML = '';
+    const unmatched = findUnmatchedEntries();
+
+    if (!unmatched.length) {
+      const resolved = document.createElement('p');
+      resolved.className = 'helper-text';
+      resolved.textContent = 'All series are linked to TMDb and Plex.';
+      list.appendChild(resolved);
+      return;
+    }
+
+    unmatched.forEach(({ entry }) => {
+      list.appendChild(buildUnmatchedRow(entry, renderList));
+    });
+  };
+
+  renderList();
+
+  modal.content.append(intro, list);
+
+  modal.footer.appendChild(
+    closeButton(() => {
+      closeModal(modal.element);
+    })
+  );
+}
+
 function formatActivityTimestamp(timestamp) {
   if (!timestamp) {
     return 'Time unavailable';
