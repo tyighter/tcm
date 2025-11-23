@@ -188,6 +188,8 @@ def search_plex(context: AppContext, query: str, limit: int = 10) -> list[dict[s
             "summary": show.get("summary"),
             "ids": show.get("ids", {}),
         }
+        if show.get("rating_key") is not None:
+            entry["rating_key"] = show.get("rating_key")
         serialised.append(entry)
 
     return serialised
