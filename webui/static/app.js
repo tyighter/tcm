@@ -674,13 +674,45 @@ function renderEntry(entry) {
   logo.className = 'entry-logo';
   logo.alt = `${entry.name} logo`;
   logo.loading = 'lazy';
+  const logoBackgroundToggle = document.createElement('button');
+  logoBackgroundToggle.type = 'button';
+  logoBackgroundToggle.className = 'entry-logo-toggle';
+
+  const logoBackgroundLabel = document.createElement('span');
+  logoBackgroundLabel.className = 'entry-logo-toggle__label';
+  logoBackgroundLabel.textContent = 'Logo bg';
+
+  const logoBackgroundSwitch = document.createElement('span');
+  logoBackgroundSwitch.className = 'entry-logo-toggle__switch';
+
+  const logoBackgroundHandle = document.createElement('span');
+  logoBackgroundHandle.className = 'entry-logo-toggle__handle';
+  logoBackgroundSwitch.append(logoBackgroundHandle);
+
+  const logoBackgroundValue = document.createElement('span');
+  logoBackgroundValue.className = 'entry-logo-toggle__value';
+
+  logoBackgroundToggle.append(
+    logoBackgroundLabel,
+    logoBackgroundSwitch,
+    logoBackgroundValue
+  );
+
+  const syncLogoToggleVisibility = () => {
+    logoBackgroundToggle.hidden = logo.classList.contains('entry-logo--missing');
+  };
+
   const handleLogoError = () => {
     logo.classList.add('entry-logo--missing');
     logo.classList.remove('entry-logo--light', 'entry-logo--dark');
     logo.removeAttribute('src');
+    syncLogoToggleVisibility();
   };
 
-  logo.addEventListener('load', () => applyLogoStroke(logo));
+  logo.addEventListener('load', () => {
+    applyLogoStroke(logo);
+    syncLogoToggleVisibility();
+  });
   logo.addEventListener('error', handleLogoError);
   logo.src = `/api/series-logo?name=${encodeURIComponent(entry.name)}`;
 
@@ -692,14 +724,11 @@ function renderEntry(entry) {
     }
   }
 
-  const logoBackgroundToggle = document.createElement('button');
-  logoBackgroundToggle.type = 'button';
-  logoBackgroundToggle.className = 'entry-logo-toggle';
-
   const syncLogoBackground = () => {
     const isDarkBackground = getLogoBackgroundPreference(entry.name) === 'dark';
     logo.classList.toggle('entry-logo--dark-surface', isDarkBackground);
-    logoBackgroundToggle.textContent = isDarkBackground ? 'Light bg' : 'Dark bg';
+    logoBackgroundToggle.dataset.mode = isDarkBackground ? 'dark' : 'light';
+    logoBackgroundValue.textContent = isDarkBackground ? 'Dark' : 'Light';
     logoBackgroundToggle.setAttribute('aria-pressed', String(isDarkBackground));
     logoBackgroundToggle.setAttribute(
       'aria-label',
@@ -714,6 +743,7 @@ function renderEntry(entry) {
   });
 
   syncLogoBackground();
+  syncLogoToggleVisibility();
 
   logoWrapper.append(logo, logoBackgroundToggle);
 
