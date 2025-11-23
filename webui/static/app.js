@@ -24,6 +24,7 @@ const dom = {
   collapseAll: document.getElementById('collapse-all-entries'),
   downloadSources: document.getElementById('download-sources'),
   runBuilder: document.getElementById('run-builder'),
+  tautulliRecent: document.getElementById('tautulli-recent'),
   modals: document.getElementById('modals'),
 };
 
@@ -531,6 +532,10 @@ function registerEvents() {
         }
       )
     );
+  }
+
+  if (dom.tautulliRecent) {
+    dom.tautulliRecent.addEventListener('click', () => openTautulliRecentModal());
   }
 }
 
@@ -2702,6 +2707,159 @@ function removeEntry(entry) {
   state.logoBackgrounds.delete(entry.name);
   persistLogoBackgroundPreferences();
   renderEntries();
+}
+
+// -----------------------------------------------------------------------------
+// Tautulli recent activity modal
+// -----------------------------------------------------------------------------
+function formatActivityTimestamp(timestamp) {
+  if (!timestamp) {
+    return 'Time unavailable';
+  }
+
+  const numeric = Number(timestamp);
+  if (!Number.isFinite(numeric)) {
+    return 'Time unavailable';
+  }
+
+  const millis = numeric < 1e12 ? numeric * 1000 : numeric;
+  const date = new Date(millis);
+  if (Number.isNaN(date.getTime())) {
+    return 'Time unavailable';
+  }
+
+  return date.toLocaleString();
+}
+
+function renderActivityList(listElement, entries, emptyMessage, timestampLabel) {
+  listElement.innerHTML = '';
+
+  if (!entries || entries.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'modal-activity-empty';
+    empty.textContent = emptyMessage;
+    listElement.appendChild(empty);
+    return;
+  }
+
+  entries.forEach((entry) => {
+    const item = document.createElement('li');
+    item.className = 'modal-activity-item';
+
+    const series = document.createElement('div');
+    series.className = 'modal-activity-item__series';
+    series.textContent = entry.series || 'Unknown series';
+
+    const episode = document.createElement('div');
+    episode.className = 'modal-activity-item__episode';
+    episode.textContent = entry.episode || 'Episode title unavailable';
+
+    const meta = document.createElement('div');
+    meta.className = 'modal-activity-item__meta';
+    const metaParts = [];
+    if (entry.season) {
+      metaParts.push(entry.season);
+    }
+    if (entry.timestamp) {
+      metaParts.push(`${timestampLabel} ${formatActivityTimestamp(entry.timestamp)}`);
+    }
+    meta.textContent = metaParts.join(' • ');
+
+    item.append(series, episode, meta);
+    listElement.appendChild(item);
+  });
+}
+
+function buildActivitySection(title, subtitle) {
+  const section = document.createElement('div');
+  section.className = 'modal-section';
+
+  const header = document.createElement('div');
+  header.className = 'modal-section__header';
+
+  const heading = document.createElement('h3');
+  heading.textContent = title;
+
+  const helper = document.createElement('p');
+  helper.className = 'helper-text';
+  helper.textContent = subtitle;
+
+  header.append(heading, helper);
+
+  const list = document.createElement('ul');
+  list.className = 'modal-activity-list';
+
+  section.append(header, list);
+
+  return { section, list };
+}
+
+async function openTautulliRecentModal() {
+  const modal = buildModal('Recent Tautulli activity');
+  addFloatingCloseButton(modal, 'Close recent activity dialog');
+
+  const intro = document.createElement('div');
+  intro.className = 'modal-section modal-section--muted';
+  const introText = document.createElement('p');
+  introText.className = 'helper-text';
+  introText.textContent =
+    'Latest watched and added episodes from Tautulli, filtered to the shows configured in tv.yml.';
+  intro.appendChild(introText);
+
+  const grid = document.createElement('div');
+  grid.className = 'modal-activity-grid';
+
+  const watchedSection = buildActivitySection(
+    'Recently watched',
+    'Most recent watched episodes from your library.'
+  );
+  const addedSection = buildActivitySection(
+    'Recently added',
+    'Newest episodes added to your library.'
+  );
+
+  renderActivityList(watchedSection.list, [], 'Loading recent watches...', 'Watched');
+  renderActivityList(addedSection.list, [], 'Loading recently added episodes...', 'Added');
+
+  grid.append(watchedSection.section, addedSection.section);
+
+  modal.content.append(intro, grid);
+  modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
+
+  try {
+    const response = await fetch('/api/tautulli/recent');
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Unable to load recent activity from Tautulli');
+    }
+
+    renderActivityList(
+      watchedSection.list,
+      payload.watched,
+      'No watched episodes found for your configured series.',
+      'Watched on'
+    );
+    renderActivityList(
+      addedSection.list,
+      payload.recently_added,
+      'No recent additions found for your configured series.',
+      'Added on'
+    );
+  } catch (error) {
+    renderActivityList(
+      watchedSection.list,
+      [],
+      'Unable to load watched episodes right now.',
+      'Watched on'
+    );
+    renderActivityList(
+      addedSection.list,
+      [],
+      'Unable to load recent additions right now.',
+      'Added on'
+    );
+    showToast(error.message || 'Failed to load Tautulli activity', 'error');
+  }
 }
 
 // -----------------------------------------------------------------------------

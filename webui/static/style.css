@@ -723,6 +723,48 @@ button:disabled:hover {
   line-height: 1.4;
 }
 
+.modal-activity-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.modal-activity-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.modal-activity-item,
+.modal-activity-empty {
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, #ffffff, #f8f8f8);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.modal-activity-empty {
+  color: var(--muted);
+}
+
+.modal-activity-item__series {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.modal-activity-item__episode {
+  color: var(--muted);
+  margin: 0.1rem 0;
+}
+
+.modal-activity-item__meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .field-selector__controls {
   display: grid;
   gap: 0.35rem;
