@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import mimetypes
+import re
 from cgi import FieldStorage
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -447,6 +448,22 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             series_names = set(series_entries.keys())
             tmdb_ids = set()
             series_tmdb_map: dict[str, int] = {}
+
+            trailing_year_patterns = (
+                re.compile(r"\s*\(\d{4}\)\s*$"),
+                re.compile(r"\s+\d{4}\s*$"),
+            )
+
+            def _series_aliases(title: str) -> set[str]:
+                aliases = {title.casefold()}
+                stripped = title
+                for pattern in trailing_year_patterns:
+                    stripped = pattern.sub("", stripped)
+                stripped = stripped.strip()
+                if stripped:
+                    aliases.add(stripped.casefold())
+                return aliases
+
             for name, config in series_entries.items():
                 if not isinstance(config, dict):
                     continue
@@ -457,7 +474,8 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
                 tmdb_id = int(tmdb_value)
                 tmdb_ids.add(tmdb_id)
-                series_tmdb_map[name] = tmdb_id
+                for alias in _series_aliases(name):
+                    series_tmdb_map[alias] = tmdb_id
 
             params = parse_qs(parsed.query)
             username = params.get("username", [None])[0]
