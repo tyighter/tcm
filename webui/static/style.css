@@ -977,6 +977,124 @@ button:disabled:hover {
   color: var(--muted);
 }
 
+.unmatched-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.unmatched-row {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: 1.2fr 1fr;
+  align-items: flex-start;
+}
+
+@media (max-width: 860px) {
+  .unmatched-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.unmatched-row__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.unmatched-row__title {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.unmatched-row__statuses {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  border: 1px solid transparent;
+}
+
+.status-pill--success {
+  background: #e9f5ff;
+  color: #0f437d;
+  border-color: #cde3fb;
+}
+
+.status-pill--error {
+  background: #fdf0ef;
+  color: #9c1f1f;
+  border-color: #f4c7c3;
+}
+
+.status-pill--muted {
+  background: #f4f4f4;
+  color: var(--muted);
+  border-color: #e4e4e4;
+}
+
+.unmatched-row__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.55rem;
+}
+
+.unmatched-row__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.unmatched-row__label {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.unmatched-row__field input,
+.unmatched-row__field select {
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  font-weight: 500;
+}
+
+.unmatched-row__field input.input-error {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px rgba(217, 48, 37, 0.1);
+}
+
+.unmatched-row__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.unmatched-row__actions button {
+  align-self: flex-end;
+}
+
+.unmatched-row__message {
+  margin: 0;
+}
+
 /* Modal styling */
 .modal-backdrop {
   position: fixed;

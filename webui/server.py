@@ -435,6 +435,10 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     "cardTypes": card_types,
                     "cardTypeExtras": build_card_type_extras(),
                     "fontDirectory": self.font_directory.as_posix(),
+                    "services": {
+                        "tmdbEnabled": self.context.preference_parser.use_tmdb,
+                        "plexEnabled": self.context.preference_parser.use_plex,
+                    },
                 }
             )
             return
