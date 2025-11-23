@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from modules.BaseCardType import BaseCardType, ImageMagickCommands
+from modules.Debug import log
 
 if TYPE_CHECKING:
     from modules.Font import Font
@@ -113,7 +114,17 @@ class WhiteBorderTitleCard(BaseCardType):
         # Optional extras
         self.border_color = border_color
         self.episode_text_color = episode_text_color
-        self.episode_text_font_size = episode_text_font_size
+        try:
+            self.episode_text_font_size = float(episode_text_font_size)
+        except (TypeError, ValueError) as exc:
+            log.error(
+                'Invalid episode_text_font_size "{episode_text_font_size}" - '
+                'must be numeric: {error}'.format(
+                    episode_text_font_size=episode_text_font_size, error=exc,
+                )
+            )
+            self.episode_text_font_size = 1.0
+            self.valid = False
         self.omit_gradient = omit_gradient
         self.separator = separator
         self.stroke_color = stroke_color
