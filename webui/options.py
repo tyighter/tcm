@@ -339,6 +339,14 @@ def build_card_type_extras() -> dict[str, list[str]]:
         "library",
     }
 
+    universal_extras = {
+        "episode_text_font_size",
+        "episode_text_stroke_color",
+        "episode_text_stroke_width",
+        "episode_title_stroke_color",
+        "episode_title_stroke_width",
+    }
+
     extras: dict[str, list[str]] = {}
     for identifier, card_type in TitleCard.BUILTIN_CARD_TYPES.items():
         parameters = list(inspect.signature(card_type.__init__).parameters.values())[1:]
@@ -348,6 +356,7 @@ def build_card_type_extras() -> dict[str, list[str]]:
                 for parameter in parameters
                 if parameter.name not in base_parameters
             }
+            | universal_extras
         )
         extras[identifier] = supported
 

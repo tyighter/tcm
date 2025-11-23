@@ -1401,6 +1401,25 @@ fieldset legend {
   align-items: flex-start;
 }
 
+.table-list-row__key {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.table-list-row__label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.table-list-row__hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.table-list-row__key input {
+  margin-top: 0.1rem;
+}
+
 .table-list-row input {
   padding: 0.45rem 0.6rem;
   border-radius: 8px;
