@@ -167,6 +167,47 @@ class TautulliInterface(WebInterface):
             return entry.get('title') or entry.get('episode_title') or entry.get('full_title') or ''
 
         tmdb_regex = re_compile(r'tmdb[^0-9]*([0-9]+)', IGNORECASE)
+        trailing_year_patterns = (
+            re_compile(r"\s*\(\d{4}\)\s*$"),
+            re_compile(r"\s+\d{4}\s*$"),
+        )
+
+        def _series_aliases(title: str) -> list[str]:
+            aliases: list[str] = []
+            try:
+                normalized = str(title)
+            except Exception:
+                return aliases
+
+            normalized = normalized.strip()
+            if not normalized:
+                return aliases
+
+            aliases.append(normalized.casefold())
+            stripped = normalized
+            for pattern in trailing_year_patterns:
+                stripped = pattern.sub('', stripped)
+            stripped = stripped.strip()
+            if stripped and stripped.casefold() not in aliases:
+                aliases.append(stripped.casefold())
+
+            return aliases
+
+        def _rating_keys(entry: dict[str, Any]) -> list[str]:
+            keys: list[str] = []
+            for field in ('grandparent_rating_key', 'parent_rating_key', 'rating_key'):
+                value = entry.get(field)
+                if value is None:
+                    continue
+
+                try:
+                    key = str(int(value))
+                except (TypeError, ValueError):
+                    continue
+
+                keys.append(key)
+
+            return keys
 
         def _extract_tmdb_id(entry: dict[str, Any]) -> Optional[int]:
             guid_fields = (
@@ -244,6 +285,7 @@ class TautulliInterface(WebInterface):
             series_filter: Optional[set[str]] = None,
             tmdb_filter: Optional[set[int]] = None,
             limit_results: Optional[int] = None,
+            track_unresolved: bool = False,
         ) -> list[dict[str, Any]]:
             if series_filter is not None:
                 series_filter = {name.casefold() for name in series_filter if name}
@@ -280,6 +322,10 @@ class TautulliInterface(WebInterface):
                 timestamp = _timestamp(entry, timestamp_fields)
                 if timestamp < cutoff:
                     continue
+
+                if tmdb_id is not None:
+                    for rating_key in _rating_keys(entry):
+                        rating_tmdb_lookup.setdefault(rating_key, tmdb_id)
 
                 results.append(
                     {
@@ -328,6 +374,7 @@ class TautulliInterface(WebInterface):
             series_filter=None,
             tmdb_filter=None,
             limit_results=None,
+            track_unresolved=True,
         )
         raw_recently_added = _normalize(
             recently_added_entries,
@@ -336,6 +383,7 @@ class TautulliInterface(WebInterface):
             series_filter=None,
             tmdb_filter=None,
             limit_results=None,
+            track_unresolved=True,
         )
 
         activity = {

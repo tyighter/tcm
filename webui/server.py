@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import mimetypes
+import re
 from cgi import FieldStorage
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -30,6 +31,7 @@ from .services import (
     list_preview_episodes,
     run_asset_downloads,
     backfill_tmdb_ids,
+    backfill_rating_keys,
     run_builder,
     run_builder_for_series,
     run_metadata_sync,
@@ -463,7 +465,14 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
                 tmdb_id = int(tmdb_value)
                 tmdb_ids.add(tmdb_id)
-                series_tmdb_map[name] = tmdb_id
+                rating_key = config.get("rating_key")
+                if rating_key is not None:
+                    try:
+                        rating_tmdb_map[str(int(rating_key))] = tmdb_id
+                    except (TypeError, ValueError):
+                        pass
+                for alias in _series_aliases(name):
+                    series_tmdb_map[alias] = tmdb_id
 
             params = parse_qs(parsed.query)
             username = params.get("username", [None])[0]
@@ -896,6 +905,17 @@ def run(port: int = 4343) -> None:
             total = result.get("total", 0)
             if updated:
                 logger.info("Updated TMDb IDs for %s of %s series", updated, total)
+
+    if context.preference_parser.use_plex:
+        try:
+            result = backfill_rating_keys(context, tv_manager)
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning("Unable to backfill Plex rating keys on startup: %s", exc)
+        else:
+            updated = result.get("updated", 0)
+            total = result.get("total", 0)
+            if updated:
+                logger.info("Updated Plex rating keys for %s of %s series", updated, total)
 
     WebRequestHandler.context = context
     WebRequestHandler.tv_manager = tv_manager
