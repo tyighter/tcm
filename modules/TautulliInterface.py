@@ -3,7 +3,7 @@ import time
 from pathlib import Path
 from re import IGNORECASE, compile as re_compile
 from sys import exit as sys_exit
-from typing import Any, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 from modules.Debug import log
 from modules.WebInterface import WebInterface
@@ -89,6 +89,9 @@ class TautulliInterface(WebInterface):
         tmdb_ids: set[int],
         *,
         series_tmdb_map: Optional[dict[str, int]] = None,
+        rating_tmdb_lookup: Optional[dict[int, int]] = None,
+        rating_key_lookup: Optional[Callable[[int], Optional[int]]] = None,
+        persist_rating_tmdb_lookup: Optional[Callable[[dict[int, int]], None]] = None,
         limit: int = 10,
         days: int = 7,
         username: Optional[str] = None,
@@ -101,6 +104,10 @@ class TautulliInterface(WebInterface):
             limit: Maximum number of results per category to return.
             days: Restrict results to activity that occurred within this many days.
             series_tmdb_map: Mapping of series names to TMDb IDs from tv.yml.
+            rating_tmdb_lookup: Mapping of Plex rating keys to TMDb IDs loaded from tv.yml.
+            rating_key_lookup: Helper to resolve TMDb IDs from Plex rating keys.
+            persist_rating_tmdb_lookup: Optional callback to persist updated rating
+                mappings to tv.yml.
 
         Returns:
             Dictionary containing "watched" and "recently_added" lists with
@@ -118,6 +125,12 @@ class TautulliInterface(WebInterface):
             for name, tmdb_id in (series_tmdb_map or {}).items()
             if isinstance(tmdb_id, int)
         }
+        rating_tmdb_lookup = {
+            int(key): int(value)
+            for key, value in (rating_tmdb_lookup or {}).items()
+            if str(key).isdigit() and str(value).isdigit()
+        }
+        rating_lookup_updated = False
 
         def _matches_username(entry: dict[str, Any]) -> bool:
             if not filter_username:
@@ -179,6 +192,51 @@ class TautulliInterface(WebInterface):
 
             return None
 
+        def _rating_keys(entry: dict[str, Any]) -> list[int]:
+            keys: list[int] = []
+            for field in (
+                'rating_key',
+                'grandparent_rating_key',
+                'parent_rating_key',
+                'subject',
+            ):
+                value = entry.get(field)
+                if value is None:
+                    continue
+
+                values = value if isinstance(value, (list, tuple, set)) else (value,)
+                for raw in values:
+                    try:
+                        keys.append(int(raw))
+                    except (TypeError, ValueError):
+                        continue
+
+            return keys
+
+        def _lookup_tmdb_from_rating_keys(keys: Iterable[int]) -> Optional[int]:
+            nonlocal rating_lookup_updated
+
+            for key in keys:
+                if key in rating_tmdb_lookup:
+                    return rating_tmdb_lookup[key]
+
+                if rating_key_lookup is None:
+                    continue
+
+                try:
+                    tmdb_value = rating_key_lookup(key)
+                except Exception:  # pylint: disable=broad-except
+                    log.exception(f'Failed to resolve TMDb ID from rating key {key}')
+                    continue
+                if tmdb_value is None:
+                    continue
+
+                rating_tmdb_lookup[key] = tmdb_value
+                rating_lookup_updated = True
+                return tmdb_value
+
+            return None
+
         def _normalize(
             entries: list[dict],
             timestamp_fields: Iterable[str],
@@ -204,6 +262,8 @@ class TautulliInterface(WebInterface):
                     continue
 
                 tmdb_id = _extract_tmdb_id(entry)
+                if tmdb_id is None:
+                    tmdb_id = _lookup_tmdb_from_rating_keys(_rating_keys(entry))
                 if tmdb_id is None:
                     tmdb_id = series_tmdb_map.get(series.casefold())
 
@@ -305,6 +365,12 @@ class TautulliInterface(WebInterface):
             filtered_watched=activity['watched'],
             filtered_recently_added=activity['recently_added'],
         )
+
+        if rating_lookup_updated and persist_rating_tmdb_lookup is not None:
+            try:
+                persist_rating_tmdb_lookup(rating_tmdb_lookup)
+            except Exception as exc:  # pylint: disable=broad-except
+                log.error(f'Failed to persist rating key lookup updates: {exc}')
 
         return activity
 

@@ -48,6 +48,8 @@ class TvYamlManager:
             data["libraries"] = CommentedMap()
         if "series" not in data or data["series"] is None:
             data["series"] = CommentedMap()
+        if "rating_tmdb_lookup" not in data or data["rating_tmdb_lookup"] is None:
+            data["rating_tmdb_lookup"] = CommentedMap()
 
         self._data = data
         return data
@@ -57,6 +59,7 @@ class TvYamlManager:
 
         data = self.load()
         libraries = _to_builtin(data.get("libraries", CommentedMap()))
+        rating_lookup = _to_builtin(data.get("rating_tmdb_lookup", CommentedMap()))
         series_entries = []
         for name, config in data.get("series", CommentedMap()).items():
             series_entries.append(
@@ -68,6 +71,7 @@ class TvYamlManager:
 
         return {
             "libraries": libraries,
+            "rating_tmdb_lookup": rating_lookup,
             "series": series_entries,
         }
 
@@ -75,11 +79,14 @@ class TvYamlManager:
         """Persist the provided payload to disk."""
 
         libraries = payload.get("libraries")
+        rating_lookup = payload.get("rating_tmdb_lookup")
         series_payload = payload.get("series", [])
 
         current = self.load()
         if libraries is not None:
             current["libraries"] = _to_commented(libraries)
+        if rating_lookup is not None:
+            current["rating_tmdb_lookup"] = _to_commented(rating_lookup)
 
         series_map = CommentedMap()
         sorted_series = sorted(

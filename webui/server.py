@@ -36,7 +36,7 @@ from .services import (
     revert_series_cards,
     search_plex,
 )
-from .tv_data import TvYamlManager
+from .tv_data import TvYamlManager, _to_builtin
 
 logger = logging.getLogger(__name__)
 
@@ -447,6 +447,12 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             series_names = set(series_entries.keys())
             tmdb_ids = set()
             series_tmdb_map: dict[str, int] = {}
+            rating_tmdb_lookup_raw = tv_data.get("rating_tmdb_lookup", {})
+            rating_tmdb_lookup: dict[int, int] = {}
+            if isinstance(rating_tmdb_lookup_raw, dict):
+                for key, value in rating_tmdb_lookup_raw.items():
+                    if str(key).isdigit() and str(value).isdigit():
+                        rating_tmdb_lookup[int(key)] = int(value)
             for name, config in series_entries.items():
                 if not isinstance(config, dict):
                     continue
@@ -462,12 +468,41 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             params = parse_qs(parsed.query)
             username = params.get("username", [None])[0]
 
+            rating_key_lookup = None
+            persist_lookup = None
+            if self.context.preference_parser.use_plex:
+                try:
+                    plex_interface = self.context.get_plex_interface()
+                    rating_key_lookup = plex_interface.lookup_tmdb_id_from_rating_key
+
+                    def persist_lookup(updated_lookup: dict[int, int]) -> None:
+                        current = self.tv_manager.load()
+                        payload = {
+                            "libraries": _to_builtin(current.get("libraries", {})),
+                            "rating_tmdb_lookup": {
+                                str(key): value for key, value in updated_lookup.items()
+                            },
+                            "series": [
+                                {"name": name, "config": _to_builtin(config)}
+                                for name, config in current.get("series", {}).items()
+                                if name
+                            ],
+                        }
+                        self.tv_manager.write(payload)
+                        self.tv_manager.invalidate()
+
+                except Exception:  # pylint: disable=broad-except
+                    logger.exception("Failed to initialise Plex lookup for Tautulli")
+
             try:
                 tautulli = TautulliInterface(**self.context.preference_parser.tautulli_interface_args)
                 activity = tautulli.get_recent_activity(
                     series_names,
                     tmdb_ids,
                     series_tmdb_map=series_tmdb_map,
+                    rating_tmdb_lookup=rating_tmdb_lookup,
+                    rating_key_lookup=rating_key_lookup,
+                    persist_rating_tmdb_lookup=persist_lookup,
                     limit=10,
                     username=username,
                 )
