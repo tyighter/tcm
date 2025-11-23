@@ -27,6 +27,7 @@ from .services import (
     forget_series_cards,
     get_or_generate_preview,
     invalidate_preview_cache,
+    list_preview_episodes,
     run_asset_downloads,
     run_builder,
     run_builder_for_series,
@@ -589,6 +590,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             show_name = payload.get("name")
             config = payload.get("config")
             force_refresh = bool(payload.get("force"))
+            preview_episode_key = payload.get("previewEpisode")
             if not show_name or not isinstance(config, dict):
                 self._error("Preview requires a series name and configuration")
                 return
@@ -600,12 +602,37 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     show_name,
                     config,
                     force=force_refresh,
+                    preview_episode_key=preview_episode_key,
                 )
             except Exception as exc:  # pylint: disable=broad-except
                 self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
                 return
 
             self._json_response({"mime": mime, "data": data})
+            return
+
+        if parsed.path == "/api/preview/episodes":
+            try:
+                payload = self._parse_json()
+            except ValueError as exc:
+                self._error(str(exc))
+                return
+
+            show_name = payload.get("name")
+            config = payload.get("config")
+            if not show_name or not isinstance(config, dict):
+                self._error("Series name and configuration are required")
+                return
+
+            try:
+                episodes = list_preview_episodes(
+                    self.context, self.tv_manager, show_name, config
+                )
+            except Exception as exc:  # pylint: disable=broad-except
+                self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
+                return
+
+            self._json_response({"episodes": episodes})
             return
 
         if parsed.path == "/api/actions/sync":
