@@ -674,6 +674,18 @@ function renderEntry(entry) {
   container.dataset.entryId = entry.id;
   initializeEntryPreviewState(entry);
 
+  const removeEntryButton = document.createElement('button');
+  removeEntryButton.type = 'button';
+  removeEntryButton.className = 'entry-remove';
+  removeEntryButton.setAttribute('aria-label', `Remove ${entry.name}`);
+  const removeEntryIcon = document.createElement('span');
+  removeEntryIcon.className = 'material-symbols-rounded';
+  removeEntryIcon.setAttribute('aria-hidden', 'true');
+  removeEntryIcon.textContent = 'close';
+  removeEntryButton.appendChild(removeEntryIcon);
+  removeEntryButton.addEventListener('click', () => removeEntry(entry));
+  container.appendChild(removeEntryButton);
+
   const header = document.createElement('div');
   header.className = 'entry-header';
 
@@ -948,17 +960,11 @@ function renderEntry(entry) {
   syncPreviewEpisodeControls();
   ensurePreviewEpisodes(entry, syncPreviewEpisodeControls);
 
-  const deleteButton = document.createElement('button');
-  deleteButton.textContent = 'Remove';
-  deleteButton.style.background = 'rgba(227, 107, 107, 0.15)';
-  deleteButton.addEventListener('click', () => removeEntry(entry));
-
   actions.append(
     buildButton,
     revertButton,
     forgetButton,
-    previewControls,
-    deleteButton
+    previewControls
   );
   header.append(summary, actions);
 
