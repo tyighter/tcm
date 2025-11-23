@@ -392,6 +392,23 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
         return results
 
 
+    @catch_and_log('Error getting series rating key', default=None)
+    def get_series_rating_key(self, library_name: str, series_info: SeriesInfo) -> Optional[str]:
+        """Return the Plex rating key for a series if available."""
+
+        if not (library := self.__get_library(library_name)):
+            return None
+
+        if not (series := self.__get_series(library, series_info)):
+            return None
+
+        try:
+            return str(int(series.ratingKey))
+        except (TypeError, ValueError):
+            rating_key = getattr(series, 'ratingKey', None)
+            return str(rating_key) if rating_key is not None else None
+
+
     @catch_and_log('Error getting all episodes', default=[])
     def get_all_episodes(self,
             library_name: str,

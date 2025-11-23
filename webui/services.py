@@ -118,6 +118,61 @@ def backfill_tmdb_ids(context: AppContext, tv_manager: TvYamlManager) -> dict[st
     return {"updated": updated, "total": processed}
 
 
+def backfill_rating_keys(context: AppContext, tv_manager: TvYamlManager) -> dict[str, int]:
+    """Populate missing Plex rating keys for configured series."""
+
+    if not context.preference_parser.use_plex:
+        raise RuntimeError("Plex is not configured in preferences.yml")
+
+    plex = context.get_plex_interface()
+    tv_data = tv_manager.load()
+
+    series_entries = tv_data.get("series", CommentedMap())
+    updated = 0
+    processed = 0
+
+    payload = {"libraries": _to_builtin(tv_data.get("libraries", CommentedMap())), "series": []}
+
+    for name, raw_config in series_entries.items():
+        processed += 1
+        config = _to_builtin(raw_config)
+
+        library = config.get("library")
+        if not library:
+            payload["series"].append({"name": name, "config": config})
+            continue
+
+        current_rating_key = config.get("rating_key")
+
+        try:
+            series_info = SeriesInfo(name, config.get("year"))
+        except Exception:
+            payload["series"].append({"name": name, "config": config})
+            continue
+
+        rating_key = plex.get_series_rating_key(library, series_info)
+        if rating_key is None:
+            payload["series"].append({"name": name, "config": config})
+            continue
+
+        try:
+            rating_key_value: int | str = int(rating_key)
+        except (TypeError, ValueError):
+            rating_key_value = str(rating_key)
+
+        if current_rating_key != rating_key_value:
+            config["rating_key"] = rating_key_value
+            updated += 1
+
+        payload["series"].append({"name": name, "config": config})
+
+    if updated:
+        tv_manager.write(payload)
+        tv_manager.invalidate()
+
+    return {"updated": updated, "total": processed}
+
+
 def search_plex(context: AppContext, query: str, limit: int = 10) -> list[dict[str, Any]]:
     """Search Plex for shows matching the query string."""
 

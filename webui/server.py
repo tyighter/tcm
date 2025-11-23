@@ -31,6 +31,7 @@ from .services import (
     list_preview_episodes,
     run_asset_downloads,
     backfill_tmdb_ids,
+    backfill_rating_keys,
     run_builder,
     run_builder_for_series,
     run_metadata_sync,
@@ -448,6 +449,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             series_names = set(series_entries.keys())
             tmdb_ids = set()
             series_tmdb_map: dict[str, int] = {}
+            rating_tmdb_map: dict[str, int] = {}
 
             trailing_year_patterns = (
                 re.compile(r"\s*\(\d{4}\)\s*$"),
@@ -474,6 +476,12 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
                 tmdb_id = int(tmdb_value)
                 tmdb_ids.add(tmdb_id)
+                rating_key = config.get("rating_key")
+                if rating_key is not None:
+                    try:
+                        rating_tmdb_map[str(int(rating_key))] = tmdb_id
+                    except (TypeError, ValueError):
+                        pass
                 for alias in _series_aliases(name):
                     series_tmdb_map[alias] = tmdb_id
 
@@ -486,6 +494,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     series_names,
                     tmdb_ids,
                     series_tmdb_map=series_tmdb_map,
+                    rating_tmdb_map=rating_tmdb_map,
                     limit=10,
                     username=username,
                 )
@@ -879,6 +888,17 @@ def run(port: int = 4343) -> None:
             total = result.get("total", 0)
             if updated:
                 logger.info("Updated TMDb IDs for %s of %s series", updated, total)
+
+    if context.preference_parser.use_plex:
+        try:
+            result = backfill_rating_keys(context, tv_manager)
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning("Unable to backfill Plex rating keys on startup: %s", exc)
+        else:
+            updated = result.get("updated", 0)
+            total = result.get("total", 0)
+            if updated:
+                logger.info("Updated Plex rating keys for %s of %s series", updated, total)
 
     WebRequestHandler.context = context
     WebRequestHandler.tv_manager = tv_manager

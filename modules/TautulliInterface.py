@@ -89,6 +89,7 @@ class TautulliInterface(WebInterface):
         tmdb_ids: set[int],
         *,
         series_tmdb_map: Optional[dict[str, int]] = None,
+        rating_tmdb_map: Optional[dict[str, int]] = None,
         limit: int = 10,
         days: int = 7,
         username: Optional[str] = None,
@@ -101,6 +102,7 @@ class TautulliInterface(WebInterface):
             limit: Maximum number of results per category to return.
             days: Restrict results to activity that occurred within this many days.
             series_tmdb_map: Mapping of series names to TMDb IDs from tv.yml.
+            rating_tmdb_map: Mapping of Plex rating keys to TMDb IDs from tv.yml.
 
         Returns:
             Dictionary containing "watched" and "recently_added" lists with
@@ -221,7 +223,17 @@ class TautulliInterface(WebInterface):
             return None
 
         unresolved_tmdb: dict[str, int] = {}
-        rating_tmdb_map: dict[str, int] = {}
+        rating_tmdb_lookup: dict[str, int] = {}
+        for key, tmdb_id in (rating_tmdb_map or {}).items():
+            if not isinstance(tmdb_id, int):
+                continue
+
+            try:
+                normalized_key = str(int(key))
+            except (TypeError, ValueError):
+                continue
+
+            rating_tmdb_lookup[normalized_key] = tmdb_id
 
         def _normalize(
             entries: list[dict],
@@ -251,7 +263,7 @@ class TautulliInterface(WebInterface):
                 tmdb_id = _extract_tmdb_id(entry)
                 if tmdb_id is None:
                     for rating_key in _rating_keys(entry):
-                        tmdb_id = rating_tmdb_map.get(rating_key)
+                        tmdb_id = rating_tmdb_lookup.get(rating_key)
                         if tmdb_id is not None:
                             break
                 if tmdb_id is None:
@@ -278,7 +290,7 @@ class TautulliInterface(WebInterface):
 
                 if tmdb_id is not None:
                     for rating_key in _rating_keys(entry):
-                        rating_tmdb_map.setdefault(rating_key, tmdb_id)
+                        rating_tmdb_lookup.setdefault(rating_key, tmdb_id)
 
                 results.append(
                     {
