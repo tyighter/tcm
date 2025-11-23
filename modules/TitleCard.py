@@ -193,6 +193,8 @@ class TitleCard:
 
         self._coerce_extra_types(kwargs)
 
+        kwargs = self._filter_kwargs(kwargs)
+
         try:
             self.maker = self.episode.card_class(**kwargs)
         except Exception as e:
@@ -272,6 +274,25 @@ class TitleCard:
             return bool
 
         return None
+
+    def _filter_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Remove extras not supported by the card constructor when needed."""
+
+        signature = inspect.signature(self.episode.card_class.__init__)
+        accepts_var_kwargs = any(
+            param.kind == inspect.Parameter.VAR_KEYWORD
+            for param in signature.parameters.values()
+        )
+
+        if accepts_var_kwargs:
+            return kwargs
+
+        supported_keys = {name for name in signature.parameters.keys() if name != 'self'}
+        unsupported = set(kwargs.keys()) - supported_keys
+        for key in unsupported:
+            kwargs.pop(key, None)
+
+        return kwargs
 
     @staticmethod
     def _convert_value(value: Any, expected_type: type) -> Any:

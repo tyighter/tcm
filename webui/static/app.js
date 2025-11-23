@@ -869,12 +869,19 @@ function renderEntry(entry) {
 
   const usedFields = new Set();
   const fontFieldRows = [];
+  let extrasFieldRow = null;
+  let extrasFieldDefinition = null;
   state.fields.forEach((field) => {
     const value = getValue(entry.config, field.path);
+    if (field.id === 'extras') {
+      extrasFieldDefinition = field;
+    }
     if (value !== undefined) {
       usedFields.add(field.id);
       if (field.path?.[0] === 'font') {
         fontFieldRows.push(renderFieldRow(entry, field, value));
+      } else if (field.id === 'extras') {
+        extrasFieldRow = renderFieldRow(entry, field, value);
       } else {
         body.appendChild(renderFieldRow(entry, field, value));
       }
@@ -886,10 +893,53 @@ function renderEntry(entry) {
   addLineButton.textContent = '+ Add line';
   addLineButton.addEventListener('click', () =>
     openFieldSelector(entry, {
-      availableFilter: (field) => field.path?.[0] !== 'font',
+      availableFilter: (field) => field.path?.[0] !== 'font' && field.id !== 'extras',
     })
   );
   body.appendChild(addLineButton);
+
+  const extrasSection = document.createElement('section');
+  extrasSection.className = 'entry-section entry-section--extras';
+
+  const extrasHeader = document.createElement('div');
+  extrasHeader.className = 'entry-section__header';
+
+  const extrasTitle = document.createElement('h3');
+  extrasTitle.className = 'entry-section__title';
+  extrasTitle.textContent = 'Extra card options';
+
+  extrasHeader.appendChild(extrasTitle);
+
+  const extrasFieldsContainer = document.createElement('div');
+  extrasFieldsContainer.className = 'entry-section__fields';
+
+  const enableExtras = () => {
+    if (!extrasFieldDefinition) {
+      return;
+    }
+    const defaultValue = defaultValueForField(extrasFieldDefinition);
+    setValue(entry.config, extrasFieldDefinition.path, defaultValue);
+    renderEntries();
+  };
+
+  if (extrasFieldRow) {
+    extrasFieldsContainer.appendChild(extrasFieldRow);
+  } else if (extrasFieldDefinition) {
+    const helper = document.createElement('p');
+    helper.className = 'helper-text entry-section__empty';
+    helper.textContent = 'No extra options added yet. Add an extra to customize your card.';
+
+    const addExtrasButton = document.createElement('button');
+    addExtrasButton.className = 'add-line add-line--inline';
+    addExtrasButton.textContent = '+ Add extra option';
+    addExtrasButton.addEventListener('click', () => enableExtras());
+
+    extrasHeader.appendChild(addExtrasButton);
+    extrasFieldsContainer.appendChild(helper);
+  }
+
+  extrasSection.append(extrasHeader, extrasFieldsContainer);
+  body.appendChild(extrasSection);
 
   const fontSection = document.createElement('section');
   fontSection.className = 'entry-section entry-section--font';
@@ -1946,10 +1996,13 @@ function mapEditor(entry, field, value, keyLabel, valueLabel, onUpdate, options 
       const line = document.createElement('div');
       line.className = 'table-list-row item-card';
 
+      const friendlyLabel = options.formatKeyLabel ? options.formatKeyLabel(row.key) : null;
+
       const keyInput = document.createElement('input');
       keyInput.type = 'text';
-      keyInput.placeholder = keyLabel;
+      keyInput.placeholder = friendlyLabel || keyLabel;
       keyInput.value = row.key;
+      keyInput.title = friendlyLabel || row.key || keyLabel;
       keyInput.addEventListener('input', (event) => {
         const wasColorField = isColorFieldKey(row.key);
         row.key = event.target.value;
@@ -2007,6 +2060,24 @@ function mapEditor(entry, field, value, keyLabel, valueLabel, onUpdate, options 
         });
       }
 
+      const keyColumn = document.createElement('div');
+      keyColumn.className = 'table-list-row__key';
+      if (friendlyLabel) {
+        const labelElement = document.createElement('div');
+        labelElement.className = 'table-list-row__label';
+        labelElement.textContent = friendlyLabel;
+        keyColumn.appendChild(labelElement);
+      }
+
+      if (options.showRawKeyHint && row.key) {
+        const hint = document.createElement('div');
+        hint.className = 'table-list-row__hint';
+        hint.textContent = row.key;
+        keyColumn.appendChild(hint);
+      }
+
+      keyColumn.appendChild(keyInput);
+
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'item-remove';
@@ -2018,7 +2089,7 @@ function mapEditor(entry, field, value, keyLabel, valueLabel, onUpdate, options 
         renderRows();
       });
 
-      line.append(keyInput, valueInput, remove);
+      line.append(keyColumn, valueInput, remove);
       list.appendChild(line);
     });
 
@@ -2050,6 +2121,19 @@ function getDefaultCardType() {
 
 function normalizeCardType(value) {
   return (value || '').toString().trim().toLowerCase();
+}
+
+function formatExtraLabel(key) {
+  if (!key) {
+    return 'Custom extra';
+  }
+
+  const parts = key
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1));
+
+  return parts.join(' ');
 }
 
 function extrasForCardType(cardType) {
@@ -2116,7 +2200,7 @@ function openExtrasPicker(cardType, rows, renderRows, updateRows) {
     const option = document.createElement('button');
     option.type = 'button';
     option.className = 'card-type-option';
-    option.textContent = key;
+    option.textContent = formatExtraLabel(key);
     option.addEventListener('click', () => {
       rows.push({ key, value: '' });
       updateRows();
@@ -2180,6 +2264,8 @@ function extrasEditor(entry, field, value) {
     onAddRow: ({ rows, render, update }) => {
       openExtrasPicker(cardType, rows, render, update);
     },
+    formatKeyLabel: formatExtraLabel,
+    showRawKeyHint: true,
   });
 }
 
