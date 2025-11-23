@@ -3089,6 +3089,8 @@ function buildUnmatchedRow(entry, onResolved) {
   const row = document.createElement('div');
   row.className = 'unmatched-row';
 
+  entry.config = entry.config || {};
+
   const header = document.createElement('div');
   header.className = 'unmatched-row__header';
 
@@ -3128,6 +3130,7 @@ function buildUnmatchedRow(entry, onResolved) {
   const fields = document.createElement('div');
   fields.className = 'unmatched-row__fields';
 
+  let tmdbInput;
   if (isServiceEnabled('tmdbEnabled')) {
     const tmdbField = document.createElement('label');
     tmdbField.className = 'unmatched-row__field';
@@ -3136,7 +3139,7 @@ function buildUnmatchedRow(entry, onResolved) {
     tmdbLabel.className = 'unmatched-row__label';
     tmdbLabel.textContent = 'TMDb ID';
 
-    const tmdbInput = document.createElement('input');
+    tmdbInput = document.createElement('input');
     tmdbInput.type = 'text';
     tmdbInput.inputMode = 'numeric';
     tmdbInput.placeholder = 'e.g. 1399';
@@ -3158,6 +3161,8 @@ function buildUnmatchedRow(entry, onResolved) {
     fields.appendChild(tmdbField);
   }
 
+  let librarySelect;
+  let ratingInput;
   if (isServiceEnabled('plexEnabled')) {
     const libraryField = document.createElement('label');
     libraryField.className = 'unmatched-row__field';
@@ -3166,7 +3171,7 @@ function buildUnmatchedRow(entry, onResolved) {
     libraryLabel.className = 'unmatched-row__label';
     libraryLabel.textContent = 'Plex library';
 
-    const librarySelect = document.createElement('select');
+    librarySelect = document.createElement('select');
     librarySelect.innerHTML = '<option value="">Select library</option>';
 
     Object.keys(state.libraries || {}).forEach((library) => {
@@ -3192,7 +3197,7 @@ function buildUnmatchedRow(entry, onResolved) {
     ratingLabel.className = 'unmatched-row__label';
     ratingLabel.textContent = 'Plex rating key';
 
-    const ratingInput = document.createElement('input');
+    ratingInput = document.createElement('input');
     ratingInput.type = 'text';
     ratingInput.placeholder = 'e.g. 12345';
     ratingInput.value = entry.config?.rating_key ?? '';
@@ -3204,6 +3209,124 @@ function buildUnmatchedRow(entry, onResolved) {
 
     ratingField.append(ratingLabel, ratingInput);
     fields.appendChild(ratingField);
+  }
+
+  const applySearchResult = (result) => {
+    const { ids = {} } = result || {};
+
+    if (result?.library && librarySelect) {
+      librarySelect.value = result.library;
+      applyLibraryValue(entry, result.library);
+    }
+
+    if (ids.tmdb_id && tmdbInput) {
+      tmdbInput.value = ids.tmdb_id;
+      applyTmdbValue(entry, tmdbInput.value);
+      statusMessage.hidden = true;
+      tmdbInput.classList.remove('input-error');
+    }
+
+    if (ids.tvdb_id) {
+      const tvdb = Number.parseInt(ids.tvdb_id, 10);
+      entry.config.tvdb_id = Number.isNaN(tvdb) ? ids.tvdb_id : tvdb;
+    }
+
+    if (ids.imdb_id) {
+      entry.config.imdb_id = ids.imdb_id;
+    }
+
+    refreshStatuses();
+  };
+
+  let searchSection = null;
+  if (isServiceEnabled('plexEnabled')) {
+    searchSection = document.createElement('div');
+    searchSection.className = 'unmatched-row__search';
+
+    const searchControls = document.createElement('div');
+    searchControls.className = 'unmatched-row__search-controls';
+
+    const searchInput = document.createElement('input');
+    searchInput.type = 'search';
+    searchInput.placeholder = 'Search Plex...';
+    searchInput.value = entry.name;
+
+    const searchButton = document.createElement('button');
+    searchButton.type = 'button';
+    searchButton.textContent = 'Search Plex';
+
+    const resultsContainer = document.createElement('div');
+    resultsContainer.className = 'search-results unmatched-row__search-results';
+
+    searchControls.append(searchInput, searchButton);
+    searchSection.append(searchControls, resultsContainer);
+
+    const highlightSelection = (element) => {
+      resultsContainer.querySelectorAll('.search-result').forEach((item) => {
+        item.classList.remove('active');
+      });
+      element.classList.add('active');
+    };
+
+    const renderSearchResults = (results) => {
+      resultsContainer.innerHTML = '';
+
+      if (!results.length) {
+        resultsContainer.textContent = 'No results.';
+        return;
+      }
+
+      results.forEach((result) => {
+        const item = document.createElement('div');
+        item.className = 'search-result';
+
+        const summary = document.createElement('div');
+        const title = result.year ? `${result.title} (${result.year})` : result.title;
+        summary.innerHTML = `<h3>${title}</h3><p class="helper-text">${
+          result.library || 'Unknown library'
+        }</p><p class="helper-text">${result.summary || ''}</p>`;
+
+        const select = document.createElement('button');
+        select.textContent = 'Use match';
+        select.addEventListener('click', () => {
+          applySearchResult(result);
+          highlightSelection(item);
+        });
+
+        item.append(summary, select);
+        resultsContainer.appendChild(item);
+      });
+    };
+
+    const performSearch = async () => {
+      const query = searchInput.value.trim();
+      if (!query) {
+        resultsContainer.textContent = 'Enter a search term to find matches.';
+        return;
+      }
+
+      resultsContainer.innerHTML = '<p class="helper-text">Searching…</p>';
+
+      try {
+        const response = await fetch(`/api/plex/search?q=${encodeURIComponent(query)}`);
+        if (!response.ok) {
+          throw new Error('Search failed');
+        }
+        const data = await response.json();
+        renderSearchResults(data.results || []);
+      } catch (error) {
+        resultsContainer.innerHTML = '';
+        resultsContainer.textContent = error.message || 'Search failed';
+      }
+    };
+
+    searchButton.addEventListener('click', performSearch);
+    searchInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        performSearch();
+      }
+    });
   }
 
   const actions = document.createElement('div');
@@ -3224,7 +3347,13 @@ function buildUnmatchedRow(entry, onResolved) {
 
   actions.appendChild(editButton);
 
-  row.append(header, fields, statusMessage, actions);
+  const rowChildren = [header, fields];
+  if (searchSection) {
+    rowChildren.push(searchSection);
+  }
+  rowChildren.push(statusMessage, actions);
+
+  row.append(...rowChildren);
 
   refreshStatuses();
 

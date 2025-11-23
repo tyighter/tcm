@@ -1095,6 +1095,31 @@ button:disabled:hover {
   margin: 0;
 }
 
+.unmatched-row__search {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.unmatched-row__search-controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.unmatched-row__search-controls input[type='search'] {
+  flex: 1;
+  min-width: 220px;
+}
+
+.unmatched-row__search-results {
+  border: 1px dashed var(--border);
+  padding: 0.65rem;
+  border-radius: 10px;
+  background: #fafafa;
+}
+
 /* Modal styling */
 .modal-backdrop {
   position: fixed;
