@@ -83,6 +83,25 @@ class TautulliInterface(WebInterface):
             self.script_timeout = 0
 
 
+    @staticmethod
+    def _show_rating_key(entry: dict[str, Any]) -> Optional[str]:
+        for field in (
+            'grandparent_rating_key',
+            'rating_key',
+            'parent_rating_key',
+        ):
+            value = entry.get(field)
+            if value is None:
+                continue
+
+            try:
+                return str(int(value))
+            except (TypeError, ValueError):
+                continue
+
+        return None
+
+
     def get_recent_activity(
         self,
         series_names: set[str],
@@ -300,6 +319,7 @@ class TautulliInterface(WebInterface):
                         'season_number': entry.get('season'),
                         'episode_number': entry.get('episode'),
                         'tmdb_id': tmdb_id,
+                        'rating_key': self._show_rating_key(entry),
                         'timestamp': timestamp,
                     }
                 )
@@ -400,7 +420,7 @@ class TautulliInterface(WebInterface):
     ) -> None:
         """Write recent Tautulli activity to /config/tautulli.log."""
 
-        log_file = Path('/config/tautulli.log')
+            log_file = Path('/config/tautulli.log')
         try:
             log_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -415,11 +435,15 @@ class TautulliInterface(WebInterface):
                     formatted_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
                     season = entry.get('season')
                     season_label = f" - {season}" if season else ''
+                    rating_key = entry.get('rating_key') or self._show_rating_key(entry)
+                    rating_key_label = (
+                        f" [rating_key={rating_key}]" if rating_key is not None else " [rating_key=?]"
+                    )
                     tmdb_id = entry.get('tmdb_id')
                     tmdb_label = f" [tmdb_id={tmdb_id}]" if tmdb_id is not None else " [tmdb_id=?]"
                     lines.append(
                         f"  {entry.get('series', '')}{season_label} - "
-                        f"{entry.get('episode', '')} @ {formatted_time}{tmdb_label}"
+                        f"{entry.get('episode', '')} @ {formatted_time}{rating_key_label}{tmdb_label}"
                     )
                 return lines
 
