@@ -307,7 +307,13 @@ class TautulliInterface(WebInterface):
             track_unresolved: bool = False,
         ) -> list[dict[str, Any]]:
             if series_filter is not None:
-                series_filter = {name.casefold() for name in series_filter if name}
+                alias_filter: set[str] = set()
+                for name in series_filter:
+                    if not name:
+                        continue
+
+                    alias_filter.update(_series_aliases(name))
+                series_filter = alias_filter
             results: list[dict[str, Any]] = []
             for entry in entries:
                 if apply_user_filter and not _matches_username(entry):
@@ -332,8 +338,10 @@ class TautulliInterface(WebInterface):
                     matches_filter = False
                     if tmdb_filter is not None and tmdb_id in tmdb_filter:
                         matches_filter = True
-                    elif series_filter is not None and series.casefold() in series_filter:
-                        matches_filter = True
+                    elif series_filter is not None:
+                        entry_aliases = _series_aliases(series)
+                        if any(alias in series_filter for alias in entry_aliases):
+                            matches_filter = True
 
                     if not matches_filter:
                         continue
