@@ -2805,7 +2805,7 @@ async function openTautulliRecentModal() {
   const introText = document.createElement('p');
   introText.className = 'helper-text';
   introText.textContent =
-    'Latest watched and added episodes from Tautulli, filtered to the shows configured in tv.yml.';
+    'Watched and added episodes from the last 7 days in Tautulli, filtered to shows configured in tv.yml.';
   intro.appendChild(introText);
 
   const grid = document.createElement('div');

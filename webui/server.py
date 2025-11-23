@@ -445,7 +445,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
             try:
                 tautulli = TautulliInterface(**self.context.preference_parser.tautulli_interface_args)
-                activity = tautulli.get_recent_activity(series_names, limit=5)
+                activity = tautulli.get_recent_activity(series_names, limit=10)
             except SystemExit:
                 self._error(
                     "Unable to connect to Tautulli with the current configuration",
