@@ -441,6 +441,16 @@ async function loadMetadata() {
   state.cardTypeExtras = data.cardTypeExtras || {};
 }
 
+function initializeEntryPreviewState(entry) {
+  if (!entry) {
+    return;
+  }
+  entry.previewEpisode = entry.previewEpisode || 'random';
+  entry.previewEpisodeOptions = entry.previewEpisodeOptions || null;
+  entry.previewEpisodeStatus = entry.previewEpisodeStatus || 'idle';
+  entry.previewEpisodeError = entry.previewEpisodeError || null;
+}
+
 async function loadConfiguration() {
   const response = await fetch('/api/config');
   if (!response.ok) {
@@ -448,11 +458,15 @@ async function loadConfiguration() {
   }
   const data = await response.json();
   state.libraries = data.libraries || {};
-  state.entries = (data.series || []).map((entry, index) => ({
-    id: `${entry.name}-${index}`,
-    name: entry.name,
-    config: entry.config || {},
-  }));
+  state.entries = (data.series || []).map((entry, index) => {
+    const mapped = {
+      id: `${entry.name}-${index}`,
+      name: entry.name,
+      config: entry.config || {},
+    };
+    initializeEntryPreviewState(mapped);
+    return mapped;
+  });
   sortEntries();
   state.collapsedEntries = new Set(state.entries.map((entry) => entry.id));
   syncSavedEntrySnapshots();
@@ -658,12 +672,16 @@ function renderEntry(entry) {
   const container = document.createElement('article');
   container.className = 'entry';
   container.dataset.entryId = entry.id;
+  initializeEntryPreviewState(entry);
 
   const header = document.createElement('div');
   header.className = 'entry-header';
 
   const summary = document.createElement('div');
   summary.className = 'entry-summary';
+
+  const summaryBody = document.createElement('div');
+  summaryBody.className = 'entry-summary__body';
 
   const toggleButton = document.createElement('button');
   toggleButton.type = 'button';
@@ -694,25 +712,13 @@ function renderEntry(entry) {
   logoBackgroundToggle.type = 'button';
   logoBackgroundToggle.className = 'entry-logo-toggle';
 
-  const logoBackgroundLabel = document.createElement('span');
-  logoBackgroundLabel.className = 'entry-logo-toggle__label';
-  logoBackgroundLabel.textContent = 'Logo bg';
-
   const logoBackgroundSwitch = document.createElement('span');
   logoBackgroundSwitch.className = 'entry-logo-toggle__switch';
 
   const logoBackgroundHandle = document.createElement('span');
   logoBackgroundHandle.className = 'entry-logo-toggle__handle';
   logoBackgroundSwitch.append(logoBackgroundHandle);
-
-  const logoBackgroundValue = document.createElement('span');
-  logoBackgroundValue.className = 'entry-logo-toggle__value';
-
-  logoBackgroundToggle.append(
-    logoBackgroundLabel,
-    logoBackgroundSwitch,
-    logoBackgroundValue
-  );
+  logoBackgroundToggle.append(logoBackgroundSwitch);
 
   const syncLogoToggleVisibility = () => {
     logoBackgroundToggle.hidden = logo.classList.contains('entry-logo--missing');
@@ -744,12 +750,12 @@ function renderEntry(entry) {
     const isDarkBackground = getLogoBackgroundPreference(entry.name) === 'dark';
     logo.classList.toggle('entry-logo--dark-surface', isDarkBackground);
     logoBackgroundToggle.dataset.mode = isDarkBackground ? 'dark' : 'light';
-    logoBackgroundValue.textContent = isDarkBackground ? 'Dark' : 'Light';
     logoBackgroundToggle.setAttribute('aria-pressed', String(isDarkBackground));
-    logoBackgroundToggle.setAttribute(
-      'aria-label',
-      isDarkBackground ? 'Switch logo background to light' : 'Switch logo background to dark'
-    );
+    const toggleLabel = isDarkBackground
+      ? 'Switch logo background to light'
+      : 'Switch logo background to dark';
+    logoBackgroundToggle.setAttribute('aria-label', toggleLabel);
+    logoBackgroundToggle.title = toggleLabel;
   };
 
   logoBackgroundToggle.addEventListener('click', () => {
@@ -761,7 +767,7 @@ function renderEntry(entry) {
   syncLogoBackground();
   syncLogoToggleVisibility();
 
-  logoWrapper.append(logo, logoBackgroundToggle);
+  logoWrapper.append(logoBackgroundToggle, logo);
 
   const preview = document.createElement('div');
   preview.className = 'entry-preview';
@@ -816,7 +822,8 @@ function renderEntry(entry) {
   titleContainer.className = 'entry-title';
   titleContainer.appendChild(titleInput);
 
-  summary.append(toggleButton, media, titleContainer);
+  summaryBody.append(titleContainer, media);
+  summary.append(toggleButton, summaryBody);
   syncToggleAppearance();
 
   const actions = document.createElement('div');
@@ -862,9 +869,84 @@ function renderEntry(entry) {
     )
   );
 
+  const previewEpisodeControl = document.createElement('div');
+  previewEpisodeControl.className = 'preview-episode-control';
+
+  const previewEpisodeLabel = document.createElement('span');
+  previewEpisodeLabel.className = 'preview-episode-label';
+  previewEpisodeLabel.textContent = 'Preview episode';
+
+  const previewEpisodeSelect = document.createElement('select');
+  previewEpisodeSelect.className = 'preview-episode-select';
+  previewEpisodeSelect.setAttribute('aria-label', 'Select preview episode');
+
+  const previewEpisodeStatus = document.createElement('span');
+  previewEpisodeStatus.className = 'preview-episode-status helper-text';
+  previewEpisodeStatus.hidden = true;
+  previewEpisodeStatus.addEventListener('click', () => {
+    if (entry.previewEpisodeStatus === 'error') {
+      entry.previewEpisodeStatus = 'idle';
+      syncPreviewEpisodeControls();
+      ensurePreviewEpisodes(entry, syncPreviewEpisodeControls);
+    }
+  });
+
+  const syncPreviewEpisodeControls = () => {
+    previewEpisodeSelect.innerHTML = '';
+
+    const randomOption = document.createElement('option');
+    randomOption.value = 'random';
+    randomOption.textContent = 'Random episode';
+    previewEpisodeSelect.appendChild(randomOption);
+
+    (entry.previewEpisodeOptions || []).forEach((option) => {
+      const choice = document.createElement('option');
+      choice.value = option.key;
+      choice.textContent = option.label || option.key;
+      previewEpisodeSelect.appendChild(choice);
+    });
+
+    previewEpisodeSelect.value = entry.previewEpisode || 'random';
+    if (!previewEpisodeSelect.value) {
+      previewEpisodeSelect.value = 'random';
+    }
+
+    const statusText =
+      entry.previewEpisodeStatus === 'loading'
+        ? 'Loading episodes…'
+        : entry.previewEpisodeStatus === 'error'
+          ? entry.previewEpisodeError || 'Unable to load episodes'
+          : '';
+
+    previewEpisodeStatus.textContent = statusText;
+    previewEpisodeStatus.title =
+      entry.previewEpisodeStatus === 'error' ? 'Click to retry loading episodes' : '';
+    previewEpisodeStatus.hidden = !statusText;
+    previewEpisodeSelect.disabled = entry.previewEpisodeStatus === 'loading';
+  };
+
+  previewEpisodeSelect.addEventListener('change', () => {
+    entry.previewEpisode = previewEpisodeSelect.value || 'random';
+    invalidateEntryPreview(entry);
+    loadEntryPreview(entry);
+  });
+
+  previewEpisodeControl.append(
+    previewEpisodeLabel,
+    previewEpisodeSelect,
+    previewEpisodeStatus
+  );
+
   const previewButton = document.createElement('button');
   previewButton.textContent = 'Preview';
   previewButton.addEventListener('click', () => openPreview(entry));
+
+  const previewControls = document.createElement('div');
+  previewControls.className = 'preview-controls';
+  previewControls.append(previewEpisodeControl, previewButton);
+
+  syncPreviewEpisodeControls();
+  ensurePreviewEpisodes(entry, syncPreviewEpisodeControls);
 
   const deleteButton = document.createElement('button');
   deleteButton.textContent = 'Remove';
@@ -875,7 +957,7 @@ function renderEntry(entry) {
     buildButton,
     revertButton,
     forgetButton,
-    previewButton,
+    previewControls,
     deleteButton
   );
   header.append(summary, actions);
@@ -1061,12 +1143,20 @@ async function loadEntryPreview(entry) {
   const requestId = (entry.previewRequestId || 0) + 1;
   entry.previewRequestId = requestId;
   entry.previewError = null;
+  const previewEpisode =
+    entry.previewEpisode && entry.previewEpisode !== 'random'
+      ? entry.previewEpisode
+      : null;
 
   try {
     const response = await fetch('/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: entry.name, config: entry.config }),
+      body: JSON.stringify({
+        name: entry.name,
+        config: entry.config,
+        previewEpisode,
+      }),
     });
 
     if (!response.ok) {
@@ -1109,6 +1199,53 @@ function requestEntryPreviews(entries = state.entries) {
 function refreshEntryPreviews(entries = state.entries) {
   entries.forEach((entry) => invalidateEntryPreview(entry));
   requestEntryPreviews(entries);
+}
+
+async function fetchPreviewEpisodes(entry, onUpdate) {
+  if (!entry || entry.previewEpisodeStatus === 'loading') {
+    return;
+  }
+
+  entry.previewEpisodeStatus = 'loading';
+  if (onUpdate) {
+    onUpdate();
+  }
+
+  try {
+    const response = await fetch('/api/preview/episodes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: entry.name, config: entry.config }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Unable to load episodes');
+    }
+
+    entry.previewEpisodeOptions = payload.episodes || [];
+    entry.previewEpisodeStatus = 'loaded';
+    entry.previewEpisodeError = null;
+  } catch (error) {
+    entry.previewEpisodeOptions = [];
+    entry.previewEpisodeStatus = 'error';
+    entry.previewEpisodeError = error.message || 'Unable to load episodes';
+  } finally {
+    if (onUpdate) {
+      onUpdate();
+    }
+  }
+}
+
+function ensurePreviewEpisodes(entry, onUpdate) {
+  if (!entry) {
+    return;
+  }
+  if (entry.previewEpisodeStatus === 'loaded' || entry.previewEpisodeStatus === 'error') {
+    return;
+  }
+
+  void fetchPreviewEpisodes(entry, onUpdate);
 }
 
 function isEntryCollapsed(entryId) {
@@ -2800,10 +2937,20 @@ function openPreview(entry) {
   message.textContent = 'Creating preview, please wait...';
   modal.content.appendChild(message);
 
+  const previewEpisode =
+    entry.previewEpisode && entry.previewEpisode !== 'random'
+      ? entry.previewEpisode
+      : null;
+
   fetch('/api/preview', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: entry.name, config: entry.config, force: true }),
+    body: JSON.stringify({
+      name: entry.name,
+      config: entry.config,
+      force: true,
+      previewEpisode,
+    }),
   })
     .then(async (response) => {
       if (!response.ok) {
@@ -3212,6 +3359,7 @@ function openAddEntryModal() {
       name,
       config,
     };
+    initializeEntryPreviewState(newEntry);
     state.entries.push(newEntry);
     setEntryCollapsed(newEntry.id, false);
     state.pendingEntryId = newEntry.id;
@@ -3241,7 +3389,11 @@ function cloneData(value) {
 }
 
 function snapshotEntry(entry) {
-  return { name: entry.name, config: cloneData(entry.config) };
+  return {
+    name: entry.name,
+    config: cloneData(entry.config),
+    previewEpisode: entry.previewEpisode || 'random',
+  };
 }
 
 function deepEqualEntrySnapshots(a, b) {

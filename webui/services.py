@@ -136,10 +136,16 @@ def search_plex(context: AppContext, query: str, limit: int = 10) -> list[dict[s
     return serialised
 
 
-def _preview_cache_key(show_name: str, series_config: dict[str, Any]) -> str:
+def _preview_cache_key(
+    show_name: str,
+    series_config: dict[str, Any],
+    *,
+    preview_episode_key: str | None = None,
+) -> str:
     serialised = json.dumps(_to_builtin(series_config), sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(serialised.encode("utf-8")).hexdigest()
-    return f"{show_name}:{digest}"
+    suffix = preview_episode_key or "random"
+    return f"{show_name}:{digest}:{suffix}"
 
 
 def invalidate_preview_cache(series_name: str | None = None) -> None:
@@ -163,17 +169,28 @@ def get_or_generate_preview(
     series_config: dict[str, Any],
     *,
     force: bool = False,
+    preview_episode_key: str | None = None,
 ) -> tuple[str, str]:
     """Return a cached preview or generate and cache a new one."""
 
-    cache_key = _preview_cache_key(show_name, series_config)
+    cache_key = _preview_cache_key(
+        show_name,
+        series_config,
+        preview_episode_key=preview_episode_key,
+    )
     if not force:
         with _preview_cache_lock:
             cached = _preview_cache.get(cache_key)
         if cached is not None:
             return cached
 
-    mime, data = generate_preview(context, tv_manager, show_name, series_config)
+    mime, data = generate_preview(
+        context,
+        tv_manager,
+        show_name,
+        series_config,
+        preferred_episode_key=preview_episode_key,
+    )
 
     with _preview_cache_lock:
         _preview_cache[cache_key] = (mime, data)
@@ -186,6 +203,8 @@ def generate_preview(
     tv_manager: TvYamlManager,
     show_name: str,
     series_config: dict[str, Any],
+    *,
+    preferred_episode_key: str | None = None,
 ) -> tuple[str, str]:
     """Generate a title card preview, returning (mime, base64_data)."""
 
@@ -228,7 +247,13 @@ def generate_preview(
     if not show.episodes:
         raise RuntimeError("No episodes are available for preview")
 
-    episode = random.choice(list(show.episodes.values()))
+    episode = (
+        show.episodes.get(preferred_episode_key)
+        if preferred_episode_key
+        else None
+    )
+    if episode is None:
+        episode = random.choice(list(show.episodes.values()))
     show.select_source_images(select_only=episode)
 
     if not episode.source.exists():
@@ -267,6 +292,86 @@ def generate_preview(
     rmtree(temp_dir, ignore_errors=True)
 
     return "image/jpeg", base64.b64encode(data).decode("ascii")
+
+
+def list_preview_episodes(
+    context: AppContext,
+    tv_manager: TvYamlManager,
+    show_name: str,
+    series_config: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Return available episodes for preview selection."""
+
+    def _safe_int(value: Any) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    runtime_config = merge_series_configuration(
+        context,
+        tv_manager,
+        show_name,
+        series_config,
+    )
+
+    show = Show(
+        show_name,
+        runtime_config,
+        context.preference_parser.source_directory,
+        context.preference_parser,
+    )
+    if not show.valid:
+        raise RuntimeError("Series configuration is invalid; check required fields")
+
+    manager = Manager(check_tautulli=False)
+    manager.sync_series_files()
+    show.assign_interfaces(
+        manager.emby_interface,
+        manager.jellyfin_interface,
+        manager.plex_interface,
+        manager.sonarr_interfaces,
+        manager.tmdb_interface,
+    )
+
+    show.set_series_ids()
+    show.read_source()
+    show.find_multipart_episodes()
+
+    if not show.episodes:
+        show.add_new_episodes()
+        show.find_multipart_episodes()
+
+    if not show.episodes:
+        raise RuntimeError("No episodes are available for preview")
+
+    sorted_episodes = sorted(
+        show.episodes.values(),
+        key=lambda ep: (
+            _safe_int(ep.episode_info.season_number),
+            _safe_int(ep.episode_info.episode_number),
+        ),
+    )
+
+    options: list[dict[str, Any]] = []
+    for episode in sorted_episodes:
+        info = episode.episode_info
+        season_number = _safe_int(info.season_number)
+        episode_number = _safe_int(info.episode_number)
+        label = f"S{season_number:02d}E{episode_number:02d}"
+        if getattr(info, "title", None):
+            label = f"{label} — {info.title}"
+
+        options.append(
+            {
+                "key": info.key,
+                "label": label,
+                "season": season_number,
+                "episode": episode_number,
+            }
+        )
+
+    return options
 
 
 def _prepare_series_context(
