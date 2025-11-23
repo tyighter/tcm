@@ -87,6 +87,8 @@ class TautulliInterface(WebInterface):
         self,
         series_names: set[str],
         tmdb_ids: set[int],
+        *,
+        series_tmdb_map: Optional[dict[str, int]] = None,
         limit: int = 10,
         days: int = 7,
         username: Optional[str] = None,
@@ -98,6 +100,7 @@ class TautulliInterface(WebInterface):
             tmdb_ids: TMDb IDs present in tv.yml.
             limit: Maximum number of results per category to return.
             days: Restrict results to activity that occurred within this many days.
+            series_tmdb_map: Mapping of series names to TMDb IDs from tv.yml.
 
         Returns:
             Dictionary containing "watched" and "recently_added" lists with
@@ -110,6 +113,11 @@ class TautulliInterface(WebInterface):
 
         cutoff = max(0, int(time.time() - max(0, days) * 24 * 60 * 60))
         filter_username = (username or self.username or "").casefold()
+        series_tmdb_map = {
+            name.casefold(): tmdb_id
+            for name, tmdb_id in (series_tmdb_map or {}).items()
+            if isinstance(tmdb_id, int)
+        }
 
         def _matches_username(entry: dict[str, Any]) -> bool:
             if not filter_username:
@@ -196,6 +204,8 @@ class TautulliInterface(WebInterface):
                     continue
 
                 tmdb_id = _extract_tmdb_id(entry)
+                if tmdb_id is None:
+                    tmdb_id = series_tmdb_map.get(series.casefold())
 
                 if series_filter is not None or tmdb_filter is not None:
                     matches_filter = False
@@ -216,6 +226,8 @@ class TautulliInterface(WebInterface):
                         'series': series,
                         'episode': _episode_title(entry),
                         'season': _season_label(entry),
+                        'season_number': entry.get('season'),
+                        'episode_number': entry.get('episode'),
                         'tmdb_id': tmdb_id,
                         'timestamp': timestamp,
                     }

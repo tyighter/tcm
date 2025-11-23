@@ -445,12 +445,19 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             tv_data = self.tv_manager.load()
             series_entries = tv_data.get("series", {})
             series_names = set(series_entries.keys())
-            tmdb_ids = {
-                int(config.get("tmdb_id"))
-                for config in series_entries.values()
-                if isinstance(config, dict)
-                and str(config.get("tmdb_id", "")).isdigit()
-            }
+            tmdb_ids = set()
+            series_tmdb_map: dict[str, int] = {}
+            for name, config in series_entries.items():
+                if not isinstance(config, dict):
+                    continue
+
+                tmdb_value = config.get("tmdb_id")
+                if not str(tmdb_value).isdigit():
+                    continue
+
+                tmdb_id = int(tmdb_value)
+                tmdb_ids.add(tmdb_id)
+                series_tmdb_map[name] = tmdb_id
 
             params = parse_qs(parsed.query)
             username = params.get("username", [None])[0]
@@ -460,6 +467,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 activity = tautulli.get_recent_activity(
                     series_names,
                     tmdb_ids,
+                    series_tmdb_map=series_tmdb_map,
                     limit=10,
                     username=username,
                 )
