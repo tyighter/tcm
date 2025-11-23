@@ -316,6 +316,17 @@ class TautulliInterface(WebInterface):
                 series_filter = alias_filter
             results: list[dict[str, Any]] = []
             for entry in entries:
+                media_type = str(entry.get('media_type', '')).casefold()
+                metadata_type = entry.get('metadata_type')
+                if media_type and media_type != 'episode':
+                    continue
+                if metadata_type not in (None, 4):
+                    try:
+                        if int(metadata_type) != 4:
+                            continue
+                    except (TypeError, ValueError):
+                        continue
+
                 if apply_user_filter and not _matches_username(entry):
                     continue
 
