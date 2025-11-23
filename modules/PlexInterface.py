@@ -403,6 +403,7 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
                     'year': show.year,
                     'library': library.title,
                     'summary': getattr(show, 'summary', ''),
+                    'rating_key': getattr(show, 'ratingKey', None),
                     'ids': {},
                 }
 

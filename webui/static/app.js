@@ -3226,6 +3226,11 @@ function buildUnmatchedRow(entry, onResolved) {
       tmdbInput.classList.remove('input-error');
     }
 
+    if (result?.rating_key && ratingInput) {
+      ratingInput.value = result.rating_key;
+      applyRatingKeyValue(entry, ratingInput.value);
+    }
+
     if (ids.tvdb_id) {
       const tvdb = Number.parseInt(ids.tvdb_id, 10);
       entry.config.tvdb_id = Number.isNaN(tvdb) ? ids.tvdb_id : tvdb;
@@ -3396,7 +3401,17 @@ function openUnmatchedItemsModal() {
 
   modal.content.append(intro, list);
 
-  modal.footer.appendChild(
+  const saveButton = document.createElement('button');
+  saveButton.type = 'button';
+  saveButton.textContent = 'Save changes';
+  saveButton.addEventListener('click', async () => {
+    saveButton.disabled = true;
+    await saveConfiguration();
+    saveButton.disabled = false;
+  });
+
+  modal.footer.append(
+    saveButton,
     closeButton(() => {
       closeModal(modal.element);
     })
