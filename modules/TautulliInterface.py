@@ -1,4 +1,5 @@
 from json import dumps
+import time
 from pathlib import Path
 from sys import exit as sys_exit
 from typing import Any, Iterable, Optional
@@ -81,12 +82,15 @@ class TautulliInterface(WebInterface):
             self.script_timeout = 0
 
 
-    def get_recent_activity(self, series_names: set[str], limit: int = 5) -> dict[str, list[dict[str, Any]]]:
+    def get_recent_activity(
+        self, series_names: set[str], limit: int = 10, days: int = 7
+    ) -> dict[str, list[dict[str, Any]]]:
         """Return recent watched and added items filtered to configured series.
 
         Args:
             series_names: Names of the series present in tv.yml.
             limit: Maximum number of results per category to return.
+            days: Restrict results to activity that occurred within this many days.
 
         Returns:
             Dictionary containing "watched" and "recently_added" lists with
@@ -96,6 +100,8 @@ class TautulliInterface(WebInterface):
         limit = max(0, limit)
         if limit == 0:
             return {"watched": [], "recently_added": []}
+
+        cutoff = max(0, int(time.time() - max(0, days) * 24 * 60 * 60))
 
         def _timestamp(entry: dict, fields: Iterable[str]) -> int:
             for field in fields:
@@ -129,18 +135,21 @@ class TautulliInterface(WebInterface):
                 if not series or series.casefold() not in series_lookup:
                     continue
 
+                timestamp = _timestamp(entry, timestamp_fields)
+                if timestamp < cutoff:
+                    continue
+
                 results.append(
                     {
                         'series': series,
                         'episode': _episode_title(entry),
                         'season': _season_label(entry),
-                        'timestamp': _timestamp(entry, timestamp_fields),
+                        'timestamp': timestamp,
                     }
                 )
 
-                if len(results) >= limit:
-                    break
-            return results
+            results.sort(key=lambda entry: entry.get('timestamp', 0), reverse=True)
+            return results[:limit]
 
         history_params = self.__params | {
             'cmd': 'get_history',
