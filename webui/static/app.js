@@ -2555,6 +2555,7 @@ function registerFontPreviewFace(path) {
 
 function openFontBrowser(entry, field, input) {
   const modal = buildModal('Select font');
+  addFloatingCloseButton(modal, 'Close font browser');
 
   const pathDisplay = document.createElement('p');
   pathDisplay.className = 'helper-text';
@@ -2662,6 +2663,7 @@ async function uploadFont(file, targetDirectory) {
 
 function openPreview(entry) {
   const modal = buildModal('Generating preview');
+  addFloatingCloseButton(modal, 'Close preview dialog');
   const message = document.createElement('p');
   message.textContent = 'Creating preview, please wait...';
   modal.content.appendChild(message);
@@ -2867,6 +2869,7 @@ async function openTautulliRecentModal() {
 // -----------------------------------------------------------------------------
 function openAddEntryModal() {
   const modal = buildModal('Add series entry');
+  addFloatingCloseButton(modal, 'Close add series dialog');
 
   const form = document.createElement('div');
   form.className = 'modal-form';
