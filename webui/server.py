@@ -468,7 +468,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 rating_key = config.get("rating_key")
                 if rating_key is not None:
                     try:
-                        rating_tmdb_map[str(int(rating_key))] = tmdb_id
+                        rating_tmdb_lookup[int(rating_key)] = tmdb_id
                     except (TypeError, ValueError):
                         pass
                 for alias in _series_aliases(name):
