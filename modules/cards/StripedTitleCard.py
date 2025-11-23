@@ -399,7 +399,17 @@ class StripedTitleCard(BaseCardType):
         # Extras
         self.angle = angle
         self.episode_text_color = episode_text_color
-        self.episode_text_font_size = episode_text_font_size
+        try:
+            self.episode_text_font_size = float(episode_text_font_size)
+        except (TypeError, ValueError) as exc:
+            log.error(
+                'Invalid episode_text_font_size "{episode_text_font_size}" - '
+                'must be numeric: {error}'.format(
+                    episode_text_font_size=episode_text_font_size, error=exc,
+                )
+            )
+            self.episode_text_font_size = 1.0
+            self.valid = False
         self.inset = inset
         self.inter_shape_spacing = inter_stripe_spacing
         self.overlay_color = overlay_color

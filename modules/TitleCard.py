@@ -1,6 +1,8 @@
 from pathlib import Path
 from re import match, sub, IGNORECASE
-from typing import TYPE_CHECKING
+
+import inspect
+from typing import Any, TYPE_CHECKING, get_args, get_origin
 
 from modules import global_objects
 from modules.BaseCardType import BaseCardType
@@ -189,6 +191,8 @@ class TitleCard:
           | self.episode.episode_info.indices \
           | extra_characteristics
 
+        self._coerce_extra_types(kwargs)
+
         try:
             self.maker = self.episode.card_class(**kwargs)
         except Exception as e:
@@ -197,6 +201,106 @@ class TitleCard:
 
         # File associated with this card is the episode's destination
         self.file = episode.destination
+
+    def _coerce_extra_types(self, kwargs: dict[str, Any]) -> None:
+        """Convert extras to expected types based on the card constructor."""
+
+        signature = inspect.signature(self.episode.card_class.__init__)
+
+        for name, param in signature.parameters.items():
+            if name not in kwargs or name in ('self', 'preferences'):
+                continue
+
+            expected_type = self._expected_type(param)
+            if expected_type is None:
+                continue
+
+            value = kwargs[name]
+            if isinstance(value, expected_type):
+                continue
+
+            try:
+                kwargs[name] = self._convert_value(value, expected_type)
+            except (TypeError, ValueError) as exc:
+                log.error(
+                    'Invalid value for %s extra "%s": %r (expected %s) - %s',
+                    self.episode.card_class.__name__,
+                    name,
+                    value,
+                    expected_type.__name__,
+                    exc,
+                )
+                if param.default is not inspect._empty:
+                    kwargs[name] = param.default
+                else:
+                    kwargs.pop(name)
+
+    @staticmethod
+    def _expected_type(param: inspect.Parameter) -> type | None:
+        """Determine whether a parameter expects a basic numeric or bool type."""
+
+        if param.default is inspect._empty:
+            return None
+
+        candidates: set[type] = set()
+
+        annotation = param.annotation
+        origin = get_origin(annotation)
+        args = get_args(annotation) if origin else ()
+
+        def add_candidate(type_: Any) -> None:
+            if type_ in (int, float, bool):
+                candidates.add(type_)
+
+        if origin is not None:
+            for arg in args:
+                add_candidate(arg)
+        else:
+            add_candidate(annotation)
+
+        if not candidates and isinstance(param.default, (int, float, bool)):
+            candidates.add(type(param.default))
+
+        if not candidates:
+            return None
+
+        if float in candidates:
+            return float
+        if int in candidates:
+            return int
+        if bool in candidates:
+            return bool
+
+        return None
+
+    @staticmethod
+    def _convert_value(value: Any, expected_type: type) -> Any:
+        """Safely convert extras to the expected primitive type."""
+
+        if expected_type is float:
+            return float(value)
+
+        if expected_type is int:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return int(float(value))
+
+        if expected_type is bool:
+            if isinstance(value, bool):
+                return value
+
+            if isinstance(value, str):
+                lowered = value.strip().lower()
+                if lowered in ('true', '1', 'yes', 'y', 'on'):  # type: ignore[arg-type]
+                    return True
+                if lowered in ('false', '0', 'no', 'n', 'off'):
+                    return False
+                raise ValueError(f'Cannot interpret {value!r} as boolean')
+
+            return bool(value)
+
+        raise TypeError(f'Unsupported conversion to {expected_type!r}')
 
 
     @staticmethod

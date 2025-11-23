@@ -6,6 +6,7 @@ from modules.BaseCardType import (
     BaseCardType, Dimensions, ImageMagickCommands, Shadow,
 )
 from modules.EpisodeInfo import EpisodeInfo
+from modules.Debug import log
 
 if TYPE_CHECKING:
     from modules.PreferenceParser import PreferenceParser
@@ -128,7 +129,17 @@ class CalligraphyTitleCard(BaseCardType):
         self.episode_text_color = (
             font_color if episode_text_color is None else episode_text_color
         )
-        self.episode_text_font_size = episode_text_font_size
+        try:
+            self.episode_text_font_size = float(episode_text_font_size)
+        except (TypeError, ValueError) as exc:
+            log.error(
+                'Invalid episode_text_font_size "{episode_text_font_size}" - '
+                'must be numeric: {error}'.format(
+                    episode_text_font_size=episode_text_font_size, error=exc,
+                )
+            )
+            self.episode_text_font_size = 1.0
+            self.valid = False
         self.logo_size = logo_size
         self.randomize_texture = randomize_texture
         self.separator = separator

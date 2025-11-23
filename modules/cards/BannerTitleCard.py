@@ -114,7 +114,17 @@ class BannerTitleCard(BaseCardType):
         # Optional extras
         self.alternate_color = alternate_color
         self.banner_height = banner_height
-        self.episode_text_font_size = episode_text_font_size
+        try:
+            self.episode_text_font_size = float(episode_text_font_size)
+        except (TypeError, ValueError) as exc:
+            log.error(
+                'Invalid episode_text_font_size "{episode_text_font_size}" - '
+                'must be numeric: {error}'.format(
+                    episode_text_font_size=episode_text_font_size, error=exc,
+                )
+            )
+            self.episode_text_font_size = 1.0
+            self.valid = False
         self.hide_banner = hide_banner
         self.banner_color = banner_color
         self.x_offset = x_offset
