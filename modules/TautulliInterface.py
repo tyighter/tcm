@@ -146,8 +146,11 @@ class TautulliInterface(WebInterface):
             entries: list[dict],
             timestamp_fields: Iterable[str],
             apply_user_filter: bool = True,
+            series_filter: Optional[set[str]] = None,
+            limit_results: Optional[int] = None,
         ) -> list[dict[str, Any]]:
-            series_lookup = {name.casefold() for name in series_names if name}
+            if series_filter is not None:
+                series_filter = {name.casefold() for name in series_filter if name}
             results: list[dict[str, Any]] = []
             for entry in entries:
                 if apply_user_filter and not _matches_username(entry):
@@ -159,7 +162,10 @@ class TautulliInterface(WebInterface):
                     or entry.get('title')
                     or ''
                 )
-                if not series or series.casefold() not in series_lookup:
+                if not series:
+                    continue
+
+                if series_filter is not None and series.casefold() not in series_filter:
                     continue
 
                 timestamp = _timestamp(entry, timestamp_fields)
@@ -176,7 +182,7 @@ class TautulliInterface(WebInterface):
                 )
 
             results.sort(key=lambda entry: entry.get('timestamp', 0), reverse=True)
-            return results[:limit]
+            return results[:limit_results] if limit_results is not None else results
 
         history_params = self.__params | {
             'cmd': 'get_history',
@@ -203,18 +209,96 @@ class TautulliInterface(WebInterface):
         if not isinstance(recently_added_entries, list):
             recently_added_entries = []
 
-        return {
+        raw_watched = _normalize(
+            history_entries,
+            ('watched_at', 'date', 'started', 'last_played'),
+            apply_user_filter=True,
+            series_filter=None,
+            limit_results=None,
+        )
+        raw_recently_added = _normalize(
+            recently_added_entries,
+            ('added_at', 'date', 'added'),
+            apply_user_filter=False,
+            series_filter=None,
+            limit_results=None,
+        )
+
+        activity = {
             'watched': _normalize(
                 history_entries,
                 ('watched_at', 'date', 'started', 'last_played'),
                 apply_user_filter=True,
+                series_filter=series_names,
+                limit_results=limit,
             ),
             'recently_added': _normalize(
                 recently_added_entries,
                 ('added_at', 'date', 'added'),
                 apply_user_filter=False,
+                series_filter=series_names,
+                limit_results=limit,
             ),
         }
+
+        self._write_activity_log(
+            username=filter_username or 'all',
+            days=days,
+            raw_watched=raw_watched,
+            raw_recently_added=raw_recently_added,
+            filtered_watched=activity['watched'],
+            filtered_recently_added=activity['recently_added'],
+        )
+
+        return activity
+
+
+    def _write_activity_log(
+        self,
+        *,
+        username: str,
+        days: int,
+        raw_watched: list[dict[str, Any]],
+        raw_recently_added: list[dict[str, Any]],
+        filtered_watched: list[dict[str, Any]],
+        filtered_recently_added: list[dict[str, Any]],
+    ) -> None:
+        """Write recent Tautulli activity to /config/tautulli.log."""
+
+        log_file = Path('/config/tautulli.log')
+        try:
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+
+            def _write_section(label: str, entries: list[dict[str, Any]]) -> list[str]:
+                lines: list[str] = [label]
+                if not entries:
+                    lines.append('  (none)')
+                    return lines
+
+                for entry in entries:
+                    timestamp = entry.get('timestamp', 0)
+                    formatted_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
+                    season = entry.get('season')
+                    season_label = f" - {season}" if season else ''
+                    lines.append(
+                        f"  {entry.get('series', '')}{season_label} - "
+                        f"{entry.get('episode', '')} @ {formatted_time}"
+                    )
+                return lines
+
+            log_lines = [
+                f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Recent activity (user={username}, days={days})",
+                * _write_section('Watched within window (all shows):', raw_watched),
+                * _write_section('Recently added within window (all shows):', raw_recently_added),
+                * _write_section('Filtered watched returned to app:', filtered_watched),
+                * _write_section('Filtered recently added returned to app:', filtered_recently_added),
+                '',
+            ]
+
+            with log_file.open('a', encoding='utf-8') as file_handle:
+                file_handle.write('\n'.join(log_lines) + '\n')
+        except Exception as exc:  # pylint: disable=broad-except
+            log.error(f'Failed to write Tautulli recent activity log: {exc}')
 
 
     def get_users(self) -> list[dict[str, Any]]:
