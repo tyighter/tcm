@@ -15,11 +15,15 @@ from shutil import rmtree
 from threading import Lock
 from typing import Any, Callable
 
+from ruamel.yaml.comments import CommentedMap
+
 from modules.CleanPath import CleanPath
 from modules.Manager import Manager
 from modules.Show import Show
 from modules.ShowArchive import ShowArchive
 from modules.TitleCard import TitleCard
+from modules.SeriesInfo import SeriesInfo
+from modules.TMDbInterface import TMDbInterface
 
 from .config import AppContext
 from .tv_data import TvYamlManager, _to_builtin
@@ -70,6 +74,46 @@ def merge_series_configuration(
         raise ValueError("Unable to resolve libraries or fonts for series")
 
     return merged
+
+
+def backfill_tmdb_ids(context: AppContext, tv_manager: TvYamlManager) -> dict[str, int]:
+    """Populate missing TMDb IDs for configured series and persist the changes."""
+
+    if not context.preference_parser.use_tmdb:
+        raise RuntimeError("TMDb is not configured in preferences.yml")
+
+    tmdb = TMDbInterface(**context.preference_parser.tmdb_interface_kwargs)
+    tv_data = tv_manager.load()
+
+    series_entries = tv_data.get("series", CommentedMap())
+    updated = 0
+    processed = 0
+
+    payload = {"libraries": _to_builtin(tv_data.get("libraries", CommentedMap())), "series": []}
+
+    for name, raw_config in series_entries.items():
+        processed += 1
+        config = _to_builtin(raw_config)
+
+        if not config.get("tmdb_id"):
+            try:
+                series_info = SeriesInfo(name)
+            except Exception:
+                series_info = None
+
+            if series_info is not None:
+                tmdb.set_series_ids(None, series_info)
+                if series_info.tmdb_id:
+                    config["tmdb_id"] = series_info.tmdb_id
+                    updated += 1
+
+        payload["series"].append({"name": name, "config": config})
+
+    if updated:
+        tv_manager.write(payload)
+        tv_manager.invalidate()
+
+    return {"updated": updated, "total": processed}
 
 
 def search_plex(context: AppContext, query: str, limit: int = 10) -> list[dict[str, Any]]:

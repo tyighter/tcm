@@ -28,6 +28,7 @@ from .services import (
     get_or_generate_preview,
     invalidate_preview_cache,
     run_asset_downloads,
+    backfill_tmdb_ids,
     run_builder,
     run_builder_for_series,
     run_metadata_sync,
@@ -610,6 +611,17 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/actions/sync":
             self._run_manager_action(run_metadata_sync, context="metadata-sync")
+            return
+
+        if parsed.path == "/api/actions/match-tmdb":
+            try:
+                result = backfill_tmdb_ids(self.context, self.tv_manager)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.exception("Failed to backfill TMDb IDs")
+                self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
+                return
+
+            self._json_response({"status": "ok"} | result)
             return
 
         if parsed.path == "/api/actions/build":
