@@ -176,6 +176,10 @@ class Show(YamlReader):
         self.logo = self.source_directory / 'logo.png'
         self.backdrop = self.source_directory / self.BACKDROP_FILENAME
 
+        if self.media_directory is None:
+            default_media_directory = Path('/config/TV_Shows') / self.series_info.full_clean_name
+            self.media_directory = default_media_directory
+
         # Create DataFileInterface for this show
         self.file_interface = DataFileInterface(
             self.series_info,
