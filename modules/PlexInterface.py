@@ -245,6 +245,36 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
 
         return None
 
+    @catch_and_log('Error looking up TMDb ID from rating key')
+    def lookup_tmdb_id_from_rating_key(self, rating_key: int) -> Optional[int]:
+        """Return a TMDb ID for the Plex item referenced by the rating key."""
+
+        entry = self.__server.fetchItem(rating_key)
+        tmdb_regex = re_compile(r'tmdb[^0-9]*([0-9]+)', IGNORECASE)
+
+        guids = list(getattr(entry, 'guids', []) or [])
+        if getattr(entry, 'guid', None) is not None:
+            guids.append(entry.guid)
+
+        for guid in guids:
+            guid_value = getattr(guid, 'id', None) or getattr(guid, 'guid', None) or guid
+            if guid_value is None:
+                continue
+
+            try:
+                guid_str = str(guid_value)
+            except Exception:
+                continue
+
+            if (match := tmdb_regex.search(guid_str)) is not None:
+                try:
+                    return int(match.group(1))
+                except (TypeError, ValueError):
+                    continue
+
+        return None
+
+
     @catch_and_log('Error getting library paths', default={})
     def get_library_paths(self,
             filter_libraries: list[str] = [],
