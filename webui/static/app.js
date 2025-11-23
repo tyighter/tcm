@@ -24,7 +24,6 @@ const dom = {
   collapseAll: document.getElementById('collapse-all-entries'),
   downloadSources: document.getElementById('download-sources'),
   runBuilder: document.getElementById('run-builder'),
-  matchTmdb: document.getElementById('match-tmdb'),
   tautulliRecent: document.getElementById('tautulli-recent'),
   modals: document.getElementById('modals'),
 };
@@ -546,21 +545,6 @@ function registerEvents() {
           onSuccess: () => refreshEntryPreviews(),
         }
       )
-    );
-  }
-
-  if (dom.matchTmdb) {
-    dom.matchTmdb.addEventListener('click', () =>
-      triggerServerAction(dom.matchTmdb, '/api/actions/match-tmdb', 'Matched TMDb IDs', {
-        workingLabel: 'Matching...',
-        onSuccess: (payload) => {
-          const updated = Number(payload?.updated || 0);
-          const total = Number(payload?.total || 0);
-          if (total) {
-            showToast(`Updated TMDb IDs for ${updated} of ${total} series`, 'success');
-          }
-        },
-      })
     );
   }
 
