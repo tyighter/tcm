@@ -2838,6 +2838,27 @@ async function openTautulliRecentModal() {
     'Watched and added episodes from the last 7 days in Tautulli, filtered to shows configured in tv.yml.';
   intro.appendChild(introText);
 
+  const controls = document.createElement('div');
+  controls.className = 'modal-controls';
+
+  const userField = document.createElement('label');
+  userField.className = 'modal-controls__field';
+
+  const userLabel = document.createElement('span');
+  userLabel.className = 'modal-controls__label';
+  userLabel.textContent = 'Plex user';
+
+  const userSelect = document.createElement('select');
+  userSelect.className = 'modal-select';
+  userSelect.innerHTML = '<option value="">All users</option>';
+
+  const userStatus = document.createElement('p');
+  userStatus.className = 'modal-controls__status helper-text';
+  userStatus.textContent = 'Loading Plex users…';
+
+  userField.append(userLabel, userSelect, userStatus);
+  controls.appendChild(userField);
+
   const grid = document.createElement('div');
   grid.className = 'modal-activity-grid';
 
@@ -2855,43 +2876,97 @@ async function openTautulliRecentModal() {
 
   grid.append(watchedSection.section, addedSection.section);
 
-  modal.content.append(intro, grid);
+  modal.content.append(intro, controls, grid);
   modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
 
-  try {
-    const response = await fetch('/api/tautulli/recent');
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(payload.error || 'Unable to load recent activity from Tautulli');
+  const setLoadingState = () => {
+    renderActivityList(watchedSection.list, [], 'Loading recent watches...', 'Watched');
+    renderActivityList(addedSection.list, [], 'Loading recently added episodes...', 'Added');
+  };
+
+  const loadActivity = async () => {
+    setLoadingState();
+
+    const username = userSelect.value;
+    const query = username ? `?username=${encodeURIComponent(username)}` : '';
+
+    try {
+      const response = await fetch(`/api/tautulli/recent${query}`);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to load recent activity from Tautulli');
+      }
+
+      renderActivityList(
+        watchedSection.list,
+        payload.watched,
+        'No watched episodes found for your configured series.',
+        'Watched on'
+      );
+      renderActivityList(
+        addedSection.list,
+        payload.recently_added,
+        'No recent additions found for your configured series.',
+        'Added on'
+      );
+    } catch (error) {
+      renderActivityList(
+        watchedSection.list,
+        [],
+        'Unable to load watched episodes right now.',
+        'Watched on'
+      );
+      renderActivityList(
+        addedSection.list,
+        [],
+        'Unable to load recent additions right now.',
+        'Added on'
+      );
+      showToast(error.message || 'Failed to load Tautulli activity', 'error');
+    }
+  };
+
+  const populateUsers = (users, defaultUser) => {
+    userSelect.innerHTML = '<option value="">All users</option>';
+    users.forEach((user) => {
+      const option = document.createElement('option');
+      option.value = user.username;
+      option.textContent = user.friendly_name || user.username;
+      userSelect.appendChild(option);
+    });
+
+    if (defaultUser) {
+      userSelect.value = defaultUser;
     }
 
-    renderActivityList(
-      watchedSection.list,
-      payload.watched,
-      'No watched episodes found for your configured series.',
-      'Watched on'
-    );
-    renderActivityList(
-      addedSection.list,
-      payload.recently_added,
-      'No recent additions found for your configured series.',
-      'Added on'
-    );
-  } catch (error) {
-    renderActivityList(
-      watchedSection.list,
-      [],
-      'Unable to load watched episodes right now.',
-      'Watched on'
-    );
-    renderActivityList(
-      addedSection.list,
-      [],
-      'Unable to load recent additions right now.',
-      'Added on'
-    );
-    showToast(error.message || 'Failed to load Tautulli activity', 'error');
-  }
+    userStatus.textContent =
+      'Select a Plex user to filter watched history. Recently added items show all users.';
+  };
+
+  const loadUsers = async () => {
+    userSelect.disabled = true;
+    userStatus.textContent = 'Loading Plex users…';
+
+    try {
+      const response = await fetch('/api/tautulli/users');
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to load Plex users from Tautulli');
+      }
+
+      populateUsers(payload.users || [], payload.default || '');
+    } catch (error) {
+      userStatus.textContent = error.message || 'Unable to load Plex users right now.';
+      showToast(error.message || 'Failed to load Plex users', 'error');
+    } finally {
+      userSelect.disabled = false;
+    }
+  };
+
+  userSelect.addEventListener('change', loadActivity);
+
+  await loadUsers().catch(() => {});
+  await loadActivity();
 }
 
 // -----------------------------------------------------------------------------

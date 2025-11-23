@@ -443,9 +443,12 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             tv_data = self.tv_manager.load()
             series_names = set(tv_data.get("series", {}).keys())
 
+            params = parse_qs(parsed.query)
+            username = params.get("username", [None])[0]
+
             try:
                 tautulli = TautulliInterface(**self.context.preference_parser.tautulli_interface_args)
-                activity = tautulli.get_recent_activity(series_names, limit=10)
+                activity = tautulli.get_recent_activity(series_names, limit=10, username=username)
             except SystemExit:
                 self._error(
                     "Unable to connect to Tautulli with the current configuration",
@@ -458,6 +461,31 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             self._json_response(activity)
+            return
+
+        if parsed.path == "/api/tautulli/users":
+            if not self.context.preference_parser.use_tautulli:
+                self._error("Tautulli is not configured in preferences.yml", status=HTTPStatus.BAD_REQUEST)
+                return
+
+            try:
+                tautulli = TautulliInterface(**self.context.preference_parser.tautulli_interface_args)
+                users = tautulli.get_users()
+            except SystemExit:
+                self._error(
+                    "Unable to connect to Tautulli with the current configuration",
+                    status=HTTPStatus.BAD_GATEWAY,
+                )
+                return
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.exception("Failed to fetch Tautulli users")
+                self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
+                return
+
+            self._json_response({
+                "users": users,
+                "default": self.context.preference_parser.tautulli_username,
+            })
             return
 
         if parsed.path == "/api/fonts":
