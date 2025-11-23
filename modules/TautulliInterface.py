@@ -455,7 +455,7 @@ class TautulliInterface(WebInterface):
     ) -> None:
         """Write recent Tautulli activity to /config/tautulli.log."""
 
-            log_file = Path('/config/tautulli.log')
+        log_file = Path('/config/tautulli.log')
         try:
             log_file.parent.mkdir(parents=True, exist_ok=True)
 
