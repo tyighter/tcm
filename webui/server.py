@@ -549,7 +549,6 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     rating_tmdb_lookup=rating_tmdb_lookup,
                     rating_key_lookup=rating_key_lookup,
                     persist_rating_tmdb_lookup=persist_lookup,
-                    limit=10,
                     username=username,
                 )
             except SystemExit:
