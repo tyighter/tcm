@@ -303,31 +303,68 @@ def _load_show_for_preview(
     return show
 
 
+def _existing_card_path(show: Show, episode: Episode | None) -> Path | None:
+    if episode is None:
+        return None
+
+    if episode.destination is not None and episode.destination.exists():
+        return episode.destination
+
+    if not show.media_directory:
+        return None
+
+    season_dir = Path(show.media_directory) / f"Season {episode.episode_info.season_number}"
+    try:
+        if not season_dir.exists() or not season_dir.is_dir():
+            return None
+    except OSError:
+        return None
+
+    candidates: list[Path] = []
+    for pattern in ("*.jpg", "*.jpeg", "*.png", "*.webp"):
+        candidates.extend(sorted(season_dir.glob(pattern)))
+
+    if not candidates:
+        return None
+
+    episode_pattern = re.compile(
+        rf"(?i)(s0*{episode.episode_info.season_number}e0*{episode.episode_info.episode_number}|"
+        rf"{episode.episode_info.season_number}x0*{episode.episode_info.episode_number})"
+    )
+
+    matching = [
+        candidate
+        for candidate in candidates
+        if episode_pattern.search(candidate.name)
+    ]
+
+    return (matching or candidates)[0]
+
+
 def _preview_from_existing_sources(
     show: Show, preferred_episode_key: str | None
 ) -> tuple[str, str] | None:
-    if preferred_episode_key:
-        episode = show.episodes.get(preferred_episode_key)
-        if (
-            episode is None
-            or episode.destination is None
-            or not episode.destination.exists()
-        ):
-            return None
+    preferred_episode = (
+        show.episodes.get(preferred_episode_key) if preferred_episode_key else None
+    )
+    preferred_card = _existing_card_path(show, preferred_episode)
+
+    available_cards = [
+        (episode, _existing_card_path(show, episode))
+        for episode in show.episodes.values()
+    ]
+    available_cards = [item for item in available_cards if item[1] is not None]
+
+    if preferred_card is not None:
+        selected_card = preferred_card
+    elif available_cards:
+        _, selected_card = random.choice(available_cards)
     else:
-        available = [
-            episode
-            for episode in show.episodes.values()
-            if episode.destination is not None and episode.destination.exists()
-        ]
-        if not available:
-            return None
+        return None
 
-        episode = random.choice(available)
-
-    mime, _ = mimetypes.guess_type(episode.destination.name)
+    mime, _ = mimetypes.guess_type(selected_card.name)
     mime = mime or "image/jpeg"
-    data = base64.b64encode(episode.destination.read_bytes()).decode("ascii")
+    data = base64.b64encode(selected_card.read_bytes()).decode("ascii")
     return mime, data
 
 
