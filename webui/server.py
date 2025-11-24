@@ -704,6 +704,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     config,
                     force=force_refresh,
                     preview_episode_key=preview_episode_key,
+                    prefer_existing=payload.get("preferExisting", True),
                 )
             except Exception as exc:  # pylint: disable=broad-except
                 self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
