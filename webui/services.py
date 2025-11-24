@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import mimetypes
 import random
 import re
@@ -35,9 +36,40 @@ class ActionInProgressError(RuntimeError):
     """Raised when a long-running Manager action is already in progress."""
 
 
+logger = logging.getLogger(__name__)
+
 _action_lock = Lock()
 _preview_cache_lock = Lock()
 _preview_cache: dict[str, tuple[str, str]] = {}
+_sync_lock = Lock()
+_last_sync: float = 0.0
+_SYNC_COOLDOWN_SECONDS = 45.0
+
+
+def _maybe_sync_series_files(
+    manager: Manager, *, force: bool = False, cooldown_seconds: float = _SYNC_COOLDOWN_SECONDS
+) -> bool:
+    """Run ``manager.sync_series_files`` unless a recent sync was performed."""
+
+    global _last_sync
+
+    if not force:
+        now = time.monotonic()
+        with _sync_lock:
+            if _last_sync and (now - _last_sync) < cooldown_seconds:
+                logger.debug(
+                    "Skipping series sync; last run %.1fs ago (cooldown %.1fs)",
+                    now - _last_sync,
+                    cooldown_seconds,
+                )
+                return False
+
+    manager.sync_series_files()
+
+    with _sync_lock:
+        _last_sync = time.monotonic()
+
+    return True
 
 
 def merge_series_configuration(
@@ -226,6 +258,8 @@ def _load_show_for_preview(
     tv_manager: TvYamlManager,
     show_name: str,
     series_config: dict[str, Any],
+    *,
+    force_sync: bool = False,
 ) -> Show:
     runtime_config = merge_series_configuration(
         context,
@@ -244,7 +278,7 @@ def _load_show_for_preview(
         raise RuntimeError("Series configuration is invalid; check required fields")
 
     manager = Manager(check_tautulli=False)
-    manager.sync_series_files()
+    _maybe_sync_series_files(manager, force=force_sync)
     show.assign_interfaces(
         manager.emby_interface,
         manager.jellyfin_interface,
@@ -488,6 +522,8 @@ def run_builder_for_series(
     tv_manager: TvYamlManager,
     series_name: str,
     series_config: dict[str, Any] | None = None,
+    *,
+    force_sync: bool = False,
 ) -> None:
     """Run the builder pipeline for a single series."""
 
@@ -508,7 +544,7 @@ def run_builder_for_series(
         raise RuntimeError("Series configuration is invalid; check required fields")
 
     def _run(manager: Manager) -> None:
-        manager.sync_series_files()
+        _maybe_sync_series_files(manager, force=force_sync)
         manager.shows = [show]
         manager.archives = []
 
@@ -528,6 +564,7 @@ def download_logo_for_series(
     series_name: str,
     series_config: dict[str, Any] | None = None,
     *,
+    force_sync: bool = False,
     max_wait_attempts: int = 6,
     wait_interval: float = 0.5,
 ) -> None:
@@ -558,7 +595,7 @@ def download_logo_for_series(
     )
 
     def _run(manager: Manager) -> None:
-        manager.sync_series_files()
+        _maybe_sync_series_files(manager, force=force_sync)
         show.assign_interfaces(
             manager.emby_interface,
             manager.jellyfin_interface,
@@ -669,10 +706,10 @@ def _run_manager_job(task: Callable[[Manager], None]) -> None:
         _action_lock.release()
 
 
-def run_metadata_sync() -> None:
+def run_metadata_sync(*, force_sync: bool = False) -> None:
     """Trigger only the metadata sync step."""
 
-    _run_manager_job(lambda manager: manager.sync_series_files())
+    _run_manager_job(lambda manager: _maybe_sync_series_files(manager, force=force_sync))
 
 
 def run_builder() -> None:
