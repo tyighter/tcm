@@ -305,7 +305,19 @@ class TautulliInterface(WebInterface):
             tmdb_filter: Optional[set[int]] = None,
             limit_results: Optional[int] = None,
             track_unresolved: bool = False,
+            media_types: Optional[Iterable[str]] = None,
+            metadata_types: Optional[Iterable[int]] = None,
         ) -> list[dict[str, Any]]:
+            allowed_media_types = (
+                {media_type.casefold() for media_type in media_types if media_type}
+                if media_types is not None
+                else None
+            )
+            allowed_metadata_types = (
+                {int(metadata_type) for metadata_type in metadata_types}
+                if metadata_types is not None
+                else None
+            )
             if series_filter is not None:
                 alias_filter: set[str] = set()
                 for name in series_filter:
@@ -318,11 +330,11 @@ class TautulliInterface(WebInterface):
             for entry in entries:
                 media_type = str(entry.get('media_type', '')).casefold()
                 metadata_type = entry.get('metadata_type')
-                if media_type and media_type != 'episode':
+                if allowed_media_types is not None and media_type not in allowed_media_types:
                     continue
-                if metadata_type not in (None, 4):
+                if allowed_metadata_types is not None and metadata_type is not None:
                     try:
-                        if int(metadata_type) != 4:
+                        if int(metadata_type) not in allowed_metadata_types:
                             continue
                     except (TypeError, ValueError):
                         continue
@@ -395,7 +407,7 @@ class TautulliInterface(WebInterface):
 
         recently_added_params = self.__params | {
             'cmd': 'get_recently_added',
-            'media_type': 'episode',
+            'media_type': 'show',
             'order_dir': 'desc',
             'length': limit * 10,
         }
@@ -414,6 +426,8 @@ class TautulliInterface(WebInterface):
             tmdb_filter=None,
             limit_results=None,
             track_unresolved=True,
+            media_types={'episode'},
+            metadata_types={4},
         )
         raw_recently_added = _normalize(
             recently_added_entries,
@@ -423,6 +437,8 @@ class TautulliInterface(WebInterface):
             tmdb_filter=None,
             limit_results=None,
             track_unresolved=True,
+            media_types={'show'},
+            metadata_types={2},
         )
 
         activity = {
@@ -433,6 +449,8 @@ class TautulliInterface(WebInterface):
                 series_filter=series_names,
                 tmdb_filter=tmdb_ids,
                 limit_results=limit,
+                media_types={'episode'},
+                metadata_types={4},
             ),
             'recently_added': _normalize(
                 recently_added_entries,
@@ -441,6 +459,8 @@ class TautulliInterface(WebInterface):
                 series_filter=series_names,
                 tmdb_filter=tmdb_ids,
                 limit_results=limit,
+                media_types={'show'},
+                metadata_types={2},
             ),
         }
 
