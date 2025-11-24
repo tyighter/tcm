@@ -437,8 +437,8 @@ class TautulliInterface(WebInterface):
             tmdb_filter=None,
             limit_results=None,
             track_unresolved=True,
-            media_types={'show'},
-            metadata_types={2},
+            media_types={'show', 'episode'},
+            metadata_types={2, 4},
         )
 
         activity = {
@@ -459,8 +459,8 @@ class TautulliInterface(WebInterface):
                 series_filter=series_names,
                 tmdb_filter=tmdb_ids,
                 limit_results=limit,
-                media_types={'show'},
-                metadata_types={2},
+                media_types={'show', 'episode'},
+                metadata_types={2, 4},
             ),
         }
 
