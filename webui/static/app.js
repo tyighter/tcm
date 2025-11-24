@@ -785,7 +785,7 @@ function renderEntry(entry) {
 
   const previewPlaceholder = document.createElement('span');
   previewPlaceholder.className = 'entry-preview__placeholder';
-  previewPlaceholder.textContent = 'Generating preview...';
+  previewPlaceholder.textContent = 'Loading preview...';
 
   if (entry.previewSrc) {
     previewImage.src = entry.previewSrc;
@@ -1117,7 +1117,7 @@ function updateEntryPreview(entry) {
   }
 
   if (!entry.previewError && placeholder) {
-    placeholder.textContent = 'Generating preview...';
+    placeholder.textContent = 'Loading preview...';
   }
 
   if (entry.previewError && placeholder) {
