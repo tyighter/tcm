@@ -412,7 +412,7 @@ class TautulliInterface(WebInterface):
 
         recently_added_params = self.__params | {
             'cmd': 'get_recently_added',
-            'media_type': 'show',
+            'media_type': 'episode',
             'order_dir': 'desc',
             'length': fetch_length,
         }
@@ -420,6 +420,12 @@ class TautulliInterface(WebInterface):
         recently_added_entries = recently_added_response.get('response', {}).get('data', {})
         if isinstance(recently_added_entries, dict):
             recently_added_entries = recently_added_entries.get('recently_added', [])
+        if not isinstance(recently_added_entries, list) or not recently_added_entries:
+            fallback_params = recently_added_params | {'media_type': 'show'}
+            recently_added_response = self.get(self.url, fallback_params)
+            recently_added_entries = recently_added_response.get('response', {}).get('data', {})
+            if isinstance(recently_added_entries, dict):
+                recently_added_entries = recently_added_entries.get('recently_added', [])
         if not isinstance(recently_added_entries, list):
             recently_added_entries = []
 
