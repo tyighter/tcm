@@ -8,6 +8,7 @@ from cgi import FieldStorage
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
 import time
 from typing import Callable
 from urllib.parse import parse_qs, urlparse
@@ -17,6 +18,7 @@ from modules.TautulliInterface import TautulliInterface
 from .card_type_images import (
     DEFAULT_THUMBNAIL_SLUG_MAP,
     REPO_THUMBNAIL_ROOT,
+    load_card_type_thumbnails,
     prepare_thumbnail_from_config,
     slugify_card_type,
 )
@@ -901,7 +903,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         return candidate
 
-    def _resolve_font_file(self, raw_path: str) -> Path | None:
+def _resolve_font_file(self, raw_path: str) -> Path | None:
         """Resolve a font file path ensuring it stays within the font directory."""
 
         if not raw_path:
@@ -926,33 +928,51 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         return candidate
 
 
+def _run_startup_tasks_async(context: AppContext, tv_manager: TvYamlManager) -> Thread:
+    """Launch background work that should not block server startup."""
+
+    def _task() -> None:
+        if context.preference_parser.use_tmdb:
+            try:
+                result = backfill_tmdb_ids(context, tv_manager)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.warning("Unable to backfill TMDb IDs on startup: %s", exc)
+            else:
+                updated = result.get("updated", 0)
+                total = result.get("total", 0)
+                if updated:
+                    logger.info("Updated TMDb IDs for %s of %s series", updated, total)
+
+        if context.preference_parser.use_plex:
+            try:
+                result = backfill_rating_keys(context, tv_manager)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.warning("Unable to backfill Plex rating keys on startup: %s", exc)
+            else:
+                updated = result.get("updated", 0)
+                total = result.get("total", 0)
+                if updated:
+                    logger.info("Updated Plex rating keys for %s of %s series", updated, total)
+
+        try:
+            thumbnails = load_card_type_thumbnails()
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning("Unable to prefetch card type thumbnails: %s", exc)
+        else:
+            logger.info("Prefetched %d card type thumbnails", len(thumbnails))
+
+    thread = Thread(target=_task, name="startup-tasks", daemon=True)
+    thread.start()
+    return thread
+
+
 def run(port: int = 4343) -> None:
     _configure_logging()
 
     context = create_app_context()
     tv_manager = TvYamlManager(context.default_tv_file)
 
-    if context.preference_parser.use_tmdb:
-        try:
-            result = backfill_tmdb_ids(context, tv_manager)
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.warning("Unable to backfill TMDb IDs on startup: %s", exc)
-        else:
-            updated = result.get("updated", 0)
-            total = result.get("total", 0)
-            if updated:
-                logger.info("Updated TMDb IDs for %s of %s series", updated, total)
-
-    if context.preference_parser.use_plex:
-        try:
-            result = backfill_rating_keys(context, tv_manager)
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.warning("Unable to backfill Plex rating keys on startup: %s", exc)
-        else:
-            updated = result.get("updated", 0)
-            total = result.get("total", 0)
-            if updated:
-                logger.info("Updated Plex rating keys for %s of %s series", updated, total)
+    _run_startup_tasks_async(context, tv_manager)
 
     WebRequestHandler.context = context
     WebRequestHandler.tv_manager = tv_manager
