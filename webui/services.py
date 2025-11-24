@@ -376,6 +376,7 @@ def get_or_generate_preview(
     *,
     force: bool = False,
     preview_episode_key: str | None = None,
+    prefer_existing: bool = True,
 ) -> tuple[str, str]:
     """Return a cached preview or generate and cache a new one."""
 
@@ -392,7 +393,11 @@ def get_or_generate_preview(
 
     show = _load_show_for_preview(context, tv_manager, show_name, series_config)
 
-    preview_from_source = _preview_from_existing_sources(show, preview_episode_key)
+    preview_from_source = (
+        _preview_from_existing_sources(show, preview_episode_key)
+        if prefer_existing
+        else None
+    )
     if preview_from_source is not None:
         mime, data = preview_from_source
     else:

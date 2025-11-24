@@ -426,7 +426,7 @@ async function init() {
     registerEvents();
     setSearchVisibility(false);
     renderEntries();
-    requestEntryPreviews();
+    requestEntryPreviews(state.entries, { preferExisting: true });
   } catch (error) {
     showToast(`Failed to load configuration: ${error.message}`, 'error');
   }
@@ -1134,7 +1134,8 @@ function invalidateEntryPreview(entry) {
   updateEntryPreview(entry);
 }
 
-async function loadEntryPreview(entry) {
+async function loadEntryPreview(entry, options = {}) {
+  const { preferExisting = false } = options;
   if (!entry || entry.previewSrc || entry.previewLoading) {
     return;
   }
@@ -1155,6 +1156,7 @@ async function loadEntryPreview(entry) {
       body: JSON.stringify({
         name: entry.name,
         config: entry.config,
+        preferExisting,
         previewEpisode,
       }),
     });
@@ -1190,9 +1192,9 @@ async function loadEntryPreview(entry) {
   }
 }
 
-function requestEntryPreviews(entries = state.entries) {
+function requestEntryPreviews(entries = state.entries, options = {}) {
   entries.forEach((entry) => {
-    void loadEntryPreview(entry);
+    void loadEntryPreview(entry, options);
   });
 }
 
@@ -2949,6 +2951,7 @@ function openPreview(entry) {
       name: entry.name,
       config: entry.config,
       force: true,
+      preferExisting: false,
       previewEpisode,
     }),
   })
