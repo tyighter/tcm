@@ -249,7 +249,11 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
     def lookup_tmdb_id_from_rating_key(self, rating_key: int) -> Optional[int]:
         """Return a TMDb ID for the Plex item referenced by the rating key."""
 
-        entry = self.__server.fetchItem(rating_key)
+        try:
+            entry = self.__server.fetchItem(rating_key)
+        except NotFound:
+            log.debug(f'Rating key "{rating_key}" not found in Plex while looking up TMDb ID')
+            return None
         tmdb_regex = re_compile(r'tmdb[^0-9]*([0-9]+)', IGNORECASE)
 
         guids = list(getattr(entry, 'guids', []) or [])
