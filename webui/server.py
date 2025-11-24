@@ -140,6 +140,11 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 "Client disconnected before JSON response could be sent for %s",
                 self.path,
             )
+        except ConnectionResetError:
+            logger.warning(
+                "Client connection reset before JSON response could be sent for %s",
+                self.path,
+            )
 
     def _error(self, message: str, status: HTTPStatus = HTTPStatus.BAD_REQUEST) -> None:
         self._json_response({"error": message}, status=status)
