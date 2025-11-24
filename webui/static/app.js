@@ -1140,7 +1140,7 @@ function invalidateEntryPreview(entry) {
 }
 
 async function loadEntryPreview(entry, options = {}) {
-  const { preferExisting = false } = options;
+  const { preferExisting = true } = options;
   if (!entry || entry.previewSrc || entry.previewLoading) {
     return;
   }
