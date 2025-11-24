@@ -1117,7 +1117,11 @@ function updateEntryPreview(entry) {
   }
 
   if (!entry.previewError && placeholder) {
-    placeholder.textContent = 'Loading preview...';
+    const statusText =
+      entry.previewLoadingStrategy === 'generate'
+        ? 'Generating preview...'
+        : 'Loading preview...';
+    placeholder.textContent = statusText;
   }
 
   if (entry.previewError && placeholder) {
@@ -1130,6 +1134,7 @@ function invalidateEntryPreview(entry) {
   entry.previewSrc = null;
   entry.previewError = null;
   entry.previewLoading = false;
+  entry.previewLoadingStrategy = undefined;
   clearPreviewCacheEntry(entry);
   updateEntryPreview(entry);
 }
@@ -1141,9 +1146,11 @@ async function loadEntryPreview(entry, options = {}) {
   }
 
   entry.previewLoading = true;
+  entry.previewLoadingStrategy = preferExisting ? 'load' : 'generate';
   const requestId = (entry.previewRequestId || 0) + 1;
   entry.previewRequestId = requestId;
   entry.previewError = null;
+  updateEntryPreview(entry);
   const previewEpisode =
     entry.previewEpisode && entry.previewEpisode !== 'random'
       ? entry.previewEpisode
@@ -1187,6 +1194,7 @@ async function loadEntryPreview(entry, options = {}) {
   } finally {
     if (entry.previewRequestId === requestId) {
       entry.previewLoading = false;
+      entry.previewLoadingStrategy = undefined;
       updateEntryPreview(entry);
     }
   }
