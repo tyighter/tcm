@@ -111,7 +111,7 @@ class TautulliInterface(WebInterface):
         rating_tmdb_lookup: Optional[dict[int, int]] = None,
         rating_key_lookup: Optional[Callable[[int], Optional[int]]] = None,
         persist_rating_tmdb_lookup: Optional[Callable[[dict[int, int]], None]] = None,
-        limit: int = 10,
+        limit: Optional[int] = None,
         days: int = 7,
         username: Optional[str] = None,
     ) -> dict[str, list[dict[str, Any]]]:
@@ -120,7 +120,8 @@ class TautulliInterface(WebInterface):
         Args:
             series_names: Names of the series present in tv.yml.
             tmdb_ids: TMDb IDs present in tv.yml.
-            limit: Maximum number of results per category to return.
+            limit: Maximum number of results per category to return. "None" returns all
+                matches within the date window.
             days: Restrict results to activity that occurred within this many days.
             series_tmdb_map: Mapping of series names to TMDb IDs from tv.yml.
             rating_tmdb_lookup: Mapping of Plex rating keys to TMDb IDs loaded from tv.yml.
@@ -133,7 +134,7 @@ class TautulliInterface(WebInterface):
             normalized episode metadata.
         """
 
-        limit = max(0, limit)
+        limit = max(0, limit) if limit is not None else None
         if limit == 0:
             return {"watched": [], "recently_added": []}
 
@@ -393,12 +394,16 @@ class TautulliInterface(WebInterface):
             results.sort(key=lambda entry: entry.get('timestamp', 0), reverse=True)
             return results[:limit_results] if limit_results is not None else results
 
+        # Request enough entries to cover the configured time window when no explicit
+        # limit is provided.
+        fetch_length = limit * 10 if limit is not None else 500
+
         history_params = self.__params | {
             'cmd': 'get_history',
             'media_type': 'episode',
             'order_dir': 'desc',
             'order_column': 'date',
-            'length': limit * 10,
+            'length': fetch_length,
         }
         history_response = self.get(self.url, history_params)
         history_entries = history_response.get('response', {}).get('data', {}).get('data', [])
@@ -409,7 +414,7 @@ class TautulliInterface(WebInterface):
             'cmd': 'get_recently_added',
             'media_type': 'show',
             'order_dir': 'desc',
-            'length': limit * 10,
+            'length': fetch_length,
         }
         recently_added_response = self.get(self.url, recently_added_params)
         recently_added_entries = recently_added_response.get('response', {}).get('data', {})
