@@ -12,6 +12,7 @@ import sys
 import tempfile
 import time
 from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
 from threading import Lock
@@ -40,10 +41,131 @@ logger = logging.getLogger(__name__)
 
 _action_lock = Lock()
 _preview_cache_lock = Lock()
-_preview_cache: dict[str, tuple[str, str]] = {}
+_preview_cache: dict[str, "PreviewPayload"] = {}
+_preview_log_lock = Lock()
 _sync_lock = Lock()
 _last_sync: float = 0.0
 _SYNC_COOLDOWN_SECONDS = 45.0
+PREVIEW_LOG_FILE = Path("/config/preview.log")
+PREVIEW_CACHE_DIR = Path("/config/preview-cache")
+
+
+@dataclass(frozen=True)
+class PreviewPayload:
+    """Preview data along with the path used to build it."""
+
+    mime: str
+    data: str
+    source_path: Path | None
+
+
+def _preview_logger() -> logging.Logger | None:
+    """Return a file-backed logger dedicated to preview activity."""
+
+    with _preview_log_lock:
+        logger_name = "tcm.preview"
+        preview_logger = logging.getLogger(logger_name)
+
+        if getattr(preview_logger, "_configured", False):
+            return preview_logger
+
+        try:
+            PREVIEW_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+            handler = logging.FileHandler(PREVIEW_LOG_FILE, mode="a")
+        except OSError as exc:  # pragma: no cover - filesystem errors are environment-specific
+            logger.warning("Unable to write preview log to %s: %s", PREVIEW_LOG_FILE, exc)
+            return None
+
+        handler.setLevel(logging.INFO)
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+        )
+
+        preview_logger.setLevel(logging.INFO)
+        preview_logger.addHandler(handler)
+        preview_logger.propagate = False
+        preview_logger._configured = True  # type: ignore[attr-defined]
+        preview_logger.info("Preview logging initialized")
+
+        return preview_logger
+
+
+def _log_preview_event(
+    show_name: str,
+    source_path: Path | str | None,
+    *,
+    status: str,
+    episode_key: str | None,
+    cached: bool = False,
+    persistent: bool = False,
+    error: str | None = None,
+) -> None:
+    """Write a structured preview event to the preview log file."""
+
+    preview_logger = _preview_logger()
+    if preview_logger is None:
+        return
+
+    episode_label = episode_key or "random"
+    resolved_source = str(source_path) if source_path else "unknown"
+    message = (
+        "Preview %s | show=%s | episode=%s | source=%s | cached=%s | persistent_cache=%s"
+        % (status, show_name, episode_label, resolved_source, cached, persistent)
+    )
+
+    if error:
+        preview_logger.error("%s | error=%s", message, error)
+    else:
+        preview_logger.info(message)
+
+
+def _safe_cache_key(cache_key: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]", "_", cache_key)
+
+
+def _persistent_cache_path(cache_key: str) -> Path:
+    return PREVIEW_CACHE_DIR / f"{_safe_cache_key(cache_key)}.json"
+
+
+def _persist_preview_payload(cache_key: str, payload: PreviewPayload) -> None:
+    """Persist preview payloads so reloads do not require regeneration."""
+
+    try:
+        PREVIEW_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        _persistent_cache_path(cache_key).write_text(
+            json.dumps(
+                {
+                    "mime": payload.mime,
+                    "data": payload.data,
+                    "source_path": str(payload.source_path) if payload.source_path else None,
+                }
+            )
+        )
+    except OSError as exc:
+        logger.debug("Unable to persist preview cache for %s: %s", cache_key, exc)
+
+
+def _load_persistent_preview(cache_key: str) -> PreviewPayload | None:
+    """Load a preview payload from the persistent cache if present."""
+
+    cache_path = _persistent_cache_path(cache_key)
+    if not cache_path.exists():
+        return None
+
+    try:
+        payload = json.loads(cache_path.read_text())
+    except (OSError, ValueError) as exc:
+        logger.debug("Unable to read persistent preview cache %s: %s", cache_path, exc)
+        return None
+
+    mime = payload.get("mime") or "image/jpeg"
+    data = payload.get("data")
+    if not isinstance(data, str):
+        return None
+
+    source_path = payload.get("source_path")
+    resolved_source = Path(source_path) if isinstance(source_path, str) else None
+    return PreviewPayload(mime=mime, data=data, source_path=resolved_source)
 
 
 def _maybe_sync_series_files(
@@ -343,7 +465,7 @@ def _existing_card_path(show: Show, episode: Episode | None) -> Path | None:
 
 def _preview_from_existing_sources(
     show: Show, preferred_episode_key: str | None
-) -> tuple[str, str] | None:
+) -> PreviewPayload | None:
     preferred_episode = (
         show.episodes.get(preferred_episode_key) if preferred_episode_key else None
     )
@@ -365,7 +487,7 @@ def _preview_from_existing_sources(
     mime, _ = mimetypes.guess_type(selected_card.name)
     mime = mime or "image/jpeg"
     data = base64.b64encode(selected_card.read_bytes()).decode("ascii")
-    return mime, data
+    return PreviewPayload(mime=mime, data=data, source_path=selected_card)
 
 
 def get_or_generate_preview(
@@ -389,31 +511,71 @@ def get_or_generate_preview(
         with _preview_cache_lock:
             cached = _preview_cache.get(cache_key)
         if cached is not None:
-            return cached
+            _log_preview_event(
+                show_name,
+                cached.source_path,
+                status="success",
+                episode_key=preview_episode_key,
+                cached=True,
+            )
+            return cached.mime, cached.data
 
-    show = _load_show_for_preview(context, tv_manager, show_name, series_config)
+        persistent_cached = _load_persistent_preview(cache_key)
+        if persistent_cached is not None:
+            with _preview_cache_lock:
+                _preview_cache[cache_key] = persistent_cached
+            _log_preview_event(
+                show_name,
+                persistent_cached.source_path,
+                status="success",
+                episode_key=preview_episode_key,
+                cached=True,
+                persistent=True,
+            )
+            return persistent_cached.mime, persistent_cached.data
 
-    preview_from_source = (
-        _preview_from_existing_sources(show, preview_episode_key)
-        if prefer_existing
-        else None
-    )
-    if preview_from_source is not None:
-        mime, data = preview_from_source
-    else:
-        mime, data = generate_preview(
-            context,
-            tv_manager,
-            show_name,
-            series_config,
-            preferred_episode_key=preview_episode_key,
-            preloaded_show=show,
+    try:
+        show = _load_show_for_preview(context, tv_manager, show_name, series_config)
+
+        preview_from_source = (
+            _preview_from_existing_sources(show, preview_episode_key)
+            if prefer_existing
+            else None
         )
+        if preview_from_source is not None:
+            payload = preview_from_source
+        else:
+            payload = generate_preview(
+                context,
+                tv_manager,
+                show_name,
+                series_config,
+                preferred_episode_key=preview_episode_key,
+                preloaded_show=show,
+            )
+    except Exception as exc:  # pylint: disable=broad-except
+        _log_preview_event(
+            show_name,
+            None,
+            status="failure",
+            episode_key=preview_episode_key,
+            error=str(exc),
+        )
+        raise
 
     with _preview_cache_lock:
-        _preview_cache[cache_key] = (mime, data)
+        _preview_cache[cache_key] = payload
 
-    return mime, data
+    _persist_preview_payload(cache_key, payload)
+    _log_preview_event(
+        show_name,
+        payload.source_path,
+        status="success",
+        episode_key=preview_episode_key,
+        cached=False,
+    )
+
+    return payload.mime, payload.data
 
 
 def generate_preview(
@@ -424,7 +586,7 @@ def generate_preview(
     *,
     preferred_episode_key: str | None = None,
     preloaded_show: Show | None = None,
-) -> tuple[str, str]:
+) -> PreviewPayload:
     """Generate a title card preview, returning (mime, base64_data)."""
 
     show = preloaded_show or _load_show_for_preview(
@@ -478,7 +640,9 @@ def generate_preview(
     episode.destination = original_destination
     rmtree(temp_dir, ignore_errors=True)
 
-    return "image/jpeg", base64.b64encode(data).decode("ascii")
+    return PreviewPayload(
+        mime="image/jpeg", data=base64.b64encode(data).decode("ascii"), source_path=destination
+    )
 
 
 def list_preview_episodes(
