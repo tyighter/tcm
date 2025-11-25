@@ -1,3 +1,4 @@
+from datetime import datetime
 from json import dumps
 import time
 from pathlib import Path
@@ -175,7 +176,12 @@ class TautulliInterface(WebInterface):
                 try:
                     return int(value)
                 except (TypeError, ValueError):
-                    continue
+                    try:
+                        if isinstance(value, str):
+                            cleaned = value.replace('T', ' ').replace('Z', '')
+                            return int(datetime.fromisoformat(cleaned).timestamp())
+                    except (TypeError, ValueError):
+                        continue
             return 0
 
         def _season_label(entry: dict) -> str:
