@@ -80,6 +80,29 @@ DEFAULT_THUMBNAIL_SLUG_MAP = {
 }
 
 
+_STATIC_SUFFIX_ORDER = (".jpg", ".jpeg", ".png", ".webp")
+
+
+def _find_static_thumbnail(slug: str) -> Path | None:
+    """Return a pre-generated thumbnail under the static card-type directory."""
+
+    for suffix in _STATIC_SUFFIX_ORDER:
+        candidate = CARD_TYPE_STATIC_ROOT / f"{slug}{suffix}"
+        try:
+            if candidate.exists():
+                return candidate
+        except OSError:
+            continue
+
+    return None
+
+
+def get_static_thumbnail(slug: str) -> Path | None:
+    """Public wrapper for retrieving a cached static thumbnail."""
+
+    return _find_static_thumbnail(slug)
+
+
 def _iter_image_urls(markdown: str) -> Iterable[str]:
     for match in _image_regex.finditer(markdown):
         url = match.group(1)
@@ -124,7 +147,7 @@ def cache_card_type_images(
 
 
 def load_card_type_thumbnails(
-    manifest_path: Path | None = None,
+    manifest_path: Path | None = None, *, force: bool = False
 ) -> dict[str, str]:
     """Load cached card type thumbnails from the manifest file."""
 
@@ -135,11 +158,8 @@ def load_card_type_thumbnails(
     }
 
     thumbnails: dict[str, str] = {}
-    local_thumbnails = _load_local_thumbnails(known_slugs)
-    for slug, source in local_thumbnails.items():
-        prepared = _prepare_resized_thumbnail(slug, source)
-        if prepared:
-            thumbnails[slug] = _thumbnail_api_url(slug)
+    baked = bake_card_type_thumbnails(known_slugs=known_slugs, force=force)
+    thumbnails.update({slug: _thumbnail_api_url(slug) for slug in baked})
 
     manifest_path = manifest_path or DOCKER_THUMBNAIL_ROOT / MANIFEST_FILENAME
     try:
@@ -182,13 +202,18 @@ def _normalize_thumbnail_url(slug: str, url: str) -> str:
     return url
 
 
-def prepare_thumbnail_from_config(slug: str) -> Path | None:
+def prepare_thumbnail_from_config(slug: str, *, force: bool = False) -> Path | None:
     """Ensure a resized thumbnail exists for the requested slug.
 
     The function looks for a JPG in `/config/thumbnails` (or the repository
     fallback) using the default mapping, resizes it to the UI slot, and stores
     the prepared image under the static card-type directory.
     """
+
+    if not force:
+        cached = _find_static_thumbnail(slug)
+        if cached:
+            return cached
 
     filename = DEFAULT_THUMBNAIL_SLUG_MAP.get(slug)
     source_paths: list[Path] = []
@@ -224,51 +249,6 @@ def prepare_thumbnail_from_config(slug: str) -> Path | None:
     prepared = _prepare_resized_thumbnail(slug, source)
 
     return prepared
-
-
-def _load_local_thumbnails(known_slugs: set[str]) -> dict[str, Path]:
-    """Return thumbnail files present on disk keyed by slug."""
-
-    thumbnails: dict[str, Path] = {}
-    roots = (DOCKER_THUMBNAIL_ROOT, REPO_THUMBNAIL_ROOT)
-
-    # First, honor the default filename mapping so known files keep priority.
-    for slug, filename in DEFAULT_THUMBNAIL_SLUG_MAP.items():
-        if slug not in known_slugs:
-            continue
-
-        for root in roots:
-            path = root / filename
-            try:
-                if not path.exists():
-                    continue
-            except OSError:
-                continue
-
-            thumbnails[slug] = path
-            break
-
-    # Fill in any remaining slugs by matching filename stems.
-    for root in roots:
-        try:
-            for candidate in root.iterdir():
-                try:
-                    if not candidate.is_file():
-                        continue
-                except OSError:
-                    continue
-
-                slug = slugify_card_type(candidate.stem)
-                if slug not in known_slugs or slug in thumbnails:
-                    continue
-
-                thumbnails[slug] = candidate
-        except FileNotFoundError:
-            continue
-        except OSError:
-            continue
-
-    return thumbnails
 
 
 def _copy_and_resize_thumbnail(source: Path, destination: Path) -> bool:
@@ -348,6 +328,43 @@ def _prepare_resized_thumbnail(slug: str, source: Path) -> Path | None:
     return None
 
 
+def bake_card_type_thumbnails(
+    *, known_slugs: set[str] | None = None, force: bool = False
+) -> dict[str, Path]:
+    """Generate the static thumbnail cache for all known card types."""
+
+    from modules.TitleCard import TitleCard
+
+    known_slugs = known_slugs or {
+        slugify_card_type(name) for name in TitleCard.BUILTIN_CARD_TYPES.keys()
+    }
+
+    baked: dict[str, Path] = {}
+    for slug in sorted(known_slugs):
+        prepared = prepare_thumbnail_from_config(slug, force=force)
+        if prepared:
+            baked[slug] = prepared
+
+    logger.info("Prepared %d pre-baked card type thumbnails", len(baked))
+    return baked
+
+
+def static_thumbnail_cache_complete(known_slugs: Iterable[str] | None = None) -> bool:
+    """Return True if every known slug already has a static thumbnail."""
+
+    from modules.TitleCard import TitleCard
+
+    known_slugs = known_slugs or {
+        slugify_card_type(name) for name in TitleCard.BUILTIN_CARD_TYPES.keys()
+    }
+
+    for slug in known_slugs:
+        if _find_static_thumbnail(slug) is None:
+            return False
+
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Cache example images for built-in card types."
@@ -363,12 +380,28 @@ def main() -> None:
         default=CARD_TYPE_MARKDOWN_URL,
         help="Custom URL for the card type markdown source.",
     )
+    parser.add_argument(
+        "--bake-static",
+        action="store_true",
+        help="Resize card type thumbnails into the static card-types directory.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate thumbnails even if cached files already exist.",
+    )
 
     args = parser.parse_args()
-    manifest = cache_card_type_images(args.markdown_url, args.dest)
-    print(
-        f"Cached {len(manifest)} card type example images to {args.dest.resolve()}"
-    )
+    if args.bake_static:
+        baked = bake_card_type_thumbnails(force=args.force)
+        print(
+            f"Prepared {len(baked)} resized card type thumbnails in {CARD_TYPE_STATIC_ROOT}"
+        )
+    else:
+        manifest = cache_card_type_images(args.markdown_url, args.dest)
+        print(
+            f"Cached {len(manifest)} card type example images to {args.dest.resolve()}"
+        )
 
 
 if __name__ == "__main__":

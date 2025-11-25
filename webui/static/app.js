@@ -3876,18 +3876,39 @@ function persistPreviewCache() {
 }
 
 function previewCacheKey(entry) {
+  if (!entry?.name) {
+    return null;
+  }
+  const snapshot = JSON.stringify(snapshotEntry(entry));
+  return `${entry.name}:${hashString(snapshot)}`;
+}
+
+function legacyPreviewCacheKey(entry) {
   return entry?.name || null;
+}
+
+function hashString(value) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash.toString(16);
 }
 
 function restoreCachedPreview(entry) {
   const key = previewCacheKey(entry);
-  if (!key) {
+  const legacyKey = legacyPreviewCacheKey(entry);
+  if (!key && !legacyKey) {
     return;
   }
-  const cached = state.previewCache[key];
+
+  const cached = (key && state.previewCache[key]) || null;
+  const legacy = (legacyKey && state.previewCache[legacyKey]) || null;
   const snapshot = JSON.stringify(snapshotEntry(entry));
-  if (cached && cached.snapshot === snapshot && cached.src) {
-    entry.previewSrc = cached.src;
+  const match = cached || legacy;
+  if (match && match.snapshot === snapshot && match.src) {
+    entry.previewSrc = match.src;
   }
 }
 
@@ -3905,10 +3926,13 @@ function updatePreviewCache(entry) {
 
 function clearPreviewCacheEntry(entry) {
   const key = previewCacheKey(entry);
-  if (!key || !state.previewCache[key]) {
-    return;
+  const legacyKey = legacyPreviewCacheKey(entry);
+  if (key && state.previewCache[key]) {
+    delete state.previewCache[key];
   }
-  delete state.previewCache[key];
+  if (legacyKey && state.previewCache[legacyKey]) {
+    delete state.previewCache[legacyKey];
+  }
   persistPreviewCache();
 }
 

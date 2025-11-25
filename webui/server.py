@@ -18,9 +18,11 @@ from modules.TautulliInterface import TautulliInterface
 from .card_type_images import (
     DEFAULT_THUMBNAIL_SLUG_MAP,
     REPO_THUMBNAIL_ROOT,
+    get_static_thumbnail,
     load_card_type_thumbnails,
     prepare_thumbnail_from_config,
     slugify_card_type,
+    static_thumbnail_cache_complete,
 )
 from .config import AppContext, create_app_context
 from .options import build_card_type_extras, build_series_fields
@@ -251,6 +253,15 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             "Resolving thumbnail for %s (slug=%s)", requested_name, requested_slug
         )
         logger.debug("Resolving thumbnail for %s (slug=%s)", requested_name, requested_slug)
+
+        cached = get_static_thumbnail(requested_slug)
+        if cached:
+            logger.debug(
+                "Using cached static thumbnail for slug %s at %s",
+                requested_slug,
+                cached,
+            )
+            return cached
 
         prepared = prepare_thumbnail_from_config(requested_slug)
         if prepared:
@@ -954,12 +965,15 @@ def _run_startup_tasks_async(context: AppContext, tv_manager: TvYamlManager) -> 
                 if updated:
                     logger.info("Updated Plex rating keys for %s of %s series", updated, total)
 
-        try:
-            thumbnails = load_card_type_thumbnails()
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.warning("Unable to prefetch card type thumbnails: %s", exc)
+        if static_thumbnail_cache_complete():
+            logger.info("Card type thumbnail cache already prepared; skipping refresh")
         else:
-            logger.info("Prefetched %d card type thumbnails", len(thumbnails))
+            try:
+                thumbnails = load_card_type_thumbnails(force=True)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.warning("Unable to prefetch card type thumbnails: %s", exc)
+            else:
+                logger.info("Prefetched %d card type thumbnails", len(thumbnails))
 
     thread = Thread(target=_task, name="startup-tasks", daemon=True)
     thread.start()

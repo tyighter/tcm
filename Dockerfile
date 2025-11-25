@@ -36,7 +36,7 @@ COPY . /maker
 COPY --from=python-reqs /usr/local /usr/local
 
 # Cache example images for built-in card types
-RUN python3 -m webui.card_type_images
+RUN python3 -m webui.card_type_images --bake-static --force
 
 # Script environment variables
 ENV TCM_PREFERENCES=/config/preferences.yml \
