@@ -96,6 +96,7 @@ def _log_preview_event(
     source_path: Path | str | None,
     *,
     status: str,
+    origin: str | None = None,
     episode_key: str | None,
     cached: bool = False,
     persistent: bool = False,
@@ -110,10 +111,12 @@ def _log_preview_event(
 
     episode_label = episode_key or "random"
     resolved_source = str(source_path) if source_path else "unknown"
+    resolved_origin = origin or "unknown"
     message = (
-        "Preview %s | show=%s | episode=%s | source=%s | cached=%s | persistent_cache=%s | existing=%s"
+        "Preview %s | origin=%s | show=%s | episode=%s | source=%s | cached=%s | persistent_cache=%s | existing=%s"
         % (
             status,
+            resolved_origin,
             show_name,
             episode_label,
             resolved_source,
@@ -531,8 +534,6 @@ def get_or_generate_preview(
         series_config,
         preview_episode_key=preview_episode_key,
     )
-    memory_hit = False
-    persistent_hit = False
     if not force:
         with _preview_cache_lock:
             cached = _preview_cache.get(cache_key)
@@ -541,6 +542,7 @@ def get_or_generate_preview(
                 show_name,
                 cached.source_path,
                 status="success",
+                origin="memory-cache",
                 episode_key=preview_episode_key,
                 cached=True,
                 existing_source=cached.existing_source,
@@ -551,11 +553,11 @@ def get_or_generate_preview(
         if persistent_cached is not None:
             with _preview_cache_lock:
                 _preview_cache[cache_key] = persistent_cached
-            persistent_hit = True
             _log_preview_event(
                 show_name,
                 persistent_cached.source_path,
                 status="success",
+                origin="persistent-cache",
                 episode_key=preview_episode_key,
                 cached=True,
                 persistent=True,
@@ -573,6 +575,7 @@ def get_or_generate_preview(
         )
         if preview_from_source is not None:
             payload = preview_from_source
+            preview_origin = "existing-source"
         else:
             payload = generate_preview(
                 context,
@@ -582,6 +585,7 @@ def get_or_generate_preview(
                 preferred_episode_key=preview_episode_key,
                 preloaded_show=show,
             )
+            preview_origin = "generated"
     except Exception as exc:  # pylint: disable=broad-except
         _log_preview_event(
             show_name,
@@ -600,9 +604,10 @@ def get_or_generate_preview(
         show_name,
         payload.source_path,
         status="success",
+        origin=preview_origin,
         episode_key=preview_episode_key,
-        cached=memory_hit or persistent_hit,
-        persistent=persistent_hit,
+        cached=False,
+        persistent=False,
         existing_source=payload.existing_source,
     )
 
