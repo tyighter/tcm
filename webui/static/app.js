@@ -40,6 +40,8 @@ document.body.appendChild(toastContainer);
 const CLIENT_LOG_ENDPOINT = '/api/client-log';
 const PREVIEW_CACHE_STORAGE_KEY = 'tcm-preview-cache';
 const LOGO_BACKGROUND_STORAGE_KEY = 'tcm-logo-backgrounds';
+const PREVIEW_DB_NAME = 'tcm-preview-cache';
+const PREVIEW_DB_STORE = 'previews';
 
 const EPISODE_TEXT_FORMAT_GROUPS = [
   {
@@ -451,7 +453,8 @@ function logToServer(level, message, context = {}) {
 // -----------------------------------------------------------------------------
 async function init() {
   try {
-    loadPreviewCache();
+    // Ensure the preview cache is ready before observers start requesting images.
+    await loadPreviewCache();
     loadLogoBackgroundPreferences();
     await loadMetadata();
     await loadConfiguration();
@@ -509,7 +512,7 @@ async function loadConfiguration() {
   sortEntries();
   state.collapsedEntries = new Set(state.entries.map((entry) => entry.id));
   syncSavedEntrySnapshots();
-  state.entries.forEach(restoreCachedPreview);
+  await Promise.all(state.entries.map((entry) => restoreCachedPreview(entry)));
 }
 
 function setSearchVisibility(isVisible) {
@@ -965,9 +968,9 @@ function renderEntry(entry) {
     previewEpisodeSelect.disabled = entry.previewEpisodeStatus === 'loading';
   };
 
-  previewEpisodeSelect.addEventListener('change', () => {
+  previewEpisodeSelect.addEventListener('change', async () => {
     entry.previewEpisode = previewEpisodeSelect.value || 'random';
-    invalidateEntryPreview(entry);
+    await invalidateEntryPreview(entry);
     loadEntryPreview(entry);
   });
 
@@ -1281,13 +1284,13 @@ async function fetchStaticPreview(entry, options = {}) {
   }
 }
 
-function invalidateEntryPreview(entry) {
+async function invalidateEntryPreview(entry) {
   entry.previewSrc = null;
   entry.previewError = null;
   entry.previewLoading = false;
   entry.previewLoadingStrategy = undefined;
   entry.previewStale = false;
-  clearPreviewCacheEntry(entry);
+  await clearPreviewCacheEntry(entry);
   updateEntryPreview(entry);
   observeEntryPreview(entry);
 }
@@ -1322,7 +1325,7 @@ async function loadEntryPreview(entry, options = {}) {
       entry.previewError = null;
       entry.previewLoading = false;
       entry.previewLoadingStrategy = undefined;
-      updatePreviewCache(entry);
+      await updatePreviewCache(entry);
       updateEntryPreview(entry);
       return;
     }
@@ -1356,7 +1359,7 @@ async function loadEntryPreview(entry, options = {}) {
 
     if (entry.previewRequestId === requestId) {
       entry.previewSrc = `data:${data.mime};base64,${data.data}`;
-      updatePreviewCache(entry);
+      await updatePreviewCache(entry);
     }
   } catch (error) {
     if (entry.previewRequestId === requestId) {
@@ -1382,8 +1385,8 @@ function requestEntryPreviews(entries = state.entries, options = {}) {
   });
 }
 
-function refreshEntryPreviews(entries = state.entries) {
-  entries.forEach((entry) => invalidateEntryPreview(entry));
+async function refreshEntryPreviews(entries = state.entries) {
+  await Promise.all(entries.map((entry) => invalidateEntryPreview(entry)));
   requestEntryPreviews(entries);
 }
 
@@ -3139,7 +3142,7 @@ async function openPreview(entry) {
       img.src = staticPreview;
       entry.previewSrc = img.src;
       entry.previewError = null;
-      updatePreviewCache(entry);
+      await updatePreviewCache(entry);
       updateEntryPreview(entry);
       modal.content.appendChild(img);
       return;
@@ -3174,7 +3177,7 @@ async function openPreview(entry) {
     img.src = `data:${data.mime};base64,${data.data}`;
     entry.previewSrc = img.src;
     entry.previewError = null;
-    updatePreviewCache(entry);
+    await updatePreviewCache(entry);
     updateEntryPreview(entry);
     modal.content.appendChild(img);
   } catch (error) {
@@ -4050,25 +4053,180 @@ function syncSavedEntrySnapshots() {
   );
 }
 
-function loadPreviewCache() {
+let previewDbPromise = null;
+let previewDbUnavailable = false;
+
+function loadLegacyPreviewCache() {
   try {
     const cached = localStorage.getItem(PREVIEW_CACHE_STORAGE_KEY);
-    state.previewCache = cached ? JSON.parse(cached) : {};
+    return cached ? JSON.parse(cached) : {};
   } catch (error) {
-    console.warn('Failed to load preview cache', error);
-    state.previewCache = {};
+    console.warn('Failed to load legacy preview cache', error);
+    return {};
   }
 }
 
-function persistPreviewCache() {
+function persistLegacyPreviewCache() {
   try {
     localStorage.setItem(
       PREVIEW_CACHE_STORAGE_KEY,
       JSON.stringify(state.previewCache)
     );
   } catch (error) {
-    console.warn('Failed to persist preview cache', error);
+    console.warn('Failed to persist legacy preview cache', error);
   }
+}
+
+function openPreviewDb() {
+  if (previewDbUnavailable || typeof indexedDB === 'undefined') {
+    previewDbUnavailable = true;
+    return Promise.resolve(null);
+  }
+
+  if (previewDbPromise) {
+    return previewDbPromise;
+  }
+
+  previewDbPromise = new Promise((resolve) => {
+    const request = indexedDB.open(PREVIEW_DB_NAME, 1);
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(PREVIEW_DB_STORE)) {
+        db.createObjectStore(PREVIEW_DB_STORE, { keyPath: 'key' });
+      }
+    };
+
+    request.onsuccess = () => {
+      resolve(request.result);
+    };
+
+    request.onerror = () => {
+      console.warn('Failed to open preview cache database', request.error);
+      previewDbUnavailable = true;
+      resolve(null);
+    };
+
+    request.onblocked = () => {
+      console.warn('Preview cache database open request is blocked');
+    };
+  });
+
+  return previewDbPromise;
+}
+
+async function runPreviewDbRequest(mode, executor) {
+  const db = await openPreviewDb();
+  if (!db) {
+    return null;
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      const transaction = db.transaction(PREVIEW_DB_STORE, mode);
+      const store = transaction.objectStore(PREVIEW_DB_STORE);
+      const request = executor(store);
+
+      transaction.oncomplete = () => resolve(request?.result ?? null);
+      transaction.onabort = () => reject(transaction.error || request?.error);
+      transaction.onerror = () => reject(transaction.error || request?.error);
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+async function readAllPreviewCacheEntries() {
+  try {
+    const entries = await runPreviewDbRequest('readonly', (store) =>
+      store.getAll()
+    );
+    return Array.isArray(entries) ? entries : [];
+  } catch (error) {
+    console.warn('Failed to load previews from IndexedDB', error);
+    return [];
+  }
+}
+
+async function readPreviewCacheEntry(key) {
+  if (!key) {
+    return null;
+  }
+
+  if (state.previewCache[key]) {
+    return state.previewCache[key];
+  }
+
+  try {
+    const entry = await runPreviewDbRequest('readonly', (store) =>
+      store.get(key)
+    );
+    if (entry) {
+      state.previewCache[key] = entry;
+    }
+    return entry || null;
+  } catch (error) {
+    console.warn('Failed to read preview cache entry', error);
+    return null;
+  }
+}
+
+async function writePreviewCacheEntry(key, value) {
+  if (!key || !value) {
+    return false;
+  }
+  try {
+    await runPreviewDbRequest('readwrite', (store) =>
+      store.put({ ...value, key })
+    );
+    return true;
+  } catch (error) {
+    console.warn('Failed to persist preview cache to IndexedDB', error);
+    return false;
+  }
+}
+
+async function deletePreviewCacheEntry(key) {
+  if (!key) {
+    return;
+  }
+  try {
+    await runPreviewDbRequest('readwrite', (store) => store.delete(key));
+  } catch (error) {
+    console.warn('Failed to delete preview cache entry', error);
+  }
+}
+
+async function loadPreviewCache() {
+  state.previewCache = {};
+
+  const dbEntries = await readAllPreviewCacheEntries();
+  dbEntries.forEach((entry) => {
+    if (entry?.key && entry.src) {
+      state.previewCache[entry.key] = { snapshot: entry.snapshot, src: entry.src };
+    }
+  });
+
+  const legacyCache = loadLegacyPreviewCache();
+  const migrationTasks = [];
+  Object.entries(legacyCache).forEach(([key, value]) => {
+    if (!value) {
+      return;
+    }
+
+    if (!state.previewCache[key]) {
+      state.previewCache[key] = value;
+    }
+
+    migrationTasks.push(writePreviewCacheEntry(key, value));
+  });
+
+  if (migrationTasks.length) {
+    await Promise.allSettled(migrationTasks);
+  }
+
+  // Keep the legacy cache in sync for fallback if IndexedDB is unavailable.
+  persistLegacyPreviewCache();
 }
 
 function previewCacheKey(entry) {
@@ -4092,37 +4250,39 @@ function hashString(value) {
   return hash.toString(16);
 }
 
-function restoreCachedPreview(entry) {
+async function restoreCachedPreview(entry) {
   const key = previewCacheKey(entry);
   const legacyKey = legacyPreviewCacheKey(entry);
   if (!key && !legacyKey) {
     return;
   }
 
-  const cached = (key && state.previewCache[key]) || null;
-  const legacy = (legacyKey && state.previewCache[legacyKey]) || null;
   const snapshot = JSON.stringify(snapshotEntry(entry));
+  const cached = (await readPreviewCacheEntry(key)) || null;
+  const legacy = (await readPreviewCacheEntry(legacyKey)) || null;
   const match = cached || legacy;
-  if (match && match.src) {
+  if (match?.src) {
     entry.previewSrc = match.src;
     entry.previewStale = match.snapshot !== snapshot;
   }
 }
 
-function updatePreviewCache(entry) {
+async function updatePreviewCache(entry) {
   const key = previewCacheKey(entry);
   if (!key || !entry.previewSrc) {
     return;
   }
-  state.previewCache[key] = {
+  const value = {
     snapshot: JSON.stringify(snapshotEntry(entry)),
     src: entry.previewSrc,
   };
+  state.previewCache[key] = value;
   entry.previewStale = false;
-  persistPreviewCache();
+  await writePreviewCacheEntry(key, value);
+  persistLegacyPreviewCache();
 }
 
-function clearPreviewCacheEntry(entry) {
+async function clearPreviewCacheEntry(entry) {
   const key = previewCacheKey(entry);
   const legacyKey = legacyPreviewCacheKey(entry);
   if (key && state.previewCache[key]) {
@@ -4131,7 +4291,15 @@ function clearPreviewCacheEntry(entry) {
   if (legacyKey && state.previewCache[legacyKey]) {
     delete state.previewCache[legacyKey];
   }
-  persistPreviewCache();
+
+  const deletions = [deletePreviewCacheEntry(key)];
+  if (legacyKey && legacyKey !== key) {
+    deletions.push(deletePreviewCacheEntry(legacyKey));
+  }
+
+  await Promise.all(deletions);
+
+  persistLegacyPreviewCache();
 }
 
 async function saveConfiguration() {
@@ -4160,11 +4328,12 @@ async function saveConfiguration() {
 
     showToast('Configuration saved', 'success');
 
-    changedEntries.forEach((entry) => {
-      clearPreviewCacheEntry(entry);
-      invalidateEntryPreview(entry);
-      recordEntrySaveSnapshot(entry);
-    });
+    await Promise.all(
+      changedEntries.map(async (entry) => {
+        await invalidateEntryPreview(entry);
+        recordEntrySaveSnapshot(entry);
+      })
+    );
     requestEntryPreviews(changedEntries);
   } catch (error) {
     showToast(error.message, 'error');
