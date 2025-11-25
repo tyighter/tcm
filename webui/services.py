@@ -57,6 +57,7 @@ class PreviewPayload:
     mime: str
     data: str
     source_path: Path | None
+    existing_source: bool = False
 
 
 def _preview_logger() -> logging.Logger | None:
@@ -98,6 +99,7 @@ def _log_preview_event(
     episode_key: str | None,
     cached: bool = False,
     persistent: bool = False,
+    existing_source: bool = False,
     error: str | None = None,
 ) -> None:
     """Write a structured preview event to the preview log file."""
@@ -109,8 +111,16 @@ def _log_preview_event(
     episode_label = episode_key or "random"
     resolved_source = str(source_path) if source_path else "unknown"
     message = (
-        "Preview %s | show=%s | episode=%s | source=%s | cached=%s | persistent_cache=%s"
-        % (status, show_name, episode_label, resolved_source, cached, persistent)
+        "Preview %s | show=%s | episode=%s | source=%s | cached=%s | persistent_cache=%s | existing=%s"
+        % (
+            status,
+            show_name,
+            episode_label,
+            resolved_source,
+            cached,
+            persistent,
+            existing_source,
+        )
     )
 
     if error:
@@ -138,6 +148,7 @@ def _persist_preview_payload(cache_key: str, payload: PreviewPayload) -> None:
                     "mime": payload.mime,
                     "data": payload.data,
                     "source_path": str(payload.source_path) if payload.source_path else None,
+                    "existing_source": payload.existing_source,
                 }
             )
         )
@@ -164,8 +175,14 @@ def _load_persistent_preview(cache_key: str) -> PreviewPayload | None:
         return None
 
     source_path = payload.get("source_path")
+    existing_source = bool(payload.get("existing_source"))
     resolved_source = Path(source_path) if isinstance(source_path, str) else None
-    return PreviewPayload(mime=mime, data=data, source_path=resolved_source)
+    return PreviewPayload(
+        mime=mime,
+        data=data,
+        source_path=resolved_source,
+        existing_source=existing_source,
+    )
 
 
 def _maybe_sync_series_files(
@@ -435,16 +452,21 @@ def _existing_card_path(show: Show, episode: Episode | None) -> Path | None:
     if not show.media_directory:
         return None
 
+    search_roots: list[Path] = []
     season_dir = Path(show.media_directory) / f"Season {episode.episode_info.season_number}"
-    try:
-        if not season_dir.exists() or not season_dir.is_dir():
-            return None
-    except OSError:
-        return None
+    search_roots.append(season_dir)
+    search_roots.append(Path(show.media_directory))
 
     candidates: list[Path] = []
-    for pattern in ("*.jpg", "*.jpeg", "*.png", "*.webp"):
-        candidates.extend(sorted(season_dir.glob(pattern)))
+    for root in search_roots:
+        try:
+            if not root.exists() or not root.is_dir():
+                continue
+        except OSError:
+            continue
+
+        for pattern in ("*.jpg", "*.jpeg", "*.png", "*.webp"):
+            candidates.extend(sorted(root.rglob(pattern)))
 
     if not candidates:
         return None
@@ -487,7 +509,9 @@ def _preview_from_existing_sources(
     mime, _ = mimetypes.guess_type(selected_card.name)
     mime = mime or "image/jpeg"
     data = base64.b64encode(selected_card.read_bytes()).decode("ascii")
-    return PreviewPayload(mime=mime, data=data, source_path=selected_card)
+    return PreviewPayload(
+        mime=mime, data=data, source_path=selected_card, existing_source=True
+    )
 
 
 def get_or_generate_preview(
@@ -507,6 +531,8 @@ def get_or_generate_preview(
         series_config,
         preview_episode_key=preview_episode_key,
     )
+    memory_hit = False
+    persistent_hit = False
     if not force:
         with _preview_cache_lock:
             cached = _preview_cache.get(cache_key)
@@ -517,6 +543,7 @@ def get_or_generate_preview(
                 status="success",
                 episode_key=preview_episode_key,
                 cached=True,
+                existing_source=cached.existing_source,
             )
             return cached.mime, cached.data
 
@@ -524,6 +551,7 @@ def get_or_generate_preview(
         if persistent_cached is not None:
             with _preview_cache_lock:
                 _preview_cache[cache_key] = persistent_cached
+            persistent_hit = True
             _log_preview_event(
                 show_name,
                 persistent_cached.source_path,
@@ -531,6 +559,7 @@ def get_or_generate_preview(
                 episode_key=preview_episode_key,
                 cached=True,
                 persistent=True,
+                existing_source=persistent_cached.existing_source,
             )
             return persistent_cached.mime, persistent_cached.data
 
@@ -572,7 +601,9 @@ def get_or_generate_preview(
         payload.source_path,
         status="success",
         episode_key=preview_episode_key,
-        cached=False,
+        cached=memory_hit or persistent_hit,
+        persistent=persistent_hit,
+        existing_source=payload.existing_source,
     )
 
     return payload.mime, payload.data
