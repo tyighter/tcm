@@ -1121,6 +1121,9 @@ function renderEntry(entry) {
   return container;
 }
 
+let previewObserver = null;
+const previewLoadOptions = new WeakMap();
+
 function updateEntryPreview(entry) {
   const wrapper = dom.entries.querySelector(
     `[data-entry-id="${entry.id}"] .entry-preview`
@@ -1162,6 +1165,58 @@ function updateEntryPreview(entry) {
     placeholder.textContent = entry.previewError;
     wrapper.classList.add('entry-preview--error');
   }
+}
+
+function ensurePreviewObserver() {
+  if (previewObserver) {
+    return previewObserver;
+  }
+
+  previewObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((observerEntry) => {
+        if (!observerEntry.isIntersecting) {
+          return;
+        }
+
+        const target = observerEntry.target;
+        const entryId = target.dataset.entryId;
+        const match = state.entries.find((candidate) => candidate.id === entryId);
+        const options = previewLoadOptions.get(target) || {};
+
+        if (match) {
+          void loadEntryPreview(match, options);
+        }
+
+        previewLoadOptions.delete(target);
+        previewObserver?.unobserve(target);
+      });
+    },
+    { root: null, rootMargin: '400px 0px' }
+  );
+
+  return previewObserver;
+}
+
+function observeEntryPreview(entry, options = {}) {
+  if (
+    !entry ||
+    entry.previewLoading ||
+    (entry.previewSrc && !entry.previewStale)
+  ) {
+    return;
+  }
+
+  const wrapper = dom.entries.querySelector(
+    `[data-entry-id="${entry.id}"] .entry-preview`
+  );
+  if (!wrapper) {
+    return;
+  }
+
+  const observer = ensurePreviewObserver();
+  previewLoadOptions.set(wrapper, options);
+  observer.observe(wrapper);
 }
 
 function previewSeasonForEntry(entry, previewEpisodeKey) {
@@ -1234,6 +1289,7 @@ function invalidateEntryPreview(entry) {
   entry.previewStale = false;
   clearPreviewCacheEntry(entry);
   updateEntryPreview(entry);
+  observeEntryPreview(entry);
 }
 
 async function loadEntryPreview(entry, options = {}) {
@@ -1322,7 +1378,7 @@ async function loadEntryPreview(entry, options = {}) {
 
 function requestEntryPreviews(entries = state.entries, options = {}) {
   entries.forEach((entry) => {
-    void loadEntryPreview(entry, options);
+    observeEntryPreview(entry, options);
   });
 }
 
