@@ -39,6 +39,8 @@ services:
     restart: unless-stopped
 ```
 
+Card-type thumbnails are pre-baked into the image so the Web UI can serve them immediately. The Docker build and startup script both run `python -m webui.card_type_images --bake-static --force` to refresh the resized assets under `webui/static/card-types` from any thumbnails present in `/config/thumbnails`.
+
 ### Local development
 ```bash
 pipenv install

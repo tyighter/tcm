@@ -35,6 +35,16 @@ for default_file in "${default_files[@]}"; do
   fi
 done
 
+python3 - <<'PY'
+from webui.card_type_images import bake_card_type_thumbnails
+
+try:
+    baked = bake_card_type_thumbnails(force=True)
+    print(f"Prepared {len(baked)} card type thumbnails for the Web UI cache.")
+except Exception as exc:  # pylint: disable=broad-except
+    print(f"Warning: unable to prepare card type thumbnails: {exc}")
+PY
+
 if [ "$#" -eq 0 ]; then
   set -- python3 main.py --run --no-color
 fi
