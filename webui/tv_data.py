@@ -4,6 +4,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from modules.CleanPath import CleanPath
 from modules.Show import Show
 
 from ruamel.yaml import YAML
@@ -66,6 +67,7 @@ class TvYamlManager:
             series_entries.append(
                 {
                     "name": name,
+                    "slug": _series_slug(name),
                     "config": _apply_series_defaults(name, _to_builtin(config)),
                 }
             )
@@ -133,6 +135,12 @@ def _to_builtin(value: Any) -> Any:
     if isinstance(value, CommentedSeq):
         return [_to_builtin(item) for item in value]
     return value
+
+
+def _series_slug(name: str) -> str:
+    """Return a filesystem-safe slug for the given series name."""
+
+    return CleanPath.sanitize_name(str(name))
 
 
 def _to_commented(value: Any) -> Any:

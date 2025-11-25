@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import mimetypes
+import random
 import re
 from cgi import FieldStorage
 from http import HTTPStatus
@@ -48,6 +49,7 @@ logger = logging.getLogger(__name__)
 
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
 CONFIG_THUMBNAIL_ROOT = Path("/config/thumbnails")
+TV_SHOWS_ROOT = Path("/config/TV_Shows")
 TEMPLATE_ROOT = Path(__file__).resolve().parent / "templates"
 LOG_FILE = Path("/config/webui.log")
 
@@ -357,6 +359,87 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         logger.debug("No original thumbnail found for slug %s", requested_slug)
         return None
 
+    def _series_directory_candidates(
+        self, *, slug: str | None, name: str | None, season: str | None
+    ) -> list[Path]:
+        """Return possible directories for static previews."""
+
+        try:
+            base = TV_SHOWS_ROOT.resolve()
+        except OSError:
+            return []
+
+        season_dirname = f"Season {season}" if season else None
+        raw_candidates = []
+        for value in (slug, name):
+            if not value:
+                continue
+            safe_value = CleanPath.sanitize_name(value.strip())
+            try:
+                series_dir = (base / safe_value).resolve()
+            except OSError:
+                continue
+
+            if not str(series_dir).startswith(str(base)):
+                logger.warning(
+                    "Attempted preview access outside TV shows directory: %s", series_dir
+                )
+                continue
+
+            if season_dirname:
+                try:
+                    season_dir = (series_dir / season_dirname).resolve()
+                except OSError:
+                    season_dir = None
+
+                if season_dir and str(season_dir).startswith(str(series_dir)):
+                    raw_candidates.append(season_dir)
+
+            raw_candidates.append(series_dir)
+
+        candidates: list[Path] = []
+        seen: set[Path] = set()
+        for directory in raw_candidates:
+            try:
+                resolved = directory.resolve()
+            except OSError:
+                continue
+
+            if resolved in seen:
+                continue
+
+            seen.add(resolved)
+            candidates.append(resolved)
+
+        return candidates
+
+    def _resolve_static_preview(
+        self, *, slug: str | None, name: str | None, season: str | None
+    ) -> Path | None:
+        """Return a random static preview image for the requested series."""
+
+        candidates = self._series_directory_candidates(
+            slug=slug or None, name=name or None, season=season or None
+        )
+        valid_suffixes = {".png", ".jpg", ".jpeg", ".webp"}
+
+        for directory in candidates:
+            try:
+                files = [
+                    entry
+                    for entry in directory.iterdir()
+                    if entry.is_file() and entry.suffix.lower() in valid_suffixes
+                ]
+            except OSError:
+                continue
+
+            if not files:
+                continue
+
+            return random.choice(files)
+
+        return None
+
     def _parse_json(self) -> dict:
         length = int(self.headers.get("Content-Length", "0"))
         raw = self.rfile.read(length)
@@ -459,6 +542,20 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             logger.debug("Serving preview %s for slug %s", match, slug)
+            self._serve_file(match)
+            return
+
+        if parsed.path == "/api/preview/static":
+            params = parse_qs(parsed.query)
+            slug = params.get("slug", [""])[0].strip() or None
+            name = params.get("name", [""])[0].strip() or None
+            season = params.get("season", [""])[0].strip() or None
+
+            match = self._resolve_static_preview(slug=slug, name=name, season=season)
+            if match is None:
+                self.send_error(HTTPStatus.NOT_FOUND.value)
+                return
+
             self._serve_file(match)
             return
 
