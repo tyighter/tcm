@@ -486,6 +486,7 @@ function initializeEntryPreviewState(entry) {
   entry.previewEpisodeOptions = entry.previewEpisodeOptions || null;
   entry.previewEpisodeStatus = entry.previewEpisodeStatus || 'idle';
   entry.previewEpisodeError = entry.previewEpisodeError || null;
+  entry.previewStale = false;
 }
 
 async function loadConfiguration() {
@@ -1230,13 +1231,18 @@ function invalidateEntryPreview(entry) {
   entry.previewError = null;
   entry.previewLoading = false;
   entry.previewLoadingStrategy = undefined;
+  entry.previewStale = false;
   clearPreviewCacheEntry(entry);
   updateEntryPreview(entry);
 }
 
 async function loadEntryPreview(entry, options = {}) {
   const { preferExisting = true } = options;
-  if (!entry || entry.previewSrc || entry.previewLoading) {
+  if (
+    !entry ||
+    entry.previewLoading ||
+    (entry.previewSrc && !entry.previewStale)
+  ) {
     return;
   }
 
@@ -4041,8 +4047,9 @@ function restoreCachedPreview(entry) {
   const legacy = (legacyKey && state.previewCache[legacyKey]) || null;
   const snapshot = JSON.stringify(snapshotEntry(entry));
   const match = cached || legacy;
-  if (match && match.snapshot === snapshot && match.src) {
+  if (match && match.src) {
     entry.previewSrc = match.src;
+    entry.previewStale = match.snapshot !== snapshot;
   }
 }
 
@@ -4055,6 +4062,7 @@ function updatePreviewCache(entry) {
     snapshot: JSON.stringify(snapshotEntry(entry)),
     src: entry.previewSrc,
   };
+  entry.previewStale = false;
   persistPreviewCache();
 }
 
