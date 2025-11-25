@@ -538,32 +538,63 @@ def get_or_generate_preview(
         with _preview_cache_lock:
             cached = _preview_cache.get(cache_key)
         if cached is not None:
-            _log_preview_event(
-                show_name,
-                cached.source_path,
-                status="success",
-                origin="memory-cache",
-                episode_key=preview_episode_key,
-                cached=True,
-                existing_source=cached.existing_source,
-            )
-            return cached.mime, cached.data
+            if prefer_existing and not cached.existing_source:
+                _log_preview_event(
+                    show_name,
+                    cached.source_path,
+                    status="invalidated",
+                    origin="memory-cache",
+                    episode_key=preview_episode_key,
+                    cached=True,
+                    existing_source=cached.existing_source,
+                )
+                with _preview_cache_lock:
+                    _preview_cache.pop(cache_key, None)
+            else:
+                _log_preview_event(
+                    show_name,
+                    cached.source_path,
+                    status="success",
+                    origin="memory-cache",
+                    episode_key=preview_episode_key,
+                    cached=True,
+                    existing_source=cached.existing_source,
+                )
+                return cached.mime, cached.data
 
         persistent_cached = _load_persistent_preview(cache_key)
         if persistent_cached is not None:
-            with _preview_cache_lock:
-                _preview_cache[cache_key] = persistent_cached
-            _log_preview_event(
-                show_name,
-                persistent_cached.source_path,
-                status="success",
-                origin="persistent-cache",
-                episode_key=preview_episode_key,
-                cached=True,
-                persistent=True,
-                existing_source=persistent_cached.existing_source,
-            )
-            return persistent_cached.mime, persistent_cached.data
+            if prefer_existing and not persistent_cached.existing_source:
+                _log_preview_event(
+                    show_name,
+                    persistent_cached.source_path,
+                    status="invalidated",
+                    origin="persistent-cache",
+                    episode_key=preview_episode_key,
+                    cached=True,
+                    persistent=True,
+                    existing_source=persistent_cached.existing_source,
+                )
+                try:
+                    _persistent_cache_path(cache_key).unlink()
+                except OSError:
+                    logger.debug(
+                        "Unable to remove invalid persistent preview cache for %s", cache_key
+                    )
+            else:
+                with _preview_cache_lock:
+                    _preview_cache[cache_key] = persistent_cached
+                _log_preview_event(
+                    show_name,
+                    persistent_cached.source_path,
+                    status="success",
+                    origin="persistent-cache",
+                    episode_key=preview_episode_key,
+                    cached=True,
+                    persistent=True,
+                    existing_source=persistent_cached.existing_source,
+                )
+                return persistent_cached.mime, persistent_cached.data
 
     try:
         show = _load_show_for_preview(context, tv_manager, show_name, series_config)
