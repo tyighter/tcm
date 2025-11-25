@@ -94,6 +94,38 @@ entryPreviewHoverImage.alt = 'Entry preview';
 entryPreviewHoverElement.appendChild(entryPreviewHoverImage);
 document.body.appendChild(entryPreviewHoverElement);
 
+function sanitizePathName(value) {
+  const replacements = {
+    '?': '!',
+    '<': '',
+    '>': '',
+    ':': ' -',
+    '"': '',
+    '|': '',
+    '*': '-',
+    '/': '+',
+    '\\': '+',
+  };
+
+  return (value || '')
+    .toString()
+    .split('')
+    .map((char) => (char in replacements ? replacements[char] : char))
+    .join('');
+}
+
+function resolveEntrySlug(entry) {
+  if (!entry) {
+    return '';
+  }
+
+  if (entry.slug) {
+    return entry.slug;
+  }
+
+  return sanitizePathName(entry.name || '');
+}
+
 const episodeTextHelperElement = createEpisodeTextFormatHelper();
 document.body.appendChild(episodeTextHelperElement);
 
@@ -467,6 +499,7 @@ async function loadConfiguration() {
     const mapped = {
       id: `${entry.name}-${index}`,
       name: entry.name,
+      slug: entry.slug || sanitizePathName(entry.name),
       config: entry.config || {},
     };
     initializeEntryPreviewState(mapped);
@@ -1130,6 +1163,68 @@ function updateEntryPreview(entry) {
   }
 }
 
+function previewSeasonForEntry(entry, previewEpisodeKey) {
+  if (!entry || !previewEpisodeKey || previewEpisodeKey === 'random') {
+    return null;
+  }
+
+  const match = (entry.previewEpisodeOptions || []).find(
+    (option) => option.key === previewEpisodeKey
+  );
+
+  if (match && (match.season || match.season === 0)) {
+    return match.season;
+  }
+
+  return null;
+}
+
+async function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result?.toString() || null);
+    reader.onerror = () => reject(new Error('Unable to read preview image'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function fetchStaticPreview(entry, options = {}) {
+  const { season = null } = options;
+  const slug = resolveEntrySlug(entry);
+  const params = new URLSearchParams();
+  if (slug) {
+    params.set('slug', slug);
+  }
+  if (entry?.name) {
+    params.set('name', entry.name);
+  }
+  if (season || season === 0) {
+    params.set('season', season);
+  }
+
+  if ([...params.keys()].length === 0) {
+    return null;
+  }
+
+  params.set('_', Date.now().toString());
+
+  try {
+    const response = await fetch(`/api/preview/static?${params.toString()}`, {
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const blob = await response.blob();
+    return await blobToDataUrl(blob);
+  } catch (error) {
+    console.warn('Static preview lookup failed', error);
+    return null;
+  }
+}
+
 function invalidateEntryPreview(entry) {
   entry.previewSrc = null;
   entry.previewError = null;
@@ -1156,12 +1251,31 @@ async function loadEntryPreview(entry, options = {}) {
       ? entry.previewEpisode
       : null;
 
+  const previewSeason = previewSeasonForEntry(entry, previewEpisode);
+
+  try {
+    const staticPreview = await fetchStaticPreview(entry, { season: previewSeason });
+    if (entry.previewRequestId === requestId && staticPreview) {
+      entry.previewSrc = staticPreview;
+      entry.previewError = null;
+      entry.previewLoading = false;
+      entry.previewLoadingStrategy = undefined;
+      updatePreviewCache(entry);
+      updateEntryPreview(entry);
+      return;
+    }
+  } catch (error) {
+    console.warn('Static preview unavailable', error);
+  }
+
   try {
     const response = await fetch('/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: entry.name,
+        slug: resolveEntrySlug(entry),
+        season: previewSeason,
         config: entry.config,
         preferExisting,
         previewEpisode,
@@ -2940,7 +3054,7 @@ async function uploadFont(file, targetDirectory) {
   return response.json();
 }
 
-function openPreview(entry) {
+async function openPreview(entry) {
   const modal = buildModal('Generating preview');
   addFloatingCloseButton(modal, 'Close preview dialog');
   const message = document.createElement('p');
@@ -2952,39 +3066,59 @@ function openPreview(entry) {
       ? entry.previewEpisode
       : null;
 
-  fetch('/api/preview', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name: entry.name,
-      config: entry.config,
-      force: true,
-      preferExisting: false,
-      previewEpisode,
-    }),
-  })
-    .then(async (response) => {
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || 'Preview failed');
-      }
-      return response.json();
-    })
-    .then((data) => {
+  const previewSeason = previewSeasonForEntry(entry, previewEpisode);
+
+  try {
+    const staticPreview = await fetchStaticPreview(entry, { season: previewSeason });
+    if (staticPreview) {
       modal.content.innerHTML = '';
       const img = document.createElement('img');
       img.className = 'preview-image';
-      img.src = `data:${data.mime};base64,${data.data}`;
+      img.src = staticPreview;
       entry.previewSrc = img.src;
       entry.previewError = null;
       updatePreviewCache(entry);
       updateEntryPreview(entry);
       modal.content.appendChild(img);
-    })
-    .catch((error) => {
-      modal.content.innerHTML = '';
-      modal.content.textContent = error.message;
+      return;
+    }
+  } catch (error) {
+    console.warn('Static preview unavailable', error);
+  }
+
+  try {
+    const response = await fetch('/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: entry.name,
+        slug: resolveEntrySlug(entry),
+        season: previewSeason,
+        config: entry.config,
+        force: true,
+        preferExisting: false,
+        previewEpisode,
+      }),
     });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || 'Preview failed');
+    }
+
+    modal.content.innerHTML = '';
+    const img = document.createElement('img');
+    img.className = 'preview-image';
+    img.src = `data:${data.mime};base64,${data.data}`;
+    entry.previewSrc = img.src;
+    entry.previewError = null;
+    updatePreviewCache(entry);
+    updateEntryPreview(entry);
+    modal.content.appendChild(img);
+  } catch (error) {
+    modal.content.innerHTML = '';
+    modal.content.textContent = error.message;
+  }
 
   modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
 }
