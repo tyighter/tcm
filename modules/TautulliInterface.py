@@ -103,6 +103,59 @@ class TautulliInterface(WebInterface):
         return None
 
 
+    @staticmethod
+    def _parse_recently_added(response: dict[str, Any]) -> tuple[list, str]:
+        data = response.get('response', {}).get('data', {})
+
+        candidates: list[tuple[str, Any]] = [('response.data', data)]
+        if isinstance(data, dict):
+            recently_added = data.get('recently_added')
+            candidates.extend(
+                [
+                    ('response.data.recently_added', recently_added),
+                    ('response.data.records', data.get('records')),
+                    ('response.data.data', data.get('data')),
+                ]
+            )
+
+            if isinstance(recently_added, dict):
+                candidates.extend(
+                    [
+                        ('response.data.recently_added.data', recently_added.get('data')),
+                        ('response.data.recently_added.records', recently_added.get('records')),
+                    ]
+                )
+
+            nested_data = data.get('data')
+            if isinstance(nested_data, dict):
+                candidates.extend(
+                    [
+                        ('response.data.data.data', nested_data.get('data')),
+                        ('response.data.data.records', nested_data.get('records')),
+                    ]
+                )
+
+        for source, value in candidates:
+            if isinstance(value, list):
+                return value, source
+
+        has_content = any(
+            isinstance(value, (dict, list)) and bool(value) for _, value in candidates
+        )
+        if has_content:
+            schema_summary = [
+                f"{source} ({type(value).__name__})"
+                for source, value in candidates
+                if value is not None
+            ]
+            log.warning(
+                'Could not parse recently added entries from Tautulli response; observed schema %s',
+                schema_summary,
+            )
+
+        return [], 'none'
+
+
     def get_recent_activity(
         self,
         series_names: set[str],
@@ -400,22 +453,6 @@ class TautulliInterface(WebInterface):
             results.sort(key=lambda entry: entry.get('timestamp', 0), reverse=True)
             return results[:limit_results] if limit_results is not None else results
 
-        def _parse_recently_added(response: dict[str, Any]) -> tuple[list, str]:
-            data = response.get('response', {}).get('data', {})
-            if isinstance(data, list):
-                return data, 'response.data'
-
-            if isinstance(data, dict):
-                recently_added = data.get('recently_added')
-                if isinstance(recently_added, list):
-                    return recently_added, 'response.data.recently_added'
-
-                alternate_data = data.get('data')
-                if isinstance(alternate_data, list):
-                    return alternate_data, 'response.data.data'
-
-            return [], 'none'
-
         # Request enough entries to cover the configured time window when no explicit
         # limit is provided.
         fetch_length = limit * 10 if limit is not None else 500
@@ -439,18 +476,19 @@ class TautulliInterface(WebInterface):
             'length': fetch_length,
         }
         recently_added_response = self.get(self.url, recently_added_params)
-        recently_added_entries, recently_added_source = _parse_recently_added(recently_added_response)
+        recently_added_entries, recently_added_source = self._parse_recently_added(recently_added_response)
         if not isinstance(recently_added_entries, list) or not recently_added_entries:
             fallback_params = recently_added_params | {'media_type': 'show'}
             recently_added_response = self.get(self.url, fallback_params)
-            recently_added_entries, recently_added_source = _parse_recently_added(recently_added_response)
+            recently_added_entries, recently_added_source = self._parse_recently_added(recently_added_response)
         if not isinstance(recently_added_entries, list):
             recently_added_entries = []
 
-        if recently_added_source == 'response.data.data':
+        if recently_added_source != 'response.data' and recently_added_source != 'none':
             log.debug(
-                'Parsed %s recently added entries from alternate response.data.data schema: %s',
+                'Parsed %s recently added entries from alternate schema (%s): %s',
                 len(recently_added_entries),
+                recently_added_source,
                 recently_added_entries[0] if recently_added_entries else '{}',
             )
 
