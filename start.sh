@@ -17,9 +17,6 @@ for config_dir in source fonts thumbnails; do
   mkdir -p "/config/${config_dir}"
 done
 
-# Ensure the Tautulli log starts fresh on each container start.
-rm -f /config/tautulli.log
-
 if [ ! -d "/config/thumbnails" ] && [ -d "/maker/config/thumbnails" ]; then
   cp -r "/maker/config/thumbnails" /config/
 fi

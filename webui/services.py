@@ -419,7 +419,7 @@ def _load_show_for_preview(
     if not show.valid:
         raise RuntimeError("Series configuration is invalid; check required fields")
 
-    manager = Manager(check_tautulli=False)
+    manager = Manager()
     _maybe_sync_series_files(manager, force=force_sync)
     show.assign_interfaces(
         manager.emby_interface,
@@ -973,7 +973,7 @@ def _run_manager_job(task: Callable[[Manager], None]) -> None:
         raise ActionInProgressError("Another task is already running")
 
     try:
-        manager = Manager(check_tautulli=False)
+        manager = Manager()
         task(manager)
     finally:
         _action_lock.release()

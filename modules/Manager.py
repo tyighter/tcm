@@ -12,7 +12,6 @@ from modules.PlexInterface import PlexInterface
 from modules.Show import Show
 from modules.ShowArchive import ShowArchive
 from modules.SonarrInterface import SonarrInterface
-from modules.TautulliInterface import TautulliInterface
 from modules.TMDbInterface import TMDbInterface
 
 
@@ -53,25 +52,15 @@ class Manager:
     VALID_EXECUTION_MODES = ('serial', 'batch')
 
 
-    def __init__(self, check_tautulli: bool = True) -> None:
+    def __init__(self) -> None:
         """
         Constructs a new instance of the Manager. This uses the global
         PreferenceParser object in preferences, and optionally creates
         interfaces as indicated by that parser.
-
-        Args:
-            check_tautulli: Whether to check Tautulli integration (for
-                fast start).
         """
 
         # Get the global preferences
         self.preferences = global_objects.pp
-
-        # Optionally integrate with Tautulli
-        if check_tautulli and self.preferences.use_tautulli:
-            TautulliInterface(
-                **self.preferences.tautulli_interface_args
-            ).integrate()
 
         # Optionally assign EmbyInterface
         self.emby_interface = None
@@ -80,7 +69,7 @@ class Manager:
                 **self.preferences.emby_interface_kwargs
             )
 
-         # Optionally assign JellyfinInterface
+        # Optionally assign JellyfinInterface
         self.jellyfin_interface = None
         if self.preferences.use_jellyfin:
             self.jellyfin_interface = JellyfinInterface(
@@ -430,64 +419,6 @@ class Manager:
             self.__run_serially()
         elif self.preferences.execution_mode == 'batch':
             self.__run()
-
-
-    def remake_cards(self, rating_keys: Iterable[int]) -> None:
-        """
-        Remake the title cards associated with the given list of rating
-        keys. These keys are used to identify their corresponding
-        episodes within Plex.
-
-        Args:
-            rating_keys: List of Plex rating keys corresponding to
-                Episodes to update the cards of.
-        """
-
-        # Exit if Plex is not enabled
-        if not self.preferences.use_plex:
-            log.error(f'Tautulli integration requires Plex')
-            return None
-
-        # Get details for each rating key from Plex
-        entry_list = []
-        for key in rating_keys:
-            if len(details := self.plex_interface.get_episode_details(key)) ==0:
-                log.error(f'Rating key {key} has no associated episodes')
-            else:
-                log.debug(f'Rating key {key} -> {len(details)} item(s)')
-                entry_list += details
-
-        # Go through every series in all series YAML files
-        for show in self.preferences.iterate_series_files():
-            # If no more entries, exit
-            if len(entry_list) == 0:
-                break
-
-            # Check if this show is one of the entries to update
-            is_found = False
-            for index, (series_info, episode_info, library_name) \
-                in enumerate(entry_list):
-                # Match the library and series name
-                full_match_name = show.series_info.full_match_name
-                if (show.valid
-                    and show.library_name == library_name
-                    and full_match_name == series_info.full_match_name):
-                    self.shows = [show]
-                    self.__run(serial=True)
-                    is_found = True
-                    break
-
-            # If an entry was found, delete from list
-            if is_found:
-                del entry_list[index] # pylint: disable=undefined-loop-variable
-
-        # Warn for all entries not found
-        for series_info, episode_info, library_name in entry_list:
-            log.warning(f'Cannot update card for "{series_info}" {episode_info}'
-                        f' within library "{library_name}" - no matching YAML '
-                        f'entry was found')
-
-        return None
 
 
     def report_missing(self, file: Path) -> None:

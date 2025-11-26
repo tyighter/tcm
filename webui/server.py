@@ -15,7 +15,6 @@ from typing import Callable
 from urllib.parse import parse_qs, urlparse
 
 from modules.CleanPath import CleanPath
-from modules.TautulliInterface import TautulliInterface
 from .card_type_images import (
     DEFAULT_THUMBNAIL_SLUG_MAP,
     REPO_THUMBNAIL_ROOT,
@@ -584,120 +583,6 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     },
                 }
             )
-            return
-
-        if parsed.path == "/api/tautulli/recent":
-            if not self.context.preference_parser.use_tautulli:
-                self._error("Tautulli is not configured in preferences.yml", status=HTTPStatus.BAD_REQUEST)
-                return
-
-            tv_data = self.tv_manager.load()
-            series_entries = tv_data.get("series", {})
-            series_names = set(series_entries.keys())
-            tmdb_ids = set()
-            series_tmdb_map: dict[str, int] = {}
-            rating_tmdb_lookup_raw = tv_data.get("rating_tmdb_lookup", {})
-            rating_tmdb_lookup: dict[int, int] = {}
-            if isinstance(rating_tmdb_lookup_raw, dict):
-                for key, value in rating_tmdb_lookup_raw.items():
-                    if str(key).isdigit() and str(value).isdigit():
-                        rating_tmdb_lookup[int(key)] = int(value)
-            for name, config in series_entries.items():
-                if not isinstance(config, dict):
-                    continue
-
-                tmdb_value = config.get("tmdb_id")
-                if not str(tmdb_value).isdigit():
-                    continue
-
-                tmdb_id = int(tmdb_value)
-                tmdb_ids.add(tmdb_id)
-                rating_key = config.get("rating_key")
-                if rating_key is not None:
-                    try:
-                        rating_tmdb_lookup[int(rating_key)] = tmdb_id
-                    except (TypeError, ValueError):
-                        pass
-                for alias in _series_aliases(name):
-                    series_tmdb_map[alias] = tmdb_id
-
-            params = parse_qs(parsed.query)
-            username = params.get("username", [None])[0]
-
-            rating_key_lookup = None
-            persist_lookup = None
-            if self.context.preference_parser.use_plex:
-                try:
-                    plex_interface = self.context.get_plex_interface()
-                    rating_key_lookup = plex_interface.lookup_tmdb_id_from_rating_key
-
-                    def persist_lookup(updated_lookup: dict[int, int]) -> None:
-                        current = self.tv_manager.load()
-                        payload = {
-                            "libraries": _to_builtin(current.get("libraries", {})),
-                            "rating_tmdb_lookup": {
-                                str(key): value for key, value in updated_lookup.items()
-                            },
-                            "series": [
-                                {"name": name, "config": _to_builtin(config)}
-                                for name, config in current.get("series", {}).items()
-                                if name
-                            ],
-                        }
-                        self.tv_manager.write(payload)
-                        self.tv_manager.invalidate()
-
-                except Exception:  # pylint: disable=broad-except
-                    logger.exception("Failed to initialise Plex lookup for Tautulli")
-
-            try:
-                tautulli = TautulliInterface(**self.context.preference_parser.tautulli_interface_args)
-                activity = tautulli.get_recent_activity(
-                    series_names,
-                    tmdb_ids,
-                    series_tmdb_map=series_tmdb_map,
-                    rating_tmdb_lookup=rating_tmdb_lookup,
-                    rating_key_lookup=rating_key_lookup,
-                    persist_rating_tmdb_lookup=persist_lookup,
-                    username=username,
-                )
-            except SystemExit:
-                self._error(
-                    "Unable to connect to Tautulli with the current configuration",
-                    status=HTTPStatus.BAD_GATEWAY,
-                )
-                return
-            except Exception as exc:  # pylint: disable=broad-except
-                logger.exception("Failed to fetch recent Tautulli activity")
-                self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
-                return
-
-            self._json_response(activity)
-            return
-
-        if parsed.path == "/api/tautulli/users":
-            if not self.context.preference_parser.use_tautulli:
-                self._error("Tautulli is not configured in preferences.yml", status=HTTPStatus.BAD_REQUEST)
-                return
-
-            try:
-                tautulli = TautulliInterface(**self.context.preference_parser.tautulli_interface_args)
-                users = tautulli.get_users()
-            except SystemExit:
-                self._error(
-                    "Unable to connect to Tautulli with the current configuration",
-                    status=HTTPStatus.BAD_GATEWAY,
-                )
-                return
-            except Exception as exc:  # pylint: disable=broad-except
-                logger.exception("Failed to fetch Tautulli users")
-                self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
-                return
-
-            self._json_response({
-                "users": users,
-                "default": self.context.preference_parser.tautulli_username,
-            })
             return
 
         if parsed.path == "/api/fonts":
