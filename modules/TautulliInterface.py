@@ -387,16 +387,33 @@ class TautulliInterface(WebInterface):
                     alias_filter.update(_series_aliases(name))
                 series_filter = alias_filter
             results: list[dict[str, Any]] = []
+            skipped_metadata_type = 0
+            timestamp_issues = 0
+            skipped_timestamp = 0
+            provisional_included = 0
             for entry in entries:
+                provisional_entry = False
+                provisional_tracked = False
                 media_type = str(entry.get('media_type', '')).casefold()
                 metadata_type = entry.get('metadata_type')
-                if allowed_media_types is not None and media_type not in allowed_media_types:
-                    continue
-                if allowed_metadata_types is not None and metadata_type is not None:
-                    try:
-                        if int(metadata_type) not in allowed_metadata_types:
-                            continue
-                    except (TypeError, ValueError):
+                media_allowed = allowed_media_types is None or media_type in allowed_media_types
+                metadata_allowed = True
+                if allowed_metadata_types is not None:
+                    metadata_allowed = False
+                    if metadata_type is not None:
+                        try:
+                            metadata_allowed = int(metadata_type) in allowed_metadata_types
+                        except (TypeError, ValueError):
+                            metadata_allowed = False
+
+                if not media_allowed or not metadata_allowed:
+                    if track_unresolved:
+                        provisional_entry = True
+                        provisional_included += 1
+                        provisional_tracked = True
+                    else:
+                        if not metadata_allowed:
+                            skipped_metadata_type += 1
                         continue
 
                 if apply_user_filter and not _matches_username(entry):
@@ -430,7 +447,18 @@ class TautulliInterface(WebInterface):
                         continue
 
                 timestamp = _timestamp(entry, timestamp_fields)
-                if timestamp < cutoff:
+                missing_timestamp = timestamp <= 0
+                if missing_timestamp:
+                    timestamp_issues += 1
+                    if track_unresolved and not provisional_entry:
+                        provisional_entry = True
+                        if not provisional_tracked:
+                            provisional_included += 1
+                            provisional_tracked = True
+                    else:
+                        skipped_timestamp += 1
+                        continue
+                elif timestamp < cutoff:
                     continue
 
                 if tmdb_id is not None:
@@ -451,6 +479,26 @@ class TautulliInterface(WebInterface):
                 )
 
             results.sort(key=lambda entry: entry.get('timestamp', 0), reverse=True)
+
+            if skipped_metadata_type:
+                log.debug(
+                    'Skipped %s entries with unsupported or missing metadata_type (allowed=%s)',
+                    skipped_metadata_type,
+                    sorted(allowed_metadata_types) if allowed_metadata_types is not None else 'any',
+                )
+            if timestamp_issues:
+                log.debug(
+                    'Observed %s entries lacking valid timestamps (skipped=%s, provisional_included=%s)',
+                    timestamp_issues,
+                    skipped_timestamp,
+                    provisional_included,
+                )
+            if provisional_included:
+                log.debug(
+                    'Included %s provisional entries that did not match requested media/metadata filters',
+                    provisional_included,
+                )
+
             return results[:limit_results] if limit_results is not None else results
 
         # Request enough entries to cover the configured time window when no explicit
