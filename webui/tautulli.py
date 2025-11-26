@@ -59,6 +59,7 @@ class TautulliSettings:
     url: str
     api_key: str
     verify_ssl: bool = True
+    user_id: str | None = None
 
     @classmethod
     def from_settings(cls) -> "TautulliSettings | None":
@@ -69,11 +70,13 @@ class TautulliSettings:
         url = str(data.get("url", "")).strip()
         api_key = str(data.get("api_key", "")).strip()
         verify_ssl = bool(data.get("verify_ssl", True))
+        user_id_raw = str(data.get("user_id", "")).strip()
+        user_id = user_id_raw or None
 
         if not url or not api_key:
             return None
 
-        return cls(url=url, api_key=api_key, verify_ssl=verify_ssl)
+        return cls(url=url, api_key=api_key, verify_ssl=verify_ssl, user_id=user_id)
 
     def request(self, command: str, **params: Any) -> dict[str, Any]:
         base_params = {"cmd": command, "apikey": self.api_key}
@@ -119,6 +122,36 @@ def _series_aliases(title: str) -> list[str]:
         aliases.append(stripped.casefold())
 
     return aliases
+
+
+def fetch_users(settings: TautulliSettings) -> list[dict[str, str]]:
+    data = settings.request("get_users")
+
+    raw_entries: list[dict[str, Any]] = []
+    if isinstance(data, list):
+        raw_entries = [entry for entry in data if isinstance(entry, dict)]
+    elif isinstance(data, dict):
+        for key in ("users", "rows", "data"):
+            value = data.get(key)
+            if isinstance(value, list):
+                raw_entries = [entry for entry in value if isinstance(entry, dict)]
+                break
+
+    users: list[dict[str, str]] = []
+    for entry in raw_entries:
+        user_id = entry.get("user_id") or entry.get("id") or entry.get("row_id")
+        name = (
+            entry.get("friendly_name")
+            or entry.get("username")
+            or entry.get("email")
+            or entry.get("user")
+        )
+        if user_id is None or name is None:
+            continue
+        users.append({"id": str(user_id), "name": str(name)})
+
+    users.sort(key=lambda entry: entry["name"].casefold())
+    return users
 
 
 def _series_lookup(tv_manager: TvYamlManager) -> list[dict[str, Any]]:
@@ -207,12 +240,15 @@ def _season_label(season_index: Any) -> str | None:
 
 
 def fetch_recent_watches(settings: TautulliSettings, lookup: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    history = settings.request(
-        "get_history",
-        length=200,
-        include_activity=0,
-        grouping=0,
-    ).get("data", [])
+    request_params: dict[str, Any] = {
+        "length": 200,
+        "include_activity": 0,
+        "grouping": 0,
+    }
+    if settings.user_id:
+        request_params["user_id"] = settings.user_id
+
+    history = settings.request("get_history", **request_params).get("data", [])
 
     tautulli_logger.info("Raw watched entries: %s", json.dumps(history, ensure_ascii=False))
 

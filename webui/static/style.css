@@ -855,6 +855,17 @@ button:disabled:hover {
   font-size: 1rem;
 }
 
+.modal-section__group {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.modal-section__group h4 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
 .modal-list {
   margin: 0;
   padding-left: 1.1rem;
@@ -871,6 +882,8 @@ button:disabled:hover {
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: start;
+  align-content: start;
 }
 
 .modal-controls {

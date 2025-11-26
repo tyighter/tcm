@@ -44,7 +44,7 @@ from .services import (
 )
 from .tv_data import TvYamlManager, _to_builtin
 from .user_settings import load_settings, save_settings
-from .tautulli import fetch_recent_activity
+from .tautulli import TautulliSettings, fetch_recent_activity, fetch_users
 
 logger = logging.getLogger(__name__)
 
@@ -588,7 +588,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/settings":
-            self._json_response(load_settings())
+            self._json_response(load_settings(self.context.preference_file))
             return
 
         if parsed.path == "/api/fonts":
@@ -632,6 +632,16 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             self._json_response({"results": results})
             return
 
+        if parsed.path == "/api/tautulli/users":
+            try:
+                settings = TautulliSettings.from_settings()
+                if not settings:
+                    raise RuntimeError("Tautulli is not configured. Set the URL and API key in settings.")
+                self._json_response({"users": fetch_users(settings)})
+            except Exception as exc:  # pylint: disable=broad-except
+                self._error(str(exc), status=HTTPStatus.BAD_REQUEST)
+                return
+
         if parsed.path == "/api/tautulli/recents":
             try:
                 payload = fetch_recent_activity(self.context, self.tv_manager)
@@ -670,7 +680,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 self._error(str(exc))
                 return
 
-            updated = save_settings(payload)
+            updated = save_settings(payload, self.context.preference_file)
             self._json_response(updated)
             return
 

@@ -15,6 +15,7 @@ const state = {
     plexEnabled: true,
   },
   settings: {
+    preferences: {},
     tautulli: {
       url: '',
       api_key: '',
@@ -3810,14 +3811,23 @@ function openRecentsModal() {
   modal.footer.append(refreshButton, settingsButton, closeButton(() => closeModal(modal.element)));
 }
 
+function formatSettingLabel(key) {
+  if (!key) return '';
+  return key
+    .toString()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function openSettingsModal() {
   const modal = buildModal('Settings');
   addFloatingCloseButton(modal, 'Close settings dialog');
 
   const tautulli = state.settings?.tautulli || {};
+  const preferences = state.settings?.preferences || {};
 
-  const form = document.createElement('div');
-  form.className = 'modal-section';
+  const tautulliSection = document.createElement('div');
+  tautulliSection.className = 'modal-section';
 
   const intro = document.createElement('p');
   intro.className = 'helper-text';
@@ -3845,6 +3855,22 @@ function openSettingsModal() {
   keyInput.autocomplete = 'off';
   keyField.append(keyLabel, keyInput);
 
+  const userField = document.createElement('label');
+  userField.className = 'modal-controls__field';
+  const userLabel = document.createElement('span');
+  userLabel.className = 'modal-controls__label';
+  userLabel.textContent = 'Plex user';
+  const userSelect = document.createElement('select');
+  const defaultUserOption = document.createElement('option');
+  defaultUserOption.value = '';
+  defaultUserOption.textContent = 'All users';
+  userSelect.append(defaultUserOption);
+  userField.append(userLabel, userSelect);
+
+  const userStatus = document.createElement('p');
+  userStatus.className = 'helper-text';
+  userStatus.textContent = 'Loading users...';
+
   const verifyField = document.createElement('label');
   verifyField.className = 'modal-controls__field';
   const verifyLabel = document.createElement('span');
@@ -3855,9 +3881,122 @@ function openSettingsModal() {
   verifyInput.checked = tautulli.verify_ssl !== false;
   verifyField.append(verifyLabel, verifyInput);
 
+  const preferencesSection = document.createElement('div');
+  preferencesSection.className = 'modal-section';
+  const preferencesHeader = document.createElement('h3');
+  preferencesHeader.textContent = 'Preferences';
+  const preferencesIntro = document.createElement('p');
+  preferencesIntro.className = 'helper-text';
+  preferencesIntro.textContent = 'Edit values from your preferences.yml file.';
+
+  const preferenceInputs = new Map();
+
+  const renderPreferenceFields = (container, data, path = []) => {
+    if (!data || typeof data !== 'object') {
+      return;
+    }
+
+    Object.entries(data).forEach(([key, value]) => {
+      const fieldPath = [...path, key];
+      const fieldId = fieldPath.join('.');
+      const isNestedObject = value && typeof value === 'object' && !Array.isArray(value);
+
+      if (isNestedObject) {
+        const group = document.createElement('div');
+        group.className = 'modal-section__group';
+        const heading = document.createElement('h4');
+        heading.textContent = formatSettingLabel(key);
+        group.appendChild(heading);
+        renderPreferenceFields(group, value, fieldPath);
+        container.appendChild(group);
+        return;
+      }
+
+      const field = document.createElement('label');
+      field.className = 'modal-controls__field';
+      const label = document.createElement('span');
+      label.className = 'modal-controls__label';
+      label.textContent = formatSettingLabel(key);
+
+      const input = document.createElement('input');
+      let fieldType = 'string';
+      if (typeof value === 'boolean') {
+        input.type = 'checkbox';
+        input.checked = value;
+        fieldType = 'boolean';
+      } else if (typeof value === 'number') {
+        input.type = 'number';
+        input.value = Number.isFinite(value) ? value : '';
+        fieldType = 'number';
+      } else if (Array.isArray(value)) {
+        input.type = 'text';
+        input.value = value.join(', ');
+        fieldType = 'array';
+      } else {
+        input.type = 'text';
+        input.value = value ?? '';
+      }
+
+      preferenceInputs.set(fieldId, { input, type: fieldType });
+
+      field.append(label, input);
+      container.appendChild(field);
+    });
+  };
+
+  const preferencesKeys = Object.keys(preferences || {});
+  if (preferencesKeys.length) {
+    preferencesKeys.forEach((key) => {
+      const section = document.createElement('div');
+      section.className = 'modal-section__group';
+      const heading = document.createElement('h4');
+      heading.textContent = formatSettingLabel(key);
+      section.appendChild(heading);
+      renderPreferenceFields(section, preferences[key], [key]);
+      preferencesSection.appendChild(section);
+    });
+  } else {
+    const emptyMessage = document.createElement('p');
+    emptyMessage.className = 'helper-text';
+    emptyMessage.textContent = 'No preferences found. Ensure preferences.yml is available to edit settings here.';
+    preferencesSection.appendChild(emptyMessage);
+  }
+
   const status = document.createElement('p');
   status.className = 'helper-text';
   status.textContent = '';
+
+  const buildPreferencePayload = (template, path = []) => {
+    if (template && typeof template === 'object' && !Array.isArray(template)) {
+      const result = {};
+      Object.entries(template).forEach(([key, value]) => {
+        result[key] = buildPreferencePayload(value, [...path, key]);
+      });
+      return result;
+    }
+
+    const fieldId = path.join('.');
+    const meta = preferenceInputs.get(fieldId);
+    if (!meta) {
+      return template;
+    }
+
+    if (meta.type === 'boolean') {
+      return meta.input.checked;
+    }
+    if (meta.type === 'number') {
+      const parsed = Number(meta.input.value);
+      return Number.isNaN(parsed) ? template : parsed;
+    }
+    if (meta.type === 'array') {
+      return meta.input.value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
+    return meta.input.value;
+  };
 
   const saveButton = document.createElement('button');
   saveButton.type = 'button';
@@ -3870,8 +4009,10 @@ function openSettingsModal() {
         tautulli: {
           url: urlInput.value,
           api_key: keyInput.value,
+          user_id: userSelect.value,
           verify_ssl: verifyInput.checked,
         },
+        preferences: buildPreferencePayload(preferences),
       });
       status.textContent = 'Settings saved.';
       showToast('Settings updated');
@@ -3883,8 +4024,48 @@ function openSettingsModal() {
     }
   });
 
-  form.append(intro, urlField, keyField, verifyField, status);
-  modal.content.append(form);
+  const loadUsers = async () => {
+    userSelect.disabled = true;
+    userStatus.textContent = 'Loading users...';
+    try {
+      const response = await fetch('/api/tautulli/users');
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to load users');
+      }
+
+      const users = Array.isArray(data.users) ? data.users : [];
+      while (userSelect.options.length > 1) {
+        userSelect.remove(1);
+      }
+
+      users.forEach((user) => {
+        if (!user || !user.id) {
+          return;
+        }
+        const option = document.createElement('option');
+        option.value = user.id;
+        option.textContent = user.name || user.id;
+        userSelect.append(option);
+      });
+
+      userSelect.value = tautulli.user_id || '';
+      userStatus.textContent = users.length
+        ? 'Select a Plex user to filter watch history.'
+        : 'No users returned from Tautulli.';
+    } catch (error) {
+      userStatus.textContent = error.message;
+    } finally {
+      userSelect.disabled = false;
+    }
+  };
+
+  loadUsers();
+
+  tautulliSection.append(intro, urlField, keyField, userField, userStatus, verifyField);
+  preferencesSection.prepend(preferencesHeader, preferencesIntro);
+
+  modal.content.append(tautulliSection, preferencesSection, status);
   modal.footer.append(saveButton, closeButton(() => closeModal(modal.element)));
 }
 
