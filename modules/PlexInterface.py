@@ -520,6 +520,52 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
         return all_episodes
 
 
+    @catch_and_log('Error expanding rating key to episodes', default=[])
+    def expand_rating_key_to_episodes(self, rating_key: int) -> list[dict[str, Any]]:
+        """Return episode metadata (including rating keys) for a Plex item.
+
+        The provided ``rating_key`` can refer to a show, season, or episode.
+        The returned dictionaries contain the series title, season/episode
+        numbers, episode title, and both show- and episode-level rating keys so
+        downstream consumers can correlate the items to TitleCardMaker entries.
+        """
+
+        try:
+            entry = self.__server.fetchItem(rating_key)
+        except Exception:
+            return []
+
+        # Normalise to the series item so we can iterate episodes regardless of
+        # the original item type.
+        if entry.type == 'show':
+            series = entry
+            episodes = series.episodes()
+        elif entry.type == 'season':
+            series = self.__server.fetchItem(entry.parentKey)
+            episodes = entry.episodes()
+        elif entry.TYPE == 'episode':
+            series = self.__server.fetchItem(entry.grandparentKey)
+            episodes = [entry]
+        else:
+            return []
+
+        results: list[dict[str, Any]] = []
+        for episode in episodes:
+            results.append(
+                {
+                    'series': getattr(series, 'title', None),
+                    'season': getattr(episode, 'parentIndex', None),
+                    'episode': getattr(episode, 'index', None),
+                    'title': getattr(episode, 'title', None),
+                    'series_year': getattr(series, 'year', None),
+                    'show_rating_key': getattr(series, 'ratingKey', None),
+                    'episode_rating_key': getattr(episode, 'ratingKey', None),
+                }
+            )
+
+        return results
+
+
     def has_series(self, library_name: str, series_info: SeriesInfo) -> bool:
         """
         Determine whether the given series is present within Plex.

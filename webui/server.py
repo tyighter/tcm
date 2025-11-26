@@ -43,6 +43,8 @@ from .services import (
     search_plex,
 )
 from .tv_data import TvYamlManager, _to_builtin
+from .user_settings import load_settings, save_settings
+from .tautulli import fetch_recent_activity
 
 logger = logging.getLogger(__name__)
 
@@ -585,6 +587,10 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if parsed.path == "/api/settings":
+            self._json_response(load_settings())
+            return
+
         if parsed.path == "/api/fonts":
             params = parse_qs(parsed.query)
             requested = self._resolve_font_path(
@@ -626,6 +632,16 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             self._json_response({"results": results})
             return
 
+        if parsed.path == "/api/tautulli/recents":
+            try:
+                payload = fetch_recent_activity(self.context, self.tv_manager)
+            except Exception as exc:  # pylint: disable=broad-except
+                self._error(str(exc), status=HTTPStatus.BAD_REQUEST)
+                return
+
+            self._json_response(payload)
+            return
+
         self.send_error(HTTPStatus.NOT_FOUND.value)
 
     def do_POST(self) -> None:  # type: ignore[override]
@@ -645,6 +661,17 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             self._json_response({"status": "ok"})
+            return
+
+        if parsed.path == "/api/settings":
+            try:
+                payload = self._parse_json()
+            except ValueError as exc:
+                self._error(str(exc))
+                return
+
+            updated = save_settings(payload)
+            self._json_response(updated)
             return
 
         if parsed.path == "/api/client-log":
