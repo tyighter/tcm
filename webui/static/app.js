@@ -14,6 +14,13 @@ const state = {
     tmdbEnabled: true,
     plexEnabled: true,
   },
+  settings: {
+    tautulli: {
+      url: '',
+      api_key: '',
+      verify_ssl: true,
+    },
+  },
 };
 
 const dom = {
@@ -29,6 +36,8 @@ const dom = {
   downloadSources: document.getElementById('download-sources'),
   runBuilder: document.getElementById('run-builder'),
   unmatchedIssues: document.getElementById('unmatched-issues'),
+  recents: document.getElementById('open-recents'),
+  settings: document.getElementById('open-settings'),
   modals: document.getElementById('modals'),
 };
 
@@ -456,6 +465,7 @@ async function init() {
     await loadPreviewCache();
     loadLogoBackgroundPreferences();
     await loadMetadata();
+    await loadSettings();
     await loadConfiguration();
     registerEvents();
     setSearchVisibility(false);
@@ -478,6 +488,19 @@ async function loadMetadata() {
   state.fontDirectory = data.fontDirectory || state.fontDirectory;
   state.cardTypeExtras = data.cardTypeExtras || {};
   state.services = data.services || state.services;
+}
+
+async function loadSettings() {
+  try {
+    const response = await fetch('/api/settings');
+    if (!response.ok) {
+      throw new Error('Unable to load settings');
+    }
+    const data = await response.json();
+    state.settings = data || state.settings;
+  } catch (error) {
+    console.warn('Unable to load settings', error);
+  }
 }
 
 function initializeEntryPreviewState(entry) {
@@ -512,6 +535,23 @@ async function loadConfiguration() {
   state.collapsedEntries = new Set(state.entries.map((entry) => entry.id));
   syncSavedEntrySnapshots();
   await Promise.all(state.entries.map((entry) => restoreCachedPreview(entry)));
+}
+
+async function saveSettings(payload) {
+  const response = await fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || 'Unable to save settings');
+  }
+
+  const data = await response.json();
+  state.settings = data || state.settings;
+  return data;
 }
 
 function setSearchVisibility(isVisible) {
@@ -592,6 +632,14 @@ function registerEvents() {
 
   if (dom.unmatchedIssues) {
     dom.unmatchedIssues.addEventListener('click', () => openUnmatchedItemsModal());
+  }
+
+  if (dom.recents) {
+    dom.recents.addEventListener('click', () => openRecentsModal());
+  }
+
+  if (dom.settings) {
+    dom.settings.addEventListener('click', () => openSettingsModal());
   }
 }
 
@@ -3676,6 +3724,168 @@ function renderActivityList(listElement, entries, emptyMessage, timestampLabel) 
     item.append(series, episode, meta);
     listElement.appendChild(item);
   });
+}
+
+async function fetchRecentActivity() {
+  const response = await fetch('/api/tautulli/recents');
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Unable to load recent activity');
+  }
+
+  return data;
+}
+
+function openRecentsModal() {
+  const modal = buildModal('Recents');
+  addFloatingCloseButton(modal, 'Close recents dialog');
+
+  const intro = document.createElement('div');
+  intro.className = 'modal-section modal-section--muted';
+  intro.innerHTML = '<p class="helper-text">Recent Tautulli activity is filtered to shows configured in tv.yml.</p>';
+
+  const status = document.createElement('p');
+  status.className = 'helper-text';
+  status.textContent = 'Loading recent activity...';
+
+  const grid = document.createElement('div');
+  grid.className = 'modal-activity-grid';
+
+  const watchedSection = document.createElement('div');
+  watchedSection.className = 'modal-section';
+  const watchedHeader = document.createElement('h3');
+  watchedHeader.textContent = 'Recently watched';
+  const watchedList = document.createElement('ul');
+  watchedList.className = 'modal-activity-list';
+  watchedSection.append(watchedHeader, watchedList);
+
+  const addedSection = document.createElement('div');
+  addedSection.className = 'modal-section';
+  const addedHeader = document.createElement('h3');
+  addedHeader.textContent = 'Recently added';
+  const addedList = document.createElement('ul');
+  addedList.className = 'modal-activity-list';
+  addedSection.append(addedHeader, addedList);
+
+  grid.append(watchedSection, addedSection);
+
+  const settingsButton = document.createElement('button');
+  settingsButton.type = 'button';
+  settingsButton.textContent = 'Update Tautulli settings';
+  settingsButton.addEventListener('click', () => {
+    closeModal(modal.element);
+    openSettingsModal();
+  });
+
+  const refreshButton = document.createElement('button');
+  refreshButton.type = 'button';
+  refreshButton.textContent = 'Refresh';
+
+  const refreshActivity = async () => {
+    status.textContent = 'Loading recent activity...';
+    refreshButton.disabled = true;
+    settingsButton.disabled = true;
+
+    try {
+      const data = await fetchRecentActivity();
+      renderActivityList(watchedList, data.watched || [], 'No watched episodes in the last 7 days.', 'Watched');
+      renderActivityList(addedList, data.added || [], 'No episodes added in the last 7 days.', 'Added');
+      if (data.generatedAt) {
+        status.textContent = `Updated ${formatActivityTimestamp(data.generatedAt)}`;
+      } else {
+        status.textContent = 'Activity loaded';
+      }
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      refreshButton.disabled = false;
+      settingsButton.disabled = false;
+    }
+  };
+
+  refreshActivity();
+
+  modal.content.append(intro, status, grid);
+  modal.footer.append(refreshButton, settingsButton, closeButton(() => closeModal(modal.element)));
+}
+
+function openSettingsModal() {
+  const modal = buildModal('Settings');
+  addFloatingCloseButton(modal, 'Close settings dialog');
+
+  const tautulli = state.settings?.tautulli || {};
+
+  const form = document.createElement('div');
+  form.className = 'modal-section';
+
+  const intro = document.createElement('p');
+  intro.className = 'helper-text';
+  intro.textContent = 'Provide your Tautulli address and API key to enable Recents.';
+
+  const urlField = document.createElement('label');
+  urlField.className = 'modal-controls__field';
+  const urlLabel = document.createElement('span');
+  urlLabel.className = 'modal-controls__label';
+  urlLabel.textContent = 'Tautulli URL';
+  const urlInput = document.createElement('input');
+  urlInput.type = 'url';
+  urlInput.value = tautulli.url || '';
+  urlInput.placeholder = 'http://localhost:8181';
+  urlField.append(urlLabel, urlInput);
+
+  const keyField = document.createElement('label');
+  keyField.className = 'modal-controls__field';
+  const keyLabel = document.createElement('span');
+  keyLabel.className = 'modal-controls__label';
+  keyLabel.textContent = 'API key';
+  const keyInput = document.createElement('input');
+  keyInput.type = 'text';
+  keyInput.value = tautulli.api_key || '';
+  keyInput.autocomplete = 'off';
+  keyField.append(keyLabel, keyInput);
+
+  const verifyField = document.createElement('label');
+  verifyField.className = 'modal-controls__field';
+  const verifyLabel = document.createElement('span');
+  verifyLabel.className = 'modal-controls__label';
+  verifyLabel.textContent = 'Verify SSL certificates';
+  const verifyInput = document.createElement('input');
+  verifyInput.type = 'checkbox';
+  verifyInput.checked = tautulli.verify_ssl !== false;
+  verifyField.append(verifyLabel, verifyInput);
+
+  const status = document.createElement('p');
+  status.className = 'helper-text';
+  status.textContent = '';
+
+  const saveButton = document.createElement('button');
+  saveButton.type = 'button';
+  saveButton.textContent = 'Save settings';
+  saveButton.addEventListener('click', async () => {
+    saveButton.disabled = true;
+    status.textContent = 'Saving settings...';
+    try {
+      await saveSettings({
+        tautulli: {
+          url: urlInput.value,
+          api_key: keyInput.value,
+          verify_ssl: verifyInput.checked,
+        },
+      });
+      status.textContent = 'Settings saved.';
+      showToast('Settings updated');
+    } catch (error) {
+      status.textContent = error.message;
+      showToast(error.message, 'error');
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
+
+  form.append(intro, urlField, keyField, verifyField, status);
+  modal.content.append(form);
+  modal.footer.append(saveButton, closeButton(() => closeModal(modal.element)));
 }
 
 // -----------------------------------------------------------------------------
