@@ -434,7 +434,7 @@ class TautulliInterface(WebInterface):
 
         recently_added_params = self.__params | {
             'cmd': 'get_recently_added',
-            'media_type': 'episode',
+            'media_type': 'all',
             'order_dir': 'desc',
             'length': fetch_length,
         }
@@ -473,8 +473,8 @@ class TautulliInterface(WebInterface):
             tmdb_filter=None,
             limit_results=None,
             track_unresolved=True,
-            media_types={'show', 'episode'},
-            metadata_types={2, 4},
+            media_types={'show', 'episode', 'season'},
+            metadata_types={2, 3, 4},
         )
 
         activity = {
@@ -495,8 +495,8 @@ class TautulliInterface(WebInterface):
                 series_filter=series_names,
                 tmdb_filter=tmdb_ids,
                 limit_results=limit,
-                media_types={'show', 'episode'},
-                metadata_types={2, 4},
+                media_types={'show', 'episode', 'season'},
+                metadata_types={2, 3, 4},
             ),
         }
 
