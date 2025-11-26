@@ -22,7 +22,6 @@ from modules.SonarrInterface import SonarrInterface
 from modules.StandardSummary import StandardSummary
 from modules.StyleSet import StyleSet
 from modules.StylizedSummary import StylizedSummary
-from modules.TautulliInterface import TautulliInterface
 from modules.Template import Template
 from modules.TitleCard import TitleCard
 from modules.TMDbInterface import TMDbInterface
@@ -167,14 +166,6 @@ class PreferenceParser(YamlReader):
         self.tmdb_skip_localized_images = False
         self.tmdb_logo_language_priority = ['en']
 
-        self.use_tautulli = False
-        self.tautulli_url = None
-        self.tautulli_api_key = None
-        self.tautulli_verify_ssl = True
-        self.tautulli_username = None
-        self.tautulli_update_script = None
-        self.tautulli_agent_name = TautulliInterface.DEFAULT_AGENT_NAME
-        self.tautulli_script_timeout = TautulliInterface.DEFAULT_SCRIPT_TIMEOUT
 
         self.imagemagick_container = None
         self.imagemagick_timeout = ImageMagickInterface.COMMAND_TIMEOUT_SECONDS
@@ -777,45 +768,6 @@ class PreferenceParser(YamlReader):
         return None
 
 
-    def __parse_yaml_tautulli(self) -> None:
-        """
-        Parse the 'tautulli' section of the raw YAML dictionary into
-        attributes.
-        """
-
-        # Skip if section omitted
-        if not self._is_specified('tautulli'):
-            return None
-
-        # Parse required attributes
-        if ((url := self.get('tautulli', 'url', type_=str)) is not None
-            and (api_key := self.get('tautulli', 'api_key', type_=str)) is not None
-            and (script := self.get('tautulli', 'update_script',
-                                     type_=Path)) is not None):
-            self.tautulli_url = url
-            self.tautulli_api_key = api_key
-            self.tautulli_update_script = script
-            self.use_tautulli = True
-        else:
-            log.critical(f'tautulli preferences must contain "url", "api_key", '
-                         f'and "update_script"')
-            self.valid = False
-
-        if (value := self.get('tautulli', 'verify_ssl', type_=bool)) is not None:
-            self.tautulli_verify_ssl = value
-
-        if (value := self.get('tautulli', 'username', type_=str)) is not None:
-            self.tautulli_username = value
-
-        if (value := self.get('tautulli', 'agent_name', type_=str)) is not None:
-            self.tautulli_agent_name = value
-
-        if (value := self.get('tautulli', 'script_timeout',type_=int)) is not None:
-            self.tautulli_script_timeout = value
-
-        return None
-
-
     def __parse_yaml_imagemagick(self) -> None:
         """
         Parse the 'imagemagick' section of the raw YAML dictionary into
@@ -856,7 +808,6 @@ class PreferenceParser(YamlReader):
         self.__parse_yaml_plex()
         self.__parse_yaml_sonarr()
         self.__parse_yaml_tmdb()
-        self.__parse_yaml_tautulli()
         self.__parse_yaml_imagemagick()
 
         # Warn for renamed settings
@@ -1217,20 +1168,6 @@ class PreferenceParser(YamlReader):
 
         return len(self.sonarr_kwargs) > 0
 
-
-    @property
-    def tautulli_interface_args(self) -> dict[str, Union[str, int]]:
-        """Arguments for initializing a TautulliInterface"""
-
-        return {
-            'url': self.tautulli_url,
-            'api_key': self.tautulli_api_key,
-            'verify_ssl': self.tautulli_verify_ssl,
-            'update_script': self.tautulli_update_script,
-            'agent_name': self.tautulli_agent_name,
-            'script_timeout': self.tautulli_script_timeout,
-            'username': self.tautulli_username,
-        }
 
     @property
     def emby_interface_kwargs(self) -> dict[str, Union[str, bool, int]]:

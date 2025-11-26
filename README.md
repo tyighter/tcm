@@ -50,7 +50,7 @@ Use `--preferences` to point at a custom preferences file and `--missing` to wri
 
 ## Usage
 - **Web UI**: Starts automatically in Docker unless `TCM_WEBUI` is disabled. The server runs from `webui.server` and listens on `TCM_WEBUI_PORT`.
-- **CLI / scheduler**: `main.py` accepts scheduling flags such as `--runtime` and `--frequency` and supports watch-status updates via Tautulli input files (`--tautulli-list`).
+- **CLI / scheduler**: `main.py` accepts scheduling flags such as `--runtime` and `--frequency` for automating runs.
 - **Mini maker**: Run `python mini_maker.py --help` for options to produce posters and cards outside the main automation loop.
 
 Sample configurations for preferences, TV sources, fonts, and thumbnails live in the `config/` directory. The container copies these into `/config` when they are missing so you can edit them in place.
