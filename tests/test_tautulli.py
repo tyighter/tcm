@@ -1,0 +1,91 @@
+from types import SimpleNamespace
+from unittest import TestCase
+from unittest.mock import patch
+
+from webui.tautulli import (
+    _plex_watched_changes,
+    _reset_plex_watch_state_cache,
+    _series_lookup,
+    _trigger_builds_for_recent_changes,
+)
+
+
+class DummyTvManager:
+    def __init__(self) -> None:
+        self.data = {
+            "series": {
+                "Example": {
+                    "rating_key": 101,
+                    "library": "TV",
+                    "watched_style": "style",
+                }
+            }
+        }
+
+    def load(self):  # pragma: no cover - trivial data access
+        return self.data
+
+
+class DummyPlex:
+    def __init__(self, show_rating_key: str) -> None:
+        self.episodes = [
+            {
+                "episode_rating_key": f"{show_rating_key}-1",
+                "show_rating_key": show_rating_key,
+                "title": "Pilot",
+                "season": 1,
+                "watched": False,
+            }
+        ]
+
+    def expand_rating_key_to_episodes(self, rating_key):  # pragma: no cover - trivial passthrough
+        return [dict(item) for item in self.episodes]
+
+    def set_watched(self, watched: bool) -> None:
+        for episode in self.episodes:
+            episode["watched"] = watched
+
+
+class DummyContext:
+    def __init__(self, plex: DummyPlex, use_fallback: bool) -> None:
+        self.preference_parser = SimpleNamespace(
+            tautulli_use_plex_fallback=use_fallback, use_plex=True
+        )
+        self._plex = plex
+
+    def get_plex_interface(self) -> DummyPlex:  # pragma: no cover - trivial accessor
+        return self._plex
+
+
+class PlexWatchStateTests(TestCase):
+    def _run_watch_toggle_flow(self, use_fallback: bool) -> None:
+        tv_manager = DummyTvManager()
+        plex = DummyPlex("show-1")
+        context = DummyContext(plex, use_fallback)
+        lookup = _series_lookup(tv_manager)
+
+        _reset_plex_watch_state_cache()
+
+        initial = _plex_watched_changes(context, lookup)
+        self.assertEqual(initial, [])
+
+        plex.set_watched(True)
+        synthetic = _plex_watched_changes(context, lookup)
+
+        self.assertEqual(len(synthetic), 1)
+        self.assertEqual(synthetic[0]["series"], "Example")
+
+        previous_payload = {"watched": [], "added": []}
+        current_payload = {"watched": synthetic, "added": []}
+
+        with patch("webui.tautulli.run_builder_for_series") as run_builder:
+            _trigger_builds_for_recent_changes(
+                context, tv_manager, previous_payload, current_payload
+            )
+            run_builder.assert_called_once_with(context, tv_manager, "Example")
+
+    def test_watch_toggle_triggers_build_with_fallback_enabled(self) -> None:
+        self._run_watch_toggle_flow(use_fallback=True)
+
+    def test_watch_toggle_triggers_build_with_fallback_disabled(self) -> None:
+        self._run_watch_toggle_flow(use_fallback=False)

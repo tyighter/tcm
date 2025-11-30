@@ -674,10 +674,6 @@ def _series_needing_build(
 def _plex_watched_changes(
     context: AppContext, lookup: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    if not context.preference_parser.tautulli_use_plex_fallback:
-        _reset_plex_watch_state_cache()
-        return []
-
     plex = context.get_plex_interface()
     now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
     synthetic: list[dict[str, Any]] = []
