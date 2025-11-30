@@ -3851,9 +3851,17 @@ function openSettingsModal() {
   const tautulliSection = document.createElement('div');
   tautulliSection.className = 'modal-section';
 
+  const tautulliHeader = document.createElement('div');
+  tautulliHeader.className = 'modal-section__header';
+  const tautulliTitle = document.createElement('h3');
+  tautulliTitle.textContent = 'Tautulli connection';
   const intro = document.createElement('p');
   intro.className = 'helper-text';
   intro.textContent = 'Provide your Tautulli address and API key to enable Recents.';
+  tautulliHeader.append(tautulliTitle, intro);
+
+  const tautulliControls = document.createElement('div');
+  tautulliControls.className = 'modal-controls';
 
   const urlField = document.createElement('label');
   urlField.className = 'modal-controls__field';
@@ -3883,6 +3891,7 @@ function openSettingsModal() {
   userLabel.className = 'modal-controls__label';
   userLabel.textContent = 'Plex user';
   const userSelect = document.createElement('select');
+  userSelect.className = 'modal-select';
   const defaultUserOption = document.createElement('option');
   defaultUserOption.value = '';
   defaultUserOption.textContent = 'All users';
@@ -3890,7 +3899,7 @@ function openSettingsModal() {
   userField.append(userLabel, userSelect);
 
   const userStatus = document.createElement('p');
-  userStatus.className = 'helper-text';
+  userStatus.className = 'helper-text modal-controls__status';
   userStatus.textContent = 'Loading users...';
 
   const verifyField = document.createElement('label');
@@ -3905,11 +3914,14 @@ function openSettingsModal() {
 
   const preferencesSection = document.createElement('div');
   preferencesSection.className = 'modal-section';
-  const preferencesHeader = document.createElement('h3');
-  preferencesHeader.textContent = 'Preferences';
+  const preferencesHeader = document.createElement('div');
+  preferencesHeader.className = 'modal-section__header';
+  const preferencesTitle = document.createElement('h3');
+  preferencesTitle.textContent = 'Preferences';
   const preferencesIntro = document.createElement('p');
   preferencesIntro.className = 'helper-text';
   preferencesIntro.textContent = 'Edit values from your preferences.yml file.';
+  preferencesHeader.append(preferencesTitle, preferencesIntro);
 
   const preferenceInputs = new Map();
 
@@ -4084,8 +4096,9 @@ function openSettingsModal() {
 
   loadUsers();
 
-  tautulliSection.append(intro, urlField, keyField, userField, userStatus, verifyField);
-  preferencesSection.prepend(preferencesHeader, preferencesIntro);
+  tautulliControls.append(urlField, keyField, userField, verifyField);
+  tautulliSection.append(tautulliHeader, tautulliControls, userStatus);
+  preferencesSection.prepend(preferencesHeader);
 
   modal.content.append(tautulliSection, preferencesSection, status);
   modal.footer.append(saveButton, closeButton(() => closeModal(modal.element)));
