@@ -3198,24 +3198,6 @@ async function openPreview(entry) {
   const previewSeason = previewSeasonForEntry(entry, previewEpisode);
 
   try {
-    const staticPreview = await fetchStaticPreview(entry, { season: previewSeason });
-    if (staticPreview) {
-      modal.content.innerHTML = '';
-      const img = document.createElement('img');
-      img.className = 'preview-image';
-      img.src = staticPreview;
-      entry.previewSrc = img.src;
-      entry.previewError = null;
-      await updatePreviewCache(entry);
-      updateEntryPreview(entry);
-      modal.content.appendChild(img);
-      return;
-    }
-  } catch (error) {
-    console.warn('Static preview unavailable', error);
-  }
-
-  try {
     const response = await fetch('/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3245,6 +3227,25 @@ async function openPreview(entry) {
     updateEntryPreview(entry);
     modal.content.appendChild(img);
   } catch (error) {
+    console.warn('Preview generation failed, attempting static preview', error);
+    try {
+      const staticPreview = await fetchStaticPreview(entry, { season: previewSeason });
+      if (staticPreview) {
+        modal.content.innerHTML = '';
+        const img = document.createElement('img');
+        img.className = 'preview-image';
+        img.src = staticPreview;
+        entry.previewSrc = img.src;
+        entry.previewError = null;
+        await updatePreviewCache(entry);
+        updateEntryPreview(entry);
+        modal.content.appendChild(img);
+        return;
+      }
+    } catch (staticError) {
+      console.warn('Static preview unavailable', staticError);
+    }
+
     modal.content.innerHTML = '';
     modal.content.textContent = error.message;
   }
