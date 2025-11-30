@@ -166,6 +166,9 @@ class PreferenceParser(YamlReader):
         self.tmdb_skip_localized_images = False
         self.tmdb_logo_language_priority = ['en']
 
+        self.tautulli_use_plex_fallback = False
+        self.tautulli_activity_poll_interval_seconds = 60
+
 
         self.imagemagick_container = None
         self.imagemagick_timeout = ImageMagickInterface.COMMAND_TIMEOUT_SECONDS
@@ -806,6 +809,7 @@ class PreferenceParser(YamlReader):
         self.__parse_yaml_emby()
         self.__parse_yaml_jellyfin()
         self.__parse_yaml_plex()
+        self.__parse_yaml_tautulli()
         self.__parse_yaml_sonarr()
         self.__parse_yaml_tmdb()
         self.__parse_yaml_imagemagick()
@@ -1238,6 +1242,23 @@ class PreferenceParser(YamlReader):
                 return value
 
         return None
+
+
+    def __parse_yaml_tautulli(self) -> None:
+        """Parse the 'tautulli' section of the raw YAML dictionary."""
+
+        minimum_interval = 15
+
+        if (value := self.get('tautulli', 'use_plex_fallback', type_=bool)) is not None:
+            self.tautulli_use_plex_fallback = value
+
+        if (value := self.get('tautulli', 'activity_poll_interval_seconds', type_=int)) is not None:
+            self.tautulli_activity_poll_interval_seconds = max(value, minimum_interval)
+        else:
+            self.tautulli_activity_poll_interval_seconds = max(
+                self.tautulli_activity_poll_interval_seconds,
+                minimum_interval,
+            )
 
 
     def meets_minimum_resolution(self, width: int, height: int) -> bool:
