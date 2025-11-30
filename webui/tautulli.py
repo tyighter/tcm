@@ -49,9 +49,11 @@ def _configure_logger() -> logging.Logger:
 
 tautulli_logger = _configure_logger()
 
-_recent_activity_cache: dict[str, Any] | None = None
+_recent_activity_cache: dict[str, dict[str, Any]] = {}
 _monitor_stop_event = Event()
 _monitor_thread: Thread | None = None
+
+_DEFAULT_CACHE_KEY = "__all__"
 
 _TRAILING_YEAR_PATTERNS = (
     re.compile(r"\s*\(\d{4}\)\s*$"),
@@ -389,8 +391,20 @@ def fetch_recently_added(
     return filtered
 
 
-def fetch_recent_activity(context: AppContext, tv_manager: TvYamlManager) -> dict[str, Any]:
-    settings = TautulliSettings.from_settings()
+def _cache_key(settings: TautulliSettings | None) -> str:
+    if settings and settings.user_id:
+        return settings.user_id
+    return _DEFAULT_CACHE_KEY
+
+
+def _reset_recent_activity_cache() -> None:
+    _recent_activity_cache.clear()
+
+
+def fetch_recent_activity(
+    context: AppContext, tv_manager: TvYamlManager, *, settings: TautulliSettings | None = None
+) -> dict[str, Any]:
+    settings = settings or TautulliSettings.from_settings()
     if not settings:
         raise RuntimeError("Tautulli is not configured. Set the URL and API key in settings.")
 
@@ -400,42 +414,79 @@ def fetch_recent_activity(context: AppContext, tv_manager: TvYamlManager) -> dic
     lookup = _series_lookup(tv_manager)
     watched = fetch_recent_watches(settings, lookup)
     added = fetch_recently_added(context, settings, lookup)
-    return {"watched": watched, "added": added, "generatedAt": int(datetime.now(tz=timezone.utc).timestamp() * 1000)}
+    return {
+        "watched": watched,
+        "added": added,
+        "generatedAt": int(datetime.now(tz=timezone.utc).timestamp() * 1000),
+    }
 
 
-def get_cached_recent_activity() -> dict[str, Any] | None:
-    return _recent_activity_cache
+def get_cached_recent_activity(cache_key: str | None) -> dict[str, Any] | None:
+    if cache_key is None:
+        return None
+    return _recent_activity_cache.get(cache_key)
 
 
 def get_or_fetch_recent_activity(context: AppContext, tv_manager: TvYamlManager) -> dict[str, Any]:
-    cached = get_cached_recent_activity()
+    settings = TautulliSettings.from_settings()
+    if not settings:
+        raise RuntimeError("Tautulli is not configured. Set the URL and API key in settings.")
+
+    cache_key = _cache_key(settings)
+    cached = get_cached_recent_activity(cache_key)
     if cached:
         return cached
 
-    payload = fetch_recent_activity(context, tv_manager)
-    _store_recent_activity(payload)
+    payload = fetch_recent_activity(context, tv_manager, settings=settings)
+    _store_recent_activity(payload, cache_key)
     return payload
 
 
-def _store_recent_activity(payload: dict[str, Any]) -> None:
-    global _recent_activity_cache
-    _recent_activity_cache = payload
+def _store_recent_activity(payload: dict[str, Any], cache_key: str) -> None:
+    _recent_activity_cache[cache_key] = payload
     watched = len(payload.get("watched", []))
     added = len(payload.get("added", []))
-    tautulli_logger.info("Cached recent Tautulli activity: %d watched, %d added", watched, added)
+    tautulli_logger.info(
+        "Cached recent Tautulli activity for %s: %d watched, %d added",
+        cache_key,
+        watched,
+        added,
+    )
 
 
 def _monitor_recent_activity(
     context: AppContext, tv_manager: TvYamlManager, interval_seconds: int
 ) -> None:
+    last_cache_key: str | None = None
     while not _monitor_stop_event.is_set():
         try:
-            payload = fetch_recent_activity(context, tv_manager)
+            settings = TautulliSettings.from_settings()
+            if not settings:
+                raise RuntimeError(
+                    "Tautulli is not configured. Set the URL and API key in settings."
+                )
+
+            cache_key = _cache_key(settings)
+
+            if cache_key != last_cache_key:
+                _reset_recent_activity_cache()
+                if last_cache_key is None:
+                    tautulli_logger.info(
+                        "Initialised Tautulli activity cache for Plex user %s", cache_key
+                    )
+                else:
+                    tautulli_logger.info(
+                        "Reset cached Tautulli activity after Plex user change (%s)",
+                        cache_key,
+                    )
+                last_cache_key = cache_key
+
+            payload = fetch_recent_activity(context, tv_manager, settings=settings)
         except Exception as exc:  # pylint: disable=broad-except
             tautulli_logger.warning("Unable to refresh Tautulli activity: %s", exc)
             continue
 
-        _store_recent_activity(payload)
+        _store_recent_activity(payload, cache_key)
 
         if _monitor_stop_event.wait(interval_seconds):
             break
