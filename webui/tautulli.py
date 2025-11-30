@@ -14,6 +14,7 @@ import re
 
 from .config import AppContext
 from .tv_data import TvYamlManager, _to_builtin
+from .services import ActionInProgressError, run_builder_for_series
 from .user_settings import load_settings
 
 TAUTULLI_LOG_FILE = Path("/config/tautulli.log")
@@ -454,10 +455,104 @@ def _store_recent_activity(payload: dict[str, Any], cache_key: str) -> None:
     )
 
 
+def _activity_identifier(entry: dict[str, Any] | None) -> tuple[str, str, str, str]:
+    if not isinstance(entry, dict):
+        return ("", "", "", "")
+
+    show_identifier = str(entry.get("showRatingKey") or entry.get("series") or "").casefold()
+    episode_identifier = entry.get("episodeRatingKey")
+    if episode_identifier is not None:
+        episode_identifier = str(episode_identifier).casefold()
+    season_label = str(entry.get("season") or "").casefold()
+    episode_label = str(entry.get("episode") or "").casefold()
+
+    return (
+        show_identifier,
+        episode_identifier or "",
+        season_label,
+        episode_label,
+    )
+
+
+def _new_entries(previous: Iterable[dict[str, Any]], current: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    previous_keys = {_activity_identifier(entry) for entry in previous}
+    return [entry for entry in current if _activity_identifier(entry) not in previous_keys]
+
+
+def _series_needing_build(
+    entries: Iterable[dict[str, Any]],
+    tv_manager: TvYamlManager,
+    *,
+    require_watch_styles: bool = False,
+) -> set[str]:
+    config = tv_manager.load().get("series", {})
+    matches: set[str] = set()
+
+    for entry in entries:
+        series_name = entry.get("series") if isinstance(entry, dict) else None
+        if not series_name or series_name not in config:
+            continue
+
+        if require_watch_styles:
+            series_config = _to_builtin(config.get(series_name, {}))
+            if not (series_config.get("watched_style") or series_config.get("unwatched_style")):
+                continue
+
+        matches.add(series_name)
+
+    return matches
+
+
+def _trigger_builds_for_recent_changes(
+    context: AppContext,
+    tv_manager: TvYamlManager,
+    previous_payload: dict[str, Any] | None,
+    current_payload: dict[str, Any],
+) -> None:
+    if not previous_payload:
+        return None
+
+    previous_payload = previous_payload or {}
+    previous_added = previous_payload.get("added", [])
+    previous_watched = previous_payload.get("watched", [])
+
+    new_added = _new_entries(previous_added, current_payload.get("added", []))
+    new_watched = _new_entries(previous_watched, current_payload.get("watched", []))
+
+    series_to_build = _series_needing_build(new_added, tv_manager)
+    series_to_build.update(
+        _series_needing_build(
+            new_watched,
+            tv_manager,
+            require_watch_styles=True,
+        )
+    )
+
+    for series_name in sorted(series_to_build):
+        try:
+            tautulli_logger.info(
+                "Triggering background build for %s due to recent Plex activity",
+                series_name,
+            )
+            run_builder_for_series(context, tv_manager, series_name)
+        except ActionInProgressError:
+            tautulli_logger.info(
+                "Skipping background build for %s; another action is already running",
+                series_name,
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            tautulli_logger.warning(
+                "Unable to build cards for %s after recent activity: %s",
+                series_name,
+                exc,
+            )
+
+
 def _monitor_recent_activity(
     context: AppContext, tv_manager: TvYamlManager, interval_seconds: int
 ) -> None:
     last_cache_key: str | None = None
+    previous_payload: dict[str, Any] | None = None
     while not _monitor_stop_event.is_set():
         try:
             settings = TautulliSettings.from_settings()
@@ -480,13 +575,24 @@ def _monitor_recent_activity(
                         cache_key,
                     )
                 last_cache_key = cache_key
+                previous_payload = None
 
             payload = fetch_recent_activity(context, tv_manager, settings=settings)
         except Exception as exc:  # pylint: disable=broad-except
             tautulli_logger.warning("Unable to refresh Tautulli activity: %s", exc)
             continue
 
+        try:
+            _trigger_builds_for_recent_changes(
+                context, tv_manager, previous_payload, payload
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            tautulli_logger.warning(
+                "Failed to trigger background build after recent changes: %s", exc
+            )
+
         _store_recent_activity(payload, cache_key)
+        previous_payload = payload
 
         if _monitor_stop_event.wait(interval_seconds):
             break
