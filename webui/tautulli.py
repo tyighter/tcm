@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from threading import Event, Thread
 from typing import Any, Iterable
 from urllib.parse import urljoin
 
@@ -47,6 +48,10 @@ def _configure_logger() -> logging.Logger:
 
 
 tautulli_logger = _configure_logger()
+
+_recent_activity_cache: dict[str, Any] | None = None
+_monitor_stop_event = Event()
+_monitor_thread: Thread | None = None
 
 _TRAILING_YEAR_PATTERNS = (
     re.compile(r"\s*\(\d{4}\)\s*$"),
@@ -396,3 +401,72 @@ def fetch_recent_activity(context: AppContext, tv_manager: TvYamlManager) -> dic
     watched = fetch_recent_watches(settings, lookup)
     added = fetch_recently_added(context, settings, lookup)
     return {"watched": watched, "added": added, "generatedAt": int(datetime.now(tz=timezone.utc).timestamp() * 1000)}
+
+
+def get_cached_recent_activity() -> dict[str, Any] | None:
+    return _recent_activity_cache
+
+
+def get_or_fetch_recent_activity(context: AppContext, tv_manager: TvYamlManager) -> dict[str, Any]:
+    cached = get_cached_recent_activity()
+    if cached:
+        return cached
+
+    payload = fetch_recent_activity(context, tv_manager)
+    _store_recent_activity(payload)
+    return payload
+
+
+def _store_recent_activity(payload: dict[str, Any]) -> None:
+    global _recent_activity_cache
+    _recent_activity_cache = payload
+    watched = len(payload.get("watched", []))
+    added = len(payload.get("added", []))
+    tautulli_logger.info("Cached recent Tautulli activity: %d watched, %d added", watched, added)
+
+
+def _monitor_recent_activity(
+    context: AppContext, tv_manager: TvYamlManager, interval_seconds: int
+) -> None:
+    while not _monitor_stop_event.is_set():
+        try:
+            payload = fetch_recent_activity(context, tv_manager)
+        except Exception as exc:  # pylint: disable=broad-except
+            tautulli_logger.warning("Unable to refresh Tautulli activity: %s", exc)
+            continue
+
+        _store_recent_activity(payload)
+
+        if _monitor_stop_event.wait(interval_seconds):
+            break
+
+
+def start_recent_activity_monitor(
+    context: AppContext, tv_manager: TvYamlManager, interval_seconds: int = 60
+) -> Thread | None:
+    global _monitor_thread
+
+    if _monitor_thread and _monitor_thread.is_alive():
+        return _monitor_thread
+
+    settings = TautulliSettings.from_settings()
+    if not settings:
+        tautulli_logger.info("Skipping Tautulli monitor start; Tautulli is not configured")
+        return None
+
+    if not context.preference_parser.use_plex:
+        tautulli_logger.info("Skipping Tautulli monitor start; Plex is disabled in preferences")
+        return None
+
+    _monitor_stop_event.clear()
+    _monitor_thread = Thread(
+        target=_monitor_recent_activity,
+        args=(context, tv_manager, max(15, int(interval_seconds))),
+        name="tautulli-monitor",
+        daemon=True,
+    )
+    _monitor_thread.start()
+    tautulli_logger.info(
+        "Started Tautulli activity monitor thread (interval=%ss)", interval_seconds
+    )
+    return _monitor_thread

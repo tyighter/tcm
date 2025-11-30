@@ -44,7 +44,12 @@ from .services import (
 )
 from .tv_data import TvYamlManager, _to_builtin
 from .user_settings import load_settings, save_settings
-from .tautulli import TautulliSettings, fetch_recent_activity, fetch_users
+from .tautulli import (
+    TautulliSettings,
+    fetch_users,
+    get_or_fetch_recent_activity,
+    start_recent_activity_monitor,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -644,7 +649,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/tautulli/recents":
             try:
-                payload = fetch_recent_activity(self.context, self.tv_manager)
+                payload = get_or_fetch_recent_activity(self.context, self.tv_manager)
             except Exception as exc:  # pylint: disable=broad-except
                 self._error(str(exc), status=HTTPStatus.BAD_REQUEST)
                 return
@@ -1006,6 +1011,8 @@ def run(port: int = 4343) -> None:
     tv_manager = TvYamlManager(context.default_tv_file)
 
     _run_startup_tasks_async(context, tv_manager)
+
+    start_recent_activity_monitor(context, tv_manager)
 
     WebRequestHandler.context = context
     WebRequestHandler.tv_manager = tv_manager
