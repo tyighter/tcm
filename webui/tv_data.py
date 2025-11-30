@@ -122,6 +122,66 @@ class TvYamlManager:
 
         return deepcopy(config)
 
+    def update_episode_rating_keys(
+        self,
+        series_name: str,
+        show_rating_key: Any,
+        episode_keys_by_label: dict[str, Any],
+    ) -> bool:
+        """Persist episode rating keys for a given series and show key.
+
+        Args:
+            series_name: Series entry in ``tv.yml`` to update.
+            show_rating_key: The Plex rating key identifying the show.
+            episode_keys_by_label: Mapping of episode labels (e.g., ``"S1E1"``)
+                to episode-level Plex rating keys.
+
+        Returns:
+            ``True`` if the YAML content was updated, ``False`` otherwise.
+        """
+
+        if not episode_keys_by_label:
+            return False
+
+        tv_data = self.load()
+        series_entries = tv_data.get("series", CommentedMap())
+        if series_name not in series_entries:
+            return False
+
+        normalized_show_key = _normalize_rating_key(show_rating_key)
+        if normalized_show_key is None:
+            return False
+
+        config = _to_builtin(series_entries.get(series_name, {}))
+        existing_mappings: dict[str, dict[str, Any]] = (
+            config.get("episode_rating_keys") or {}
+        )
+        current = existing_mappings.get(normalized_show_key, {})
+
+        changes: dict[str, Any] = {}
+        for label, rating_key in episode_keys_by_label.items():
+            normalized_episode_key = _normalize_rating_key(rating_key)
+            if not label or normalized_episode_key is None:
+                continue
+            if str(current.get(label)) == normalized_episode_key:
+                continue
+            changes[label] = normalized_episode_key
+
+        if not changes:
+            return False
+
+        merged = {**current, **changes}
+        existing_mappings[normalized_show_key] = merged
+        config["episode_rating_keys"] = existing_mappings
+
+        series_entries[series_name] = _to_commented(config)
+
+        with self.file_path.open("w", encoding="utf-8") as handle:
+            self._yaml.dump(tv_data, handle)
+
+        self._data = tv_data
+        return True
+
 
 # ----------------------------------------------------------------------
 # Conversion helpers
@@ -135,6 +195,19 @@ def _to_builtin(value: Any) -> Any:
     if isinstance(value, CommentedSeq):
         return [_to_builtin(item) for item in value]
     return value
+
+
+def _normalize_rating_key(value: Any) -> str | None:
+    """Return a string representation of a rating key or ``None``."""
+
+    try:
+        numeric = int(value)
+        return str(numeric)
+    except (TypeError, ValueError):
+        try:
+            return str(value) if value is not None else None
+        except Exception:
+            return None
 
 
 def _series_slug(name: str) -> str:

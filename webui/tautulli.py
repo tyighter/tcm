@@ -376,6 +376,85 @@ def _expand_rating_key_to_episodes(
     return expanded
 
 
+def _episode_label(episode: dict[str, Any]) -> str | None:
+    try:
+        season = int(episode.get("season"))
+        number = int(episode.get("episode"))
+    except (TypeError, ValueError):
+        return None
+
+    return f"S{season}E{number}"
+
+
+def _backfill_episode_rating_keys(
+    context: AppContext, tv_manager: TvYamlManager
+) -> dict[str, int]:
+    updated = 0
+    processed = 0
+
+    plex = context.get_plex_interface()
+    tv_data = tv_manager.load()
+    series_entries = tv_data.get("series", {})
+
+    for series_name, raw_config in series_entries.items():
+        processed += 1
+        config = _to_builtin(raw_config)
+        rating_key = config.get("rating_key")
+        if rating_key is None:
+            continue
+
+        existing_mappings = config.get("episode_rating_keys") or {}
+        normalized_show_key = _normalize_rating_key(rating_key)
+        if normalized_show_key in existing_mappings and existing_mappings.get(
+            normalized_show_key
+        ):
+            continue
+
+        try:
+            episodes = plex.expand_rating_key_to_episodes(rating_key)
+        except Exception as exc:  # pylint: disable=broad-except
+            tautulli_logger.warning(
+                "Unable to expand Plex rating key %s for %s: %s",
+                rating_key,
+                series_name,
+                exc,
+            )
+            continue
+
+        labels: dict[str, Any] = {}
+        show_keys: set[str] = set()
+        for episode in episodes:
+            label = _episode_label(episode)
+            episode_key = _normalize_rating_key(episode.get("episode_rating_key"))
+            if label and episode_key:
+                labels[label] = episode_key
+
+            show_key = _normalize_rating_key(
+                episode.get("show_rating_key") or rating_key
+            )
+            if show_key:
+                show_keys.add(show_key)
+
+        if not labels:
+            continue
+
+        changed = False
+        for show_key in show_keys:
+            if tv_manager.update_episode_rating_keys(series_name, show_key, labels):
+                changed = True
+
+        if changed and normalized_show_key and normalized_show_key not in show_keys:
+            if tv_manager.update_episode_rating_keys(
+                series_name, normalized_show_key, labels
+            ):
+                changed = True
+
+        if changed:
+            updated += 1
+
+    return {"updated": updated, "total": processed}
+
+
 def fetch_recently_added(
     context: AppContext,
     settings: TautulliSettings,
@@ -763,6 +842,21 @@ def start_recent_activity_monitor(
     if not context.preference_parser.use_plex:
         tautulli_logger.info("Skipping Tautulli monitor start; Plex is disabled in preferences")
         return None
+
+    try:
+        result = _backfill_episode_rating_keys(context, tv_manager)
+    except Exception as exc:  # pylint: disable=broad-except
+        tautulli_logger.warning(
+            "Unable to backfill episode rating keys before starting monitor: %s",
+            exc,
+        )
+    else:
+        updated = result.get("updated", 0)
+        if updated:
+            tautulli_logger.info(
+                "Backfilled episode rating keys for %d series before starting monitor",
+                updated,
+            )
 
     interval_seconds = interval_seconds or context.preference_parser.tautulli_activity_poll_interval_seconds
     interval_seconds = max(_MIN_ACTIVITY_POLL_INTERVAL_SECONDS, int(interval_seconds))
