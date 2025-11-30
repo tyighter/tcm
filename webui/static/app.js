@@ -8,6 +8,7 @@ const state = {
   collapsedEntries: new Set(),
   lastSavedEntries: new Map(),
   previewCache: {},
+  logoCache: {},
   cardTypeExtras: {},
   logoBackgrounds: new Map(),
   services: {
@@ -49,8 +50,10 @@ document.body.appendChild(toastContainer);
 const CLIENT_LOG_ENDPOINT = '/api/client-log';
 const PREVIEW_CACHE_STORAGE_KEY = 'tcm-preview-cache';
 const LOGO_BACKGROUND_STORAGE_KEY = 'tcm-logo-backgrounds';
-const PREVIEW_DB_NAME = 'tcm-preview-cache';
+const CACHE_DB_NAME = 'tcm-preview-cache';
+const CACHE_DB_VERSION = 2;
 const PREVIEW_DB_STORE = 'previews';
+const LOGO_DB_STORE = 'logos';
 
 const EPISODE_TEXT_FORMAT_GROUPS = [
   {
@@ -464,6 +467,7 @@ async function init() {
   try {
     // Ensure the preview cache is ready before observers start requesting images.
     await loadPreviewCache();
+    await loadLogoCache();
     loadLogoBackgroundPreferences();
     await loadMetadata();
     await loadSettings();
@@ -535,7 +539,11 @@ async function loadConfiguration() {
   sortEntries();
   state.collapsedEntries = new Set(state.entries.map((entry) => entry.id));
   syncSavedEntrySnapshots();
-  await Promise.all(state.entries.map((entry) => restoreCachedPreview(entry)));
+  await Promise.all(
+    state.entries.map((entry) =>
+      Promise.all([restoreCachedLogo(entry), restoreCachedPreview(entry)])
+    )
+  );
 }
 
 async function saveSettings(payload) {
@@ -811,19 +819,31 @@ function renderEntry(entry) {
     logoBackgroundToggle.hidden = logo.classList.contains('entry-logo--missing');
   };
 
+  const logoUrl = `/api/series-logo?name=${encodeURIComponent(entry.name)}`;
+
   const handleLogoError = () => {
+    const hadCachedLogo = Boolean(entry.logoSrc);
     logo.classList.add('entry-logo--missing');
     logo.classList.remove('entry-logo--light', 'entry-logo--dark');
     logo.removeAttribute('src');
     syncLogoToggleVisibility();
+    void clearLogoCacheEntry(entry);
+    if (hadCachedLogo) {
+      logo.src = logoUrl;
+    }
   };
 
   logo.addEventListener('load', () => {
     applyLogoStroke(logo);
     syncLogoToggleVisibility();
+    void updateLogoCacheFromElement(entry, logo);
   });
   logo.addEventListener('error', handleLogoError);
-  logo.src = `/api/series-logo?name=${encodeURIComponent(entry.name)}`;
+  if (entry.logoSrc) {
+    logo.src = entry.logoSrc;
+  } else {
+    logo.src = logoUrl;
+  }
 
   if (logo.complete) {
     if (logo.naturalWidth > 0 && logo.naturalHeight > 0) {
@@ -3240,6 +3260,7 @@ function removeEntry(entry) {
   state.collapsedEntries.delete(entry.id);
   state.lastSavedEntries.delete(entry.id);
   state.logoBackgrounds.delete(entry.name);
+  void clearLogoCacheEntry(entry);
   persistLogoBackgroundPreferences();
   renderEntries();
 }
@@ -4269,8 +4290,8 @@ function syncSavedEntrySnapshots() {
   );
 }
 
-let previewDbPromise = null;
-let previewDbUnavailable = false;
+let cacheDbPromise = null;
+let cacheDbUnavailable = false;
 
 function loadLegacyPreviewCache() {
   try {
@@ -4293,23 +4314,26 @@ function persistLegacyPreviewCache() {
   }
 }
 
-function openPreviewDb() {
-  if (previewDbUnavailable || typeof indexedDB === 'undefined') {
-    previewDbUnavailable = true;
+function openCacheDb() {
+  if (cacheDbUnavailable || typeof indexedDB === 'undefined') {
+    cacheDbUnavailable = true;
     return Promise.resolve(null);
   }
 
-  if (previewDbPromise) {
-    return previewDbPromise;
+  if (cacheDbPromise) {
+    return cacheDbPromise;
   }
 
-  previewDbPromise = new Promise((resolve) => {
-    const request = indexedDB.open(PREVIEW_DB_NAME, 1);
+  cacheDbPromise = new Promise((resolve) => {
+    const request = indexedDB.open(CACHE_DB_NAME, CACHE_DB_VERSION);
 
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(PREVIEW_DB_STORE)) {
         db.createObjectStore(PREVIEW_DB_STORE, { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains(LOGO_DB_STORE)) {
+        db.createObjectStore(LOGO_DB_STORE, { keyPath: 'key' });
       }
     };
 
@@ -4318,29 +4342,29 @@ function openPreviewDb() {
     };
 
     request.onerror = () => {
-      console.warn('Failed to open preview cache database', request.error);
-      previewDbUnavailable = true;
+      console.warn('Failed to open cache database', request.error);
+      cacheDbUnavailable = true;
       resolve(null);
     };
 
     request.onblocked = () => {
-      console.warn('Preview cache database open request is blocked');
+      console.warn('Cache database open request is blocked');
     };
   });
 
-  return previewDbPromise;
+  return cacheDbPromise;
 }
 
-async function runPreviewDbRequest(mode, executor) {
-  const db = await openPreviewDb();
+async function runCacheDbRequest(storeName, mode, executor) {
+  const db = await openCacheDb();
   if (!db) {
     return null;
   }
 
   return new Promise((resolve, reject) => {
     try {
-      const transaction = db.transaction(PREVIEW_DB_STORE, mode);
-      const store = transaction.objectStore(PREVIEW_DB_STORE);
+      const transaction = db.transaction(storeName, mode);
+      const store = transaction.objectStore(storeName);
       const request = executor(store);
 
       transaction.oncomplete = () => resolve(request?.result ?? null);
@@ -4354,7 +4378,7 @@ async function runPreviewDbRequest(mode, executor) {
 
 async function readAllPreviewCacheEntries() {
   try {
-    const entries = await runPreviewDbRequest('readonly', (store) =>
+    const entries = await runCacheDbRequest(PREVIEW_DB_STORE, 'readonly', (store) =>
       store.getAll()
     );
     return Array.isArray(entries) ? entries : [];
@@ -4374,7 +4398,7 @@ async function readPreviewCacheEntry(key) {
   }
 
   try {
-    const entry = await runPreviewDbRequest('readonly', (store) =>
+    const entry = await runCacheDbRequest(PREVIEW_DB_STORE, 'readonly', (store) =>
       store.get(key)
     );
     if (entry) {
@@ -4392,7 +4416,7 @@ async function writePreviewCacheEntry(key, value) {
     return false;
   }
   try {
-    await runPreviewDbRequest('readwrite', (store) =>
+    await runCacheDbRequest(PREVIEW_DB_STORE, 'readwrite', (store) =>
       store.put({ ...value, key })
     );
     return true;
@@ -4407,7 +4431,9 @@ async function deletePreviewCacheEntry(key) {
     return;
   }
   try {
-    await runPreviewDbRequest('readwrite', (store) => store.delete(key));
+    await runCacheDbRequest(PREVIEW_DB_STORE, 'readwrite', (store) =>
+      store.delete(key)
+    );
   } catch (error) {
     console.warn('Failed to delete preview cache entry', error);
   }
@@ -4443,6 +4469,184 @@ async function loadPreviewCache() {
 
   // Keep the legacy cache in sync for fallback if IndexedDB is unavailable.
   persistLegacyPreviewCache();
+}
+
+async function readAllLogoCacheEntries() {
+  try {
+    const entries = await runCacheDbRequest(LOGO_DB_STORE, 'readonly', (store) =>
+      store.getAll()
+    );
+    return Array.isArray(entries) ? entries : [];
+  } catch (error) {
+    console.warn('Failed to load logos from IndexedDB', error);
+    return [];
+  }
+}
+
+async function readLogoCacheEntry(key) {
+  if (!key) {
+    return null;
+  }
+
+  if (state.logoCache[key]) {
+    return state.logoCache[key];
+  }
+
+  try {
+    const entry = await runCacheDbRequest(LOGO_DB_STORE, 'readonly', (store) =>
+      store.get(key)
+    );
+    if (entry) {
+      state.logoCache[key] = entry;
+    }
+    return entry || null;
+  } catch (error) {
+    console.warn('Failed to read logo cache entry', error);
+    return null;
+  }
+}
+
+async function writeLogoCacheEntry(key, value) {
+  if (!key || !value) {
+    return false;
+  }
+  try {
+    await runCacheDbRequest(LOGO_DB_STORE, 'readwrite', (store) =>
+      store.put({ ...value, key })
+    );
+    return true;
+  } catch (error) {
+    console.warn('Failed to persist logo cache to IndexedDB', error);
+    return false;
+  }
+}
+
+async function deleteLogoCacheEntry(key) {
+  if (!key) {
+    return;
+  }
+  try {
+    await runCacheDbRequest(LOGO_DB_STORE, 'readwrite', (store) =>
+      store.delete(key)
+    );
+  } catch (error) {
+    console.warn('Failed to delete logo cache entry', error);
+  }
+}
+
+async function loadLogoCache() {
+  state.logoCache = {};
+
+  const dbEntries = await readAllLogoCacheEntries();
+  dbEntries.forEach((entry) => {
+    if (entry?.key && entry.src) {
+      state.logoCache[entry.key] = { snapshot: entry.snapshot, src: entry.src };
+    }
+  });
+}
+
+function logoCacheKey(entry, snapshot = null) {
+  const name = typeof entry === 'string' ? entry : entry?.name;
+  if (!name) {
+    return null;
+  }
+  const resolvedSnapshot = snapshot || (typeof entry === 'object' ? entry.logoSnapshot : null);
+  return resolvedSnapshot ? `${name}:${hashString(resolvedSnapshot)}` : name;
+}
+
+function getImageDataUrl(image) {
+  if (
+    !image ||
+    !image.complete ||
+    image.naturalWidth === 0 ||
+    image.naturalHeight === 0
+  ) {
+    return null;
+  }
+
+  if (typeof image.src === 'string' && image.src.startsWith('data:')) {
+    return image.src;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return null;
+  }
+
+  try {
+    context.drawImage(image, 0, 0);
+    return canvas.toDataURL();
+  } catch (error) {
+    console.warn('Failed to serialize logo image', error);
+    return null;
+  }
+}
+
+async function restoreCachedLogo(entry) {
+  if (!entry?.name) {
+    return;
+  }
+
+  const snapshot = JSON.stringify(snapshotEntry(entry));
+  const cached =
+    (await readLogoCacheEntry(logoCacheKey(entry, snapshot))) ||
+    (await readLogoCacheEntry(logoCacheKey(entry)));
+
+  if (cached?.src) {
+    entry.logoSrc = cached.src;
+    entry.logoSnapshot = cached.snapshot || null;
+  }
+}
+
+async function updateLogoCache(entry, src, snapshotOverride = null) {
+  if (!entry?.name || !src) {
+    return;
+  }
+
+  const snapshot = snapshotOverride || JSON.stringify(snapshotEntry(entry));
+  const key = logoCacheKey(entry, snapshot);
+  if (!key) {
+    return;
+  }
+
+  const value = { snapshot, src };
+  const existing = state.logoCache[key];
+  if (existing?.src === value.src && existing?.snapshot === value.snapshot) {
+    entry.logoSrc = value.src;
+    entry.logoSnapshot = value.snapshot;
+    return;
+  }
+  state.logoCache[key] = value;
+  entry.logoSrc = src;
+  entry.logoSnapshot = snapshot;
+  await writeLogoCacheEntry(key, value);
+}
+
+async function updateLogoCacheFromElement(entry, image) {
+  const src = getImageDataUrl(image);
+  if (!src) {
+    return;
+  }
+  await updateLogoCache(entry, src);
+}
+
+async function clearLogoCacheEntry(entry) {
+  const keys = [logoCacheKey(entry, entry?.logoSnapshot), logoCacheKey(entry)];
+  const uniqueKeys = [...new Set(keys.filter(Boolean))];
+
+  uniqueKeys.forEach((key) => {
+    if (state.logoCache[key]) {
+      delete state.logoCache[key];
+    }
+  });
+
+  entry.logoSrc = null;
+  entry.logoSnapshot = null;
+
+  await Promise.all(uniqueKeys.map((key) => deleteLogoCacheEntry(key)));
 }
 
 function previewCacheKey(entry) {
