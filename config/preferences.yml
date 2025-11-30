@@ -21,3 +21,5 @@ tautulli:
   api_key: 7p6yOQnr5gvXh_rxomOJCVYCmMlZX8_q        # Your API key
   verify_ssl: false
   username: tyfighter0 #This should be dropdown.
+  use_plex_fallback: false                      # Poll Plex for watch state changes when history entries are missing
+  activity_poll_interval_seconds: 60            # Minimum poll interval is 15 seconds

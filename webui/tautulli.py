@@ -53,8 +53,10 @@ tautulli_logger = _configure_logger()
 _recent_activity_cache: dict[str, dict[str, Any]] = {}
 _monitor_stop_event = Event()
 _monitor_thread: Thread | None = None
+_plex_watch_state_cache: dict[str, dict[str, bool]] = {}
 
 _DEFAULT_CACHE_KEY = "__all__"
+_MIN_ACTIVITY_POLL_INTERVAL_SECONDS = 15
 
 _TRAILING_YEAR_PATTERNS = (
     re.compile(r"\s*\(\d{4}\)\s*$"),
@@ -398,8 +400,24 @@ def _cache_key(settings: TautulliSettings | None) -> str:
     return _DEFAULT_CACHE_KEY
 
 
+def _normalize_rating_key(value: Any) -> str | None:
+    try:
+        return str(int(value))
+    except (TypeError, ValueError):
+        try:
+            text = str(value).strip()
+        except Exception:
+            return None
+        return text or None
+
+
 def _reset_recent_activity_cache() -> None:
     _recent_activity_cache.clear()
+    _reset_plex_watch_state_cache()
+
+
+def _reset_plex_watch_state_cache() -> None:
+    _plex_watch_state_cache.clear()
 
 
 def fetch_recent_activity(
@@ -414,6 +432,7 @@ def fetch_recent_activity(
 
     lookup = _series_lookup(tv_manager)
     watched = fetch_recent_watches(settings, lookup)
+    watched = _merge_new_entries(watched, _plex_watched_changes(context, lookup))
     added = fetch_recently_added(context, settings, lookup)
     return {
         "watched": watched,
@@ -474,6 +493,20 @@ def _activity_identifier(entry: dict[str, Any] | None) -> tuple[str, str, str, s
     )
 
 
+def _merge_new_entries(
+    existing: Iterable[dict[str, Any]], additions: Iterable[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    merged = list(existing)
+    existing_keys = {_activity_identifier(entry) for entry in merged}
+    for entry in additions:
+        identifier = _activity_identifier(entry)
+        if identifier in existing_keys:
+            continue
+        merged.append(entry)
+        existing_keys.add(identifier)
+    return merged
+
+
 def _new_entries(previous: Iterable[dict[str, Any]], current: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     previous_keys = {_activity_identifier(entry) for entry in previous}
     return [entry for entry in current if _activity_identifier(entry) not in previous_keys]
@@ -501,6 +534,66 @@ def _series_needing_build(
         matches.add(series_name)
 
     return matches
+
+
+def _plex_watched_changes(
+    context: AppContext, lookup: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    if not context.preference_parser.tautulli_use_plex_fallback:
+        _reset_plex_watch_state_cache()
+        return []
+
+    plex = context.get_plex_interface()
+    now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+    synthetic: list[dict[str, Any]] = []
+
+    for entry in lookup:
+        show_rating_key = _normalize_rating_key(entry.get("rating_key"))
+        if not show_rating_key:
+            continue
+
+        previous_state = _plex_watch_state_cache.get(show_rating_key)
+        try:
+            episodes = plex.expand_rating_key_to_episodes(entry["rating_key"])
+        except Exception as exc:  # pylint: disable=broad-except
+            tautulli_logger.warning(
+                "Unable to poll Plex watch state for %s (%s): %s",
+                entry.get("name"),
+                show_rating_key,
+                exc,
+            )
+            continue
+
+        current_state: dict[str, bool] = {}
+        for episode in episodes:
+            episode_rating_key = _normalize_rating_key(
+                episode.get("episode_rating_key")
+            )
+            if not episode_rating_key:
+                continue
+
+            watched = bool(episode.get("watched"))
+            current_state[episode_rating_key] = watched
+
+            if previous_state is None:
+                continue
+
+            if watched and not previous_state.get(episode_rating_key, False):
+                synthetic.append(
+                    _activity_entry(
+                        series_name=entry.get("name", ""),
+                        episode_title=episode.get("title"),
+                        season_label=_season_label(episode.get("season")),
+                        timestamp=now_ms,
+                        show_rating_key=episode.get("show_rating_key")
+                        or entry.get("rating_key"),
+                        episode_rating_key=episode.get("episode_rating_key"),
+                    )
+                )
+
+        _plex_watch_state_cache[show_rating_key] = current_state
+
+    return synthetic
 
 
 def _trigger_builds_for_recent_changes(
@@ -599,7 +692,7 @@ def _monitor_recent_activity(
 
 
 def start_recent_activity_monitor(
-    context: AppContext, tv_manager: TvYamlManager, interval_seconds: int = 60
+    context: AppContext, tv_manager: TvYamlManager, interval_seconds: int | None = None
 ) -> Thread | None:
     global _monitor_thread
 
@@ -615,10 +708,13 @@ def start_recent_activity_monitor(
         tautulli_logger.info("Skipping Tautulli monitor start; Plex is disabled in preferences")
         return None
 
+    interval_seconds = interval_seconds or context.preference_parser.tautulli_activity_poll_interval_seconds
+    interval_seconds = max(_MIN_ACTIVITY_POLL_INTERVAL_SECONDS, int(interval_seconds))
+
     _monitor_stop_event.clear()
     _monitor_thread = Thread(
         target=_monitor_recent_activity,
-        args=(context, tv_manager, max(15, int(interval_seconds))),
+        args=(context, tv_manager, interval_seconds),
         name="tautulli-monitor",
         daemon=True,
     )

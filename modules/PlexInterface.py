@@ -560,6 +560,7 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
                     'series_year': getattr(series, 'year', None),
                     'show_rating_key': getattr(series, 'ratingKey', None),
                     'episode_rating_key': getattr(episode, 'ratingKey', None),
+                    'watched': bool(getattr(episode, 'isWatched', False)),
                 }
             )
 
