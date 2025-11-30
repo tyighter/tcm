@@ -220,6 +220,59 @@ def _filter_recent(
     return filtered
 
 
+def _coerce_number(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_marked_watched(entry: dict[str, Any]) -> bool:
+    watched_status = entry.get("watched_status")
+
+    if isinstance(watched_status, bool):
+        return watched_status
+
+    try:
+        numeric_status = int(watched_status)
+        if numeric_status == 1:
+            return True
+    except (TypeError, ValueError):
+        pass
+
+    if isinstance(watched_status, str):
+        normalized = watched_status.strip().casefold()
+        if normalized in {"watched", "played", "complete", "completed"}:
+            return True
+
+    return False
+
+
+def _progress_fraction(entry: dict[str, Any]) -> float | None:
+    for key in ("progress", "progress_percent", "percent_complete"):
+        percent = _coerce_number(entry.get(key))
+        if percent is None:
+            continue
+
+        # Normalize both ratio (0-1) and percent (0-100) formats
+        return percent / 100 if percent > 1 else percent
+
+    offset = _coerce_number(entry.get("view_offset"))
+    duration = _coerce_number(entry.get("media_duration") or entry.get("duration"))
+    if offset is None or duration in (None, 0):
+        return None
+
+    return max(0.0, offset) / duration
+
+
+def _is_sufficiently_watched(entry: dict[str, Any]) -> bool:
+    if _is_marked_watched(entry):
+        return True
+
+    progress = _progress_fraction(entry)
+    return progress is not None and progress >= 0.5
+
+
 def _activity_entry(
     *,
     series_name: str,
@@ -272,6 +325,9 @@ def fetch_recent_watches(settings: TautulliSettings, lookup: list[dict[str, Any]
             rating_key=entry.get("grandparent_rating_key"),
         )
         if not match:
+            continue
+
+        if not _is_sufficiently_watched(entry):
             continue
 
         recent.append(
