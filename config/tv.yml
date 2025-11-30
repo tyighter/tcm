@@ -3,7 +3,7 @@ libraries:
     path: /config/TV_Shows/
     image_source_priority: tmdb, plex
 series:
-  9-1-1 (2018):
+  "9-1-1 (2018)":
     library: TV Shows
     card_type: striped
     tmdb_id: 75219
@@ -11,7 +11,8 @@ series:
     imdb_id: tt7235466
     font:
       size: 150%
-  Abbott Elementary (2021):
+    rating_key: 165878
+  "Abbott Elementary (2021)":
     library: TV Shows
     card_type: anime
     episode_text_format: Year {season_number}, Class {episode_number}
@@ -25,14 +26,16 @@ series:
       - language: JA
         key: Kanji
     tmdb_id: 125935
-  Adam Eats the 80s (2022):
+    rating_key: 97453
+  "Adam Eats the 80s (2022)":
     library: TV Shows
     card_type: landscape
     extras:
       add_bounding_box: true
       darken: box
     tmdb_id: 158716
-  Afro Samurai (2007):
+    rating_key: 97719
+  "Afro Samurai (2007)":
     library: TV Shows
     card_type: anime
     translation:
@@ -46,7 +49,8 @@ series:
     seasons:
       hide: true
     tmdb_id: 19544
-  Agatha All Along (2024):
+    rating_key: 165814
+  "Agatha All Along (2024)":
     library: TV Shows
     card_type: standard
     font:
@@ -64,7 +68,8 @@ series:
     seasons:
       hide: true
     tmdb_id: 138501
-  'Alien: Earth (2025)':
+    rating_key: 97731
+  "Alien: Earth (2025)":
     library: TV Shows
     card_type: shape
     watched_style: unique
@@ -74,7 +79,8 @@ series:
       case: title
       size: 175%
     tmdb_id: 157239
-  'Anthony Bourdain: Parts Unknown (2013)':
+    rating_key: 97863
+  "Anthony Bourdain: Parts Unknown (2013)":
     library: TV Shows
     card_type: frame
     extras:
@@ -88,7 +94,8 @@ series:
     seasons:
       hide: true
     tmdb_id: 56305
-  Archive 81 (2022):
+    rating_key: 98368
+  "Archive 81 (2022)":
     library: TV Shows
     card_type: tinted frame
     watched-style: unique
@@ -102,7 +109,8 @@ series:
     extras:
       episode_text_font_size: '2.5'
     tmdb_id: 112314
-  Arrested Development (2003):
+    rating_key: 98480
+  "Arrested Development (2003)":
     library: TV Shows
     card_type: overline
     font:
@@ -111,7 +119,8 @@ series:
     extras:
       logo: /config/source/Arrested Development (2003)/logo.png
     tmdb_id: 4589
-  Attack on Titan (2013):
+    rating_key: 98567
+  "Attack on Titan (2013)":
     library: TV Shows
     card_type: anime
     translation:
@@ -123,7 +132,8 @@ series:
     extras:
       kanji_font_size: '2'
     tmdb_id: 1429
-  Bar Rescue (2011):
+    rating_key: 98678
+  "Bar Rescue (2011)":
     library: TV Shows
     card_type: tinted frame
     episode_text_format: '{airdate: %B %d, %Y}'
@@ -140,7 +150,27 @@ series:
     seasons:
       hide: true
     tmdb_id: 44470
-  Blue Planet (2001):
+    rating_key: 98950
+  "Big Fat Quiz (2004)":
+    library: TV Shows
+    card_type: logo
+    tmdb_id: 3811
+    tvdb_id: 81068
+    extras:
+      background: '#1c94bd'
+      logo_size: '1.2'
+      logo_vertical_shift: '100'
+      episode_text_vertical_shift: '-100'
+      logo: /config/source/Big Fat Quiz (2004)/logo.png
+    font:
+      color: '#ffffff'
+      file: /config/fonts/quiz.otf
+      size: 75%
+    episode_text_format: ''
+    seasons:
+      hide: true
+    rating_key: 197738
+  "Blue Planet (2001)":
     library: TV Shows
     card_type: landscape
     extras:
@@ -152,7 +182,10 @@ series:
       case: upper
       color: '#B6D0E2'
     tmdb_id: 13579
-  Blue Planet II (2017):
+    rating_key: 100808
+    tvdb_id: 74372
+    imdb_id: tt0296310
+  "Blue Planet II (2017)":
     library: TV Shows
     card_type: landscape
     extras:
@@ -164,7 +197,10 @@ series:
       case: upper
       color: '#B6D0E2'
     tmdb_id: 74313
-  Breaking Bad (2008):
+    rating_key: 185212
+    tvdb_id: 330942
+    imdb_id: tt6769208
+  "Breaking Bad (2008)":
     library: TV Shows
     card_type: olivier
     font:
@@ -174,7 +210,10 @@ series:
     watched_style: unique
     unwatched_style: blur grayscale
     tmdb_id: 1396
-  Clone High (2002):
+    rating_key: 101403
+    tvdb_id: 81189
+    imdb_id: tt0903747
+  "Clone High (2002)":
     library: TV Shows
     card_type: divider
     episode_text_format: '{episode_number}'
@@ -186,7 +225,10 @@ series:
       case: upper
       size: 176%
     tmdb_id: 2342
-  Clone High (2023):
+    rating_key: 102103
+    tvdb_id: 78560
+    imdb_id: tt0305011
+  "Clone High (2023)":
     library: TV Shows
     card_type: divider
     episode_text_format: '{episode_number}'
@@ -197,7 +239,10 @@ series:
     seasons:
       hide: true
     tmdb_id: 118546
-  'CSI: Crime Scene Investigation (2000)':
+    rating_key: 102118
+    tvdb_id: 396626
+    imdb_id: tt14028208
+  "CSI: Crime Scene Investigation (2000)":
     library: TV Shows
     font:
       file: /config/fonts/csi.ttf
@@ -205,7 +250,10 @@ series:
       color: '#0096FF'
     card_type: marvel
     tmdb_id: 1431
-  'CSI: Cyber (2015)':
+    rating_key: 102825
+    tvdb_id: 72546
+    imdb_id: tt0247082
+  "CSI: Cyber (2015)":
     library: TV Shows
     font:
       file: /config/fonts/csi.ttf
@@ -213,7 +261,10 @@ series:
       color: '#AAFF00'
     card_type: marvel
     tmdb_id: 61811
-  'CSI: Miami (2002)':
+    rating_key: 103175
+    tvdb_id: 281551
+    imdb_id: tt3560060
+  "CSI: Miami (2002)":
     library: TV Shows
     font:
       file: /config/fonts/csi.ttf
@@ -223,7 +274,10 @@ series:
     unwatched_style: blur grayscale
     card_type: marvel
     tmdb_id: 1620
-  'CSI: NY (2004)':
+    rating_key: 103209
+    tvdb_id: 78310
+    imdb_id: tt0313043
+  "CSI: NY (2004)":
     library: TV Shows
     font:
       file: /config/fonts/csi.ttf
@@ -233,7 +287,10 @@ series:
     unwatched_style: blur grayscale
     card_type: marvel
     tmdb_id: 2458
-  'CSI: Vegas (2021)':
+    rating_key: 103452
+    tvdb_id: 73696
+    imdb_id: tt0395843
+  "CSI: Vegas (2021)":
     library: TV Shows
     font:
       file: /config/fonts/csi.ttf
@@ -243,7 +300,10 @@ series:
     watched_style: unique
     card_type: marvel
     tmdb_id: 122194
-  'Cyberpunk: Edgerunners (2022)':
+    rating_key: 103659
+    tvdb_id: 400248
+    imdb_id: tt12887536
+  "Cyberpunk: Edgerunners (2022)":
     library: TV Shows
     card_type: anime
     translation:
@@ -256,7 +316,10 @@ series:
     watched_style: unique
     unwatched_style: blur grayscale
     tmdb_id: 105248
-  Daisy Jones and the Six (2023):
+    rating_key: 165518
+    tvdb_id: 384541
+    imdb_id: tt12590266
+  "Daisy Jones and the Six (2023)":
     library: TV Shows
     card_type: standard
     episode_text_format: Track {episode_number_cardinal}
@@ -281,7 +344,10 @@ series:
         'Track 9: ': ''
         'Track 10:': ''
     tmdb_id: 95555
-  Death Note (2006):
+    rating_key: 180443
+    tvdb_id: 416580
+    imdb_id: tt8749198
+  "Death Note (2006)":
     library: TV Shows
     card_type: anime
     translation:
@@ -295,7 +361,10 @@ series:
       '0': specials
       '1': ''
     tmdb_id: 13916
-  Dragon Ball Z Kai (2009):
+    rating_key: 104098
+    tvdb_id: 79481
+    imdb_id: tt0877057
+  "Dragon Ball Z Kai (2009)":
     library: TV Shows
     card_type: anime
     translation:
@@ -305,7 +374,10 @@ series:
       size: 122%
     episode_data_source: plex
     tmdb_id: 61709
-  Evil (2019):
+    rating_key: 105197
+    tvdb_id: 88031
+    imdb_id: tt1409055
+  "Evil (2019)":
     library: TV Shows
     card_type: anime
     font:
@@ -318,7 +390,10 @@ series:
       - language: JA
         key: Kanji
     tmdb_id: 86848
-  Fallout (2024):
+    rating_key: 105989
+    tvdb_id: 363955
+    imdb_id: tt9055008
+  "Fallout (2024)":
     library: TV Shows
     card_type: olivier
     watched_style: unique
@@ -328,7 +403,10 @@ series:
       color: '#EADD48'
       size: 200%
     tmdb_id: 106379
-  Fargo (2014):
+    rating_key: 106048
+    tvdb_id: 416744
+    imdb_id: tt12637874
+  "Fargo (2014)":
     library: TV Shows
     card_type: tinted frame
     watched_style: unique
@@ -350,7 +428,10 @@ series:
       '4': '1950'
       '5': '2019'
     tmdb_id: 60622
-  For All Mankind (2019):
+    rating_key: 106066
+    tvdb_id: 269613
+    imdb_id: tt2802850
+  "For All Mankind (2019)":
     library: TV Shows
     card_type: standard
     watched_style: unique
@@ -360,7 +441,10 @@ series:
       case: upper
       size: 157%
     tmdb_id: 87917
-  Foundation (2021):
+    rating_key: 106518
+    tvdb_id: 356202
+    imdb_id: tt7772588
+  "Foundation (2021)":
     library: TV Shows
     card_type: tinted frame
     watched_style: unique
@@ -372,7 +456,10 @@ series:
       replacements:
         delete_missing: true
     tmdb_id: 93740
-  Freaks and Geeks (1999):
+    rating_key: 106563
+    tvdb_id: 366972
+    imdb_id: tt0804484
+  "Freaks and Geeks (1999)":
     library: TV Shows
     card_type: frame
     font:
@@ -383,7 +470,10 @@ series:
     seasons:
       hide: true
     tmdb_id: 2382
-  Fringe (2008):
+    rating_key: 106975
+    tvdb_id: 76321
+    imdb_id: tt0193676
+  "Fringe (2008)":
     library: TV Shows
     card_type: standard
     seasons:
@@ -398,7 +488,10 @@ series:
       text_position: lower left
       title_text_position: right
     tmdb_id: 1705
-  'Fullmetal Alchemist: Brotherhood (2009)':
+    rating_key: 106995
+    tvdb_id: 82066
+    imdb_id: tt1119644
+  "Fullmetal Alchemist: Brotherhood (2009)":
     library: TV Shows
     card_type: anime
     translation:
@@ -414,7 +507,10 @@ series:
     extras:
       kanji_font_size: '2.5'
     tmdb_id: 31911
-  Gen V (2023):
+    rating_key: 107231
+    tvdb_id: 85249
+    imdb_id: tt1355642
+  "Gen V (2023)":
     library: TV Shows
     card_type: standard
     font:
@@ -425,7 +521,10 @@ series:
     watched_style: unique
     unwatched_style: blur grayscale
     tmdb_id: 205715
-  Halt and Catch Fire (2014):
+    rating_key: 107497
+    tvdb_id: 417909
+    imdb_id: tt13159924
+  "Halt and Catch Fire (2014)":
     library: TV Shows
     card_type: sherlock
     episode_text_format: v{season_number}.{episode_number}
@@ -449,7 +548,10 @@ series:
         a: '4'
         A: '4'
     tmdb_id: 59659
-  High Potential (2024):
+    rating_key: 107913
+    tvdb_id: 271910
+    imdb_id: tt2543312
+  "High Potential (2024)":
     library: TV Shows
     cand_type: standard
     font:
@@ -457,7 +559,10 @@ series:
       size: 145%
       color: '#ef1794'
     tmdb_id: 226637
-  His Dark Materials (2019):
+    rating_key: 108417
+    tvdb_id: 434988
+    imdb_id: tt22091076
+  "His Dark Materials (2019)":
     library: TV Shows
     card_type: olivier
     font:
@@ -466,7 +571,10 @@ series:
     watched_style: unique
     unwatched_style: blur grayscale
     tmdb_id: 68507
-  Hotel Hell (2012):
+    rating_key: 108435
+    tvdb_id: 360295
+    imdb_id: tt5607976
+  "Hotel Hell (2012)":
     library: TV Shows
     card_type: tinted frame
     episode_text_format: '{airdate:%A %B %d, %Y}'
@@ -480,7 +588,10 @@ series:
       case: title
       kerning: 35%
     tmdb_id: 44472
-  How I Met Your Mother (2005):
+    rating_key: 108470
+    tvdb_id: 257609
+    imdb_id: tt2242025
+  "How I Met Your Mother (2005)":
     library: TV Shows
     card_type: frame
     episode_text_format: e{episode_number}
@@ -493,7 +604,10 @@ series:
     seasons:
       hide: true
     tmdb_id: 1100
-  Ink Master (2012):
+    rating_key: 108681
+    tvdb_id: 75760
+    imdb_id: tt0460649
+  "Ink Master (2012)":
     library: TV Shows
     card_type: comic book
     font:
@@ -502,7 +616,10 @@ series:
     extras:
       banner_fill_color: rgba(135,10,10,0.6)
     tmdb_id: 46286
-  'Ink Master: Angels (2017)':
+    rating_key: 109104
+    tvdb_id: 254986
+    imdb_id: tt1865740
+  "Ink Master: Angels (2017)":
     library: TV Shows
     card_type: comic book
     image_source_priority: plex
@@ -512,7 +629,10 @@ series:
     extras:
       banner_fill_color: rgba(255,105,180,0.6)
     tmdb_id: 74395
-  'Ink Master: Grudge Match (2019)':
+    rating_key: 109342
+    tvdb_id: 333791
+    imdb_id: tt7479160
+  "Ink Master: Grudge Match (2019)":
     library: TV Shows
     card_type: comic book
     image_source_priority: plex
@@ -522,7 +642,10 @@ series:
     extras:
       banner_fill_color: rgba(218,165,32,0.6)
     tmdb_id: 92808
-  'Ink Master: Redemption (2015)':
+    rating_key: 109366
+    tvdb_id: 368693
+    imdb_id: tt11000396
+  "Ink Master: Redemption (2015)":
     library: TV Shows
     card_type: comic book
     image_source_priority: plex
@@ -532,7 +655,9 @@ series:
     extras:
       banner_fill_color: rgba(10,10,135,0.6)
     tmdb_id: 65760
-  'IT: Welcome to Derry (2025)':
+    rating_key: 109380
+    tvdb_id: 299942
+  "IT: Welcome to Derry (2025)":
     library: TV Shows
     card_type: divider
     tmdb_id: 200875
@@ -547,7 +672,8 @@ series:
       hide: true
     image_source_priority: tmdb, plex
     episode_text_format: Chapter {episode_number}
-  Its Always Sunny in Philadelphia (2005):
+    rating_key: 184299
+  "Its Always Sunny in Philadelphia (2005)":
     library: TV Shows
     card_type: divider
     font:
@@ -561,7 +687,10 @@ series:
       hide: true
     episode_text_format: s{season_number}e{episode_number}
     tmdb_id: 2710
-  Kitchen Nightmares (US) (2007):
+    rating_key: 109474
+    tvdb_id: 75805
+    imdb_id: tt0472954
+  "Kitchen Nightmares (US) (2007)":
     library: TV Shows
     card_type: tinted frame
     episode_text_format: '{airdate: %B %d, %Y}'
@@ -581,7 +710,10 @@ series:
       case: title
       kerning: 36%
     tmdb_id: 11294
-  Laid-Back Camp (2018):
+    rating_key: 110482
+    tvdb_id: 80552
+    imdb_id: tt0983514
+  "Laid-Back Camp (2018)":
     library: TV Shows
     card_type: anime
     translation:
@@ -597,11 +729,17 @@ series:
     unwatched_style: blur grayscale
     episode_data_source: plex
     tmdb_id: 76075
-  Lazarus (2025):
+    rating_key: 165821
+    tvdb_id: 330692
+    imdb_id: tt7742120
+  "Lazarus (2025)":
     library: TV Shows
     card_type: standard
     tmdb_id: 231003
-  Lisey's Story (2021):
+    rating_key: 110829
+    tvdb_id: 437408
+    imdb_id: tt28454008
+  "Lisey's Story (2021)":
     library: TV Shows
     card_type: divider
     episode_text_format: Chapter {episode_number}
@@ -615,7 +753,10 @@ series:
     seasons:
       hide: true
     tmdb_id: 95839
-  Lost (2004):
+    rating_key: 110892
+    tvdb_id: 366527
+    imdb_id: tt3319460
+  "Lost (2004)":
     library: TV Shows
     episode_data_source: plex
     image_source_priority: plex, tmdb
@@ -627,7 +768,10 @@ series:
     watched_style: unique
     unwatched_style: blur grayscale
     tmdb_id: 4607
-  Malcolm in the Middle (2000):
+    rating_key: 111141
+    tvdb_id: 73739
+    imdb_id: tt0411008
+  "Malcolm in the Middle (2000)":
     library: TV Shows
     card_type: sherlock
     watched_style: unique
@@ -637,7 +781,10 @@ series:
       size: 152%
       case: title
     tmdb_id: 2004
-  Midnight Mass (2021):
+    rating_key: 111790
+    tvdb_id: 73838
+    imdb_id: tt0212671
+  "Midnight Mass (2021)":
     library: TV Shows
     card_type: divider
     episode_text_format: '{episode_number_ordinal} Book'
@@ -668,7 +815,10 @@ series:
     seasons:
       hide: true
     tmdb_id: 97400
-  MILF Manor (2023):
+    rating_key: 112923
+    tvdb_id: 367226
+    imdb_id: tt10574558
+  "MILF Manor (2023)":
     library: TV Shows
     card_type: landscape
     extras:
@@ -678,7 +828,10 @@ series:
       file: /config/fonts/eurostile.ttf
       size: 145%
     tmdb_id: 217417
-  Monster (2004):
+    rating_key: 112951
+    tvdb_id: 428423
+    imdb_id: tt25375242
+  "Monster (2004)":
     library: TV Shows
     card_type: anime
     translation:
@@ -692,7 +845,10 @@ series:
     seasons:
       hide: true
     tmdb_id: 30981
-  Mr. Mercedes (2017):
+    rating_key: 113379
+    tvdb_id: 74599
+    imdb_id: tt0434706
+  "Mr. Mercedes (2017)":
     library: TV Shows
     card_type: divider
     episode_text_format: Chapter {episode_number}
@@ -707,7 +863,10 @@ series:
       title_text_position: right
       text_position: lower left
     tmdb_id: 70485
-  Mr. Robot (2015):
+    rating_key: 113595
+    tvdb_id: 327109
+    imdb_id: tt4354880
+  "Mr. Robot (2015)":
     library: TV Shows
     watched_style: unique
     unwatched_style: blur grayscale
@@ -720,7 +879,10 @@ series:
     seasons:
       hide: true
     tmdb_id: 62560
-  'Muscles & Mayhem: An Unauthorized Story of American Gladiators (2023)':
+    rating_key: 113511
+    tvdb_id: 289590
+    imdb_id: tt4158110
+  "Muscles & Mayhem: An Unauthorized Story of American Gladiators (2023)":
     library: TV Shows
     card_type: divider
     episode_text_format: '{episode_number}'
@@ -731,7 +893,10 @@ series:
     seasons:
       hide: true
     tmdb_id: 228550
-  Mystery Diners (2011):
+    rating_key: 113710
+    tvdb_id: 435568
+    imdb_id: tt27851747
+  "Mystery Diners (2011)":
     episode_data_source: plex
     image_source_priority: plex
     library: TV Shows
@@ -745,7 +910,11 @@ series:
       frame_color: '#ffffff'
     seasons:
       hide: true
-  Mythic Quest (2020):
+    tmdb_id: 58936
+    rating_key: 113731
+    tvdb_id: 259235
+    imdb_id: tt2147632
+  "Mythic Quest (2020)":
     library: TV Shows
     card_type: divider
     episode_text_format: v{season_number}.{episode_number}
@@ -756,7 +925,10 @@ series:
     seasons:
       hide: true
     tmdb_id: 94951
-  Neon Genesis Evangelion (1995):
+    rating_key: 114094
+    tvdb_id: 362829
+    imdb_id: tt8879940
+  "Neon Genesis Evangelion (1995)":
     library: TV Shows
     card_type: anime
     translation:
@@ -769,7 +941,10 @@ series:
     watched_style: unique
     unwatched_style: blur grayscale
     tmdb_id: 890
-  Parks and Recreation (2009):
+    rating_key: 114209
+    tvdb_id: 70350
+    imdb_id: tt0112159
+  "Parks and Recreation (2009)":
     library: TV Shows
     card_type: sherlock
     font:
@@ -779,7 +954,10 @@ series:
       color: '#FFCC00'
       vertical_shift: -10
     tmdb_id: 8592
-  Party Down (2009):
+    rating_key: 114881
+    tvdb_id: 84912
+    imdb_id: tt1266020
+  "Party Down (2009)":
     library: TV Shows
     card_type: standard
     watched_style: unique
@@ -788,7 +966,10 @@ series:
       size: 70%
       vertical_shift: 60
     tmdb_id: 17287
-  Peacemaker (2022):
+    rating_key: 115014
+    tvdb_id: 83616
+    imdb_id: tt1073507
+  "Peacemaker (2022)":
     library: TV Shows
     card_type: standard
     watched_style: unique
@@ -799,7 +980,10 @@ series:
       size: 200%
       color: '#ffd505'
     tmdb_id: 110492
-  Percy Jackson and the Olympians (2023):
+    rating_key: 115192
+    tvdb_id: 391153
+    imdb_id: tt13146488
+  "Percy Jackson and the Olympians (2023)":
     library: TV Shows
     card_type: divider
     watched_style: unique
@@ -809,7 +993,10 @@ series:
       size: 150%
       case: title
     tmdb_id: 103540
-  Planet Earth (2006):
+    rating_key: 198461
+    tvdb_id: 415151
+    imdb_id: tt12324366
+  "Planet Earth (2006)":
     library: TV Shows
     card_type: landscape
     extras:
@@ -820,7 +1007,10 @@ series:
       size: 170%
       case: upper
     tmdb_id: 1044
-  Planet Earth II (2016):
+    rating_key: 115508
+    tvdb_id: 79257
+    imdb_id: tt0795176
+  "Planet Earth II (2016)":
     library: TV Shows
     card_type: landscape
     extras:
@@ -831,7 +1021,10 @@ series:
       size: 170%
       case: upper
     tmdb_id: 68595
-  Pluribus (2025):
+    rating_key: 115521
+    tvdb_id: 318408
+    imdb_id: tt5491994
+  "Pluribus (2025)":
     library: TV Shows
     card_type: olivier
     font:
@@ -843,7 +1036,10 @@ series:
     extras:
       episode_text_font_size: '2'
     tmdb_id: 225171
-  Pluto (2023):
+    rating_key: 191612
+    tvdb_id: 436457
+    imdb_id: tt22202452
+  "Pluto (2023)":
     library: TV Shows
     card_type: anime
     translation:
@@ -857,7 +1053,10 @@ series:
     seasons:
       hide: true
     tmdb_id: 91997
-  Poker Face (2023):
+    rating_key: 115529
+    tvdb_id: 431093
+    imdb_id: tt26737616
+  "Poker Face (2023)":
     library: TV Shows
     card_type: standard
     watched_style: unique
@@ -868,7 +1067,10 @@ series:
       size: 100%
       color: '#FFBF00'
     tmdb_id: 120998
-  Pokémon (1997):
+    rating_key: 116768
+    tvdb_id: 398822
+    imdb_id: tt14269590
+  "Pokémon (1997)":
     library: TV Shows
     card_type: anime
     translation:
@@ -908,7 +1110,10 @@ series:
       stroke_color: '#004F98'
       kanji_vertical_shift: 50
     tmdb_id: 60572
-  'Pokémon: Origins (2013)':
+    rating_key: 115549
+    tvdb_id: 76703
+    imdb_id: tt0168366
+  "Pokémon: Origins (2013)":
     library: TV Shows
     card_type: anime
     translation:
@@ -933,7 +1138,10 @@ series:
     extras:
       stroke_color: '#004F98'
     tmdb_id: 61295
-  Quantum Leap (1989):
+    rating_key: 116762
+    tvdb_id: 273616
+    imdb_id: tt3218680
+  "Quantum Leap (1989)":
     tmdb_id: 4018
     library: TV Shows
     card_type: standard
@@ -945,7 +1153,10 @@ series:
       color: '#49a8f1'
       size: 170%
       stroke_width: 125%
-  Riverdale (2017):
+    rating_key: 116944
+    tvdb_id: 72248
+    imdb_id: tt0096684
+  "Riverdale (2017)":
     library: TV Shows
     card_type: tinted frame
     episode_text_format: Chapter {episode_number}
@@ -1109,7 +1320,10 @@ series:
     season_posters:
       create: false
     tmdb_id: 69050
-  Samurai Jack (2001):
+    rating_key: 117535
+    tvdb_id: 311954
+    imdb_id: tt5420376
+  "Samurai Jack (2001)":
     library: TV Shows
     card_type: anime
     translation:
@@ -1123,7 +1337,10 @@ series:
     unwatched_style: blur grayscale
     episode_data_source: plex
     tmdb_id: 2723
-  Scrubs (2001):
+    rating_key: 118341
+    tvdb_id: 75164
+    imdb_id: tt0278238
+  "Scrubs (2001)":
     library: TV Shows
     watched_style: unique
     unwatched_style: unique
@@ -1134,7 +1351,10 @@ series:
       stroke_width: 110%
       size: 145%
     tmdb_id: 4556
-  Severance (2022):
+    rating_key: 119283
+    tvdb_id: 76156
+    imdb_id: tt0285403
+  "Severance (2022)":
     library: TV Shows
     card_type: divider
     watched_style: unique
@@ -1147,7 +1367,10 @@ series:
       case: Title
       size: 150%
     tmdb_id: 95396
-  Silo (2023):
+    rating_key: 119819
+    tvdb_id: 371980
+    imdb_id: tt11280740
+  "Silo (2023)":
     library: TV Shows
     watched_style: unique
     unwatched_style: blur grayscale
@@ -1157,7 +1380,10 @@ series:
       file: /config/fonts/silostencil.ttf
       size: 199%
     tmdb_id: 125988
-  'Star Trek: Deep Space Nine (1993)':
+    rating_key: 119995
+    tvdb_id: 403245
+    imdb_id: tt14688458
+  "Star Trek: Deep Space Nine (1993)":
     library: TV Shows
     font:
       file: /config/fonts/startrek.otf
@@ -1167,7 +1393,10 @@ series:
       case: title
       stroke_width: 120%
     tmdb_id: 580
-  'Star Trek: Discovery (2017)':
+    rating_key: 121221
+    tvdb_id: 72073
+    imdb_id: tt0106145
+  "Star Trek: Discovery (2017)":
     library: TV Shows
     font:
       file: /config/fonts/startrek.otf
@@ -1177,7 +1406,10 @@ series:
       case: title
       stroke_width: 120%
     tmdb_id: 67198
-  'Star Trek: Enterprise (2001)':
+    rating_key: 120595
+    tvdb_id: 328711
+    imdb_id: tt5171438
+  "Star Trek: Enterprise (2001)":
     library: TV Shows
     font:
       file: /config/fonts/startrek.otf
@@ -1187,7 +1419,10 @@ series:
       case: title
       stroke_width: 120%
     tmdb_id: 314
-  'Star Trek: Picard (2020)':
+    rating_key: 120666
+    tvdb_id: 73893
+    imdb_id: tt0244365
+  "Star Trek: Picard (2020)":
     library: TV Shows
     font:
       file: /config/fonts/startrek.otf
@@ -1197,7 +1432,10 @@ series:
       case: title
       stroke_width: 120%
     tmdb_id: 85949
-  'Star Trek: Strange New Worlds (2022)':
+    rating_key: 120768
+    tvdb_id: 364093
+    imdb_id: tt8806524
+  "Star Trek: Strange New Worlds (2022)":
     library: TV Shows
     font:
       file: /config/fonts/startrek.otf
@@ -1207,7 +1445,10 @@ series:
       case: title
       stroke_width: 120%
     tmdb_id: 103516
-  'Star Trek: The Animated Series (1973)':
+    rating_key: 120802
+    tvdb_id: 382389
+    imdb_id: tt12327578
+  "Star Trek: The Animated Series (1973)":
     library: TV Shows
     font:
       file: /config/fonts/startrek.otf
@@ -1217,7 +1458,10 @@ series:
       case: title
       stroke_width: 120%
     tmdb_id: 1992
-  'Star Trek: The Next Generation (1987)':
+    rating_key: 120836
+    tvdb_id: 73566
+    imdb_id: tt0069637
+  "Star Trek: The Next Generation (1987)":
     library: TV Shows
     card_type: standard
     font:
@@ -1227,7 +1471,10 @@ series:
       case: title
       stroke_width: 120%
     tmdb_id: 655
-  'Star Trek: Voyager (1995)':
+    rating_key: 120861
+    tvdb_id: 71470
+    imdb_id: tt0092455
+  "Star Trek: Voyager (1995)":
     library: TV Shows
     font:
       file: /config/fonts/startrek.otf
@@ -1237,7 +1484,10 @@ series:
       case: title
       stroke_width: 120%
     tmdb_id: 1855
-  'Star Wars: Skeleton Crew (2024)':
+    rating_key: 121045
+    tvdb_id: 74550
+    imdb_id: tt0112178
+  "Star Wars: Skeleton Crew (2024)":
     library: TV Shows
     card_type: star wars
     seasons:
@@ -1245,7 +1495,10 @@ series:
     unwatched_style: blur grayscale
     watched_style: unique
     tmdb_id: 202879
-  Stephen Kings It (1990):
+    rating_key: 121461
+    tvdb_id: 420600
+    imdb_id: tt20600980
+  "Stephen Kings It (1990)":
     library: TV Shows
     card_type: divider
     watched-style: unique
@@ -1264,7 +1517,10 @@ series:
       title_text_position: right
       text_position: lower left
     tmdb_id: 19614
-  Tales from the Crypt (1989):
+    rating_key: 109470
+    tvdb_id: 113981
+    imdb_id: tt0099864
+  "Tales from the Crypt (1989)":
     library: TV Shows
     card_type: standard
     episode_text_format: Volume {season_number_cardinal}, Issue {episode_number_cardinal}
@@ -1274,7 +1530,10 @@ series:
     seasons:
       hide: true
     tmdb_id: 2391
-  Taskmaster (2015):
+    rating_key: 121852
+    tvdb_id: 73029
+    imdb_id: tt0096708
+  "Taskmaster (2015)":
     library: TV Shows
     card_type: calligraphy
     watched_style: unique
@@ -1289,7 +1548,10 @@ series:
     extras:
       logo: /config/source/Taskmaster (2015)/logo.png
     tmdb_id: 63404
-  Tattoo Fixers (2015):
+    rating_key: 122058
+    tvdb_id: 298905
+    imdb_id: tt4934214
+  "Tattoo Fixers (2015)":
     library: TV Shows
     card_type: comic book
     image_source_priority: plex
@@ -1300,7 +1562,10 @@ series:
     extras:
       banner_fill_color: rgba(0,100,220,0.6)
     tmdb_id: 71239
-  Tattoo Nightmares (2012):
+    rating_key: 122262
+    tvdb_id: 406934
+    imdb_id: tt5307354
+  "Tattoo Nightmares (2012)":
     library: TV Shows
     card_type: comic book
     image_source_priority: plex
@@ -1311,7 +1576,10 @@ series:
     extras:
       banner_fill_color: rgba(135,0,120,0.6)
     tmdb_id: 52069
-  That 70s Show (1998):
+    rating_key: 122345
+    tvdb_id: 262998
+    imdb_id: tt2209649
+  "That 70s Show (1998)":
     library: TV Shows
     card_type: frame
     episode_text_format: Track {episode_number}
@@ -1327,7 +1595,10 @@ series:
     extras:
       episode_text_position: right
     tmdb_id: 52
-  The Americans (2013):
+    rating_key: 122559
+    tvdb_id: 73787
+    imdb_id: tt0165598
+  "The Americans (2013)":
     library: TV Shows
     card_type: olivier
     watched_style: unique
@@ -1337,7 +1608,10 @@ series:
       color: '#DB261D'
       size: 200%
     tmdb_id: 46533
-  The Boys (2019):
+    rating_key: 122846
+    tvdb_id: 261690
+    imdb_id: tt2149175
+  "The Boys (2019)":
     library: TV Shows
     card_type: standard
     font:
@@ -1348,7 +1622,10 @@ series:
     watched_style: unique
     unwatched_style: blur grayscale
     tmdb_id: 76479
-  The Curse (2023):
+    rating_key: 101233
+    tvdb_id: 355567
+    imdb_id: tt1190634
+  "The Curse (2023)":
     library: TV Shows
     card_type: white border
     watched_style: unique
@@ -1363,13 +1640,19 @@ series:
     seasons:
       hide: true
     tmdb_id: 114655
-  The Decameron (2024):
+    rating_key: 123277
+    tvdb_id: 377278
+    imdb_id: tt13623608
+  "The Decameron (2024)":
     library: TV Shows
     card_type: standard
     font:
       file: /config/fonts/decameron.otf
     tmdb_id: 250162
-  The Fall of the House of Usher (2023):
+    rating_key: 123289
+    tvdb_id: 423618
+    imdb_id: tt21831910
+  "The Fall of the House of Usher (2023)":
     library: TV Shows
     card_type: divider
     episode_text_format: Chapter {abs_number}
@@ -1382,14 +1665,20 @@ series:
     seasons:
       hide: true
     tmdb_id: 157065
-  The Food That Built America (2019):
+    rating_key: 123702
+    tvdb_id: 411021
+    imdb_id: tt15567174
+  "The Food That Built America (2019)":
     library: TV Shows
     card_type: landscape
     extras:
       add_bounding_box: true
       darken: box
     tmdb_id: 92371
-  The Good Place (2016):
+    rating_key: 123770
+    tvdb_id: 367084
+    imdb_id: tt10098248
+  "The Good Place (2016)":
     library: TV Shows
     card_type: divider
     episode_text_format: Chapter {abs_number}
@@ -1403,7 +1692,10 @@ series:
       title_text_position: right
       text_position: upper left
     tmdb_id: 66573
-  The Green Planet (2022):
+    rating_key: 124091
+    tvdb_id: 311711
+    imdb_id: tt4955642
+  "The Green Planet (2022)":
     library: TV Shows
     card_type: landscape
     extras:
@@ -1415,7 +1707,10 @@ series:
       case: upper
       color: '#98FB98'
     tmdb_id: 96323
-  The Haunting (2018):
+    rating_key: 124291
+    tvdb_id: 359250
+    imdb_id: tt16986646
+  "The Haunting (2018)":
     library: TV Shows
     card_type: anime
     episode_text_format: Chapter {episode_number}
@@ -1434,7 +1729,10 @@ series:
       - language: JA
         key: Kanji
     tmdb_id: 72844
-  The IT Crowd (2006):
+    rating_key: 124298
+    tvdb_id: 345246
+    imdb_id: tt6763664
+  "The IT Crowd (2006)":
     library: TV Shows
     card_type: sherlock
     episode_text_format: v{season_number}.{episode_number}
@@ -1458,7 +1756,10 @@ series:
         a: '4'
         A: '4'
     tmdb_id: 2490
-  The Last Of Us (2023):
+    rating_key: 124394
+    tvdb_id: 79216
+    imdb_id: tt0487831
+  "The Last Of Us (2023)":
     library: TV Shows
     card_type: overline
     font:
@@ -1468,7 +1769,10 @@ series:
     watched_style: unique
     unwatched_style: unique
     tmdb_id: 100088
-  The Man in the High Castle (2015):
+    rating_key: 124844
+    tvdb_id: 392256
+    imdb_id: tt3581920
+  "The Man in the High Castle (2015)":
     library: TV Shows
     card_type: olivier
     font:
@@ -1479,7 +1783,7 @@ series:
     watched_style: unique
     unwatched_style: blur grayscale
     tmdb_id: 62017
-  The Mandalorian (2019):
+  "The Mandalorian (2019)":
     library: TV Shows
     card_type: star wars
     episode_text_format: Chapter {abs_number}
@@ -1488,7 +1792,10 @@ series:
     font:
       size: 200%
     tmdb_id: 82856
-  The Midnight Club (2022):
+    rating_key: 111953
+    tvdb_id: 361753
+    imdb_id: tt8111088
+  "The Midnight Club (2022)":
     library: TV Shows
     card_type: divider
     episode_text_format: Chapter {episode_number}
@@ -1499,7 +1806,10 @@ series:
       size: 250%
       color: '#FFDE21'
     tmdb_id: 126254
-  The Movies That Made Us (2019):
+    rating_key: 125183
+    tvdb_id: 381909
+    imdb_id: tt13444912
+  "The Movies That Made Us (2019)":
     library: TV Shows
     card_type: landscape
     extras:
@@ -1508,7 +1818,10 @@ series:
     font:
       size: 110%
     tmdb_id: 93219
-  The Muppets Mayhem (2023):
+    rating_key: 125226
+    tvdb_id: 371824
+    imdb_id: tt10681222
+  "The Muppets Mayhem (2023)":
     library: TV Shows
     card_type: standard
     episode_text_format: Track {episode_number_cardinal}
@@ -1533,7 +1846,10 @@ series:
         'Track 9: ': ''
         'Track 10:': ''
     tmdb_id: 194573
-  The Office (US) (2005):
+    rating_key: 165590
+    tvdb_id: 417543
+    imdb_id: tt18545980
+  "The Office (US) (2005)":
     library: TV Shows
     watched_style: unique
     card_type: tinted glass
@@ -1542,7 +1858,10 @@ series:
       case: title
       stroke_width: 110%
     tmdb_id: 2316
-  The Outsider (2020):
+    rating_key: 125393
+    tvdb_id: 73244
+    imdb_id: tt0386676
+  "The Outsider (2020)":
     library: TV Shows
     card_type: divider
     episode_text_format: Chapter {episode_number}
@@ -1556,7 +1875,10 @@ series:
     seasons:
       hide: true
     tmdb_id: 84661
-  The Penguin (2024):
+    rating_key: 165423
+    tvdb_id: 365480
+    imdb_id: tt8550800
+  "The Penguin (2024)":
     library: TV Shows
     card_type: olivier
     watch_style: unique
@@ -1569,7 +1891,10 @@ series:
       episode_text_font_size: 1.5
       episode_text_vertical_shift: -20
     tmdb_id: 194764
-  The Reluctant Traveler With Eugene Levy (2023):
+    rating_key: 125738
+    tvdb_id: 417648
+    imdb_id: tt15435876
+  "The Reluctant Traveler With Eugene Levy (2023)":
     library: TV Shows
     card_type: notification
     extras:
@@ -1580,7 +1905,10 @@ series:
       size: 100%
       file: /config/fonts/dj.otf
     tmdb_id: 137735
-  The Righteous Gemstones (2019):
+    rating_key: 125795
+    tvdb_id: 429201
+    imdb_id: tt15822846
+  "The Righteous Gemstones (2019)":
     library: TV Shows
     card_type: divider
     watched_style: unique
@@ -1592,7 +1920,10 @@ series:
     seasons:
       hide: true
     tmdb_id: 82782
-  The Shining (1997):
+    rating_key: 125827
+    tvdb_id: 357223
+    imdb_id: tt8634332
+  "The Shining (1997)":
     library: TV Shows
     card_type: divider
     episode_text_format: Chapter {episode_number}
@@ -1606,7 +1937,10 @@ series:
     seasons:
       hide: true
     tmdb_id: 1867
-  The Stand (1994):
+    rating_key: 119905
+    tvdb_id: 80245
+    imdb_id: tt0118460
+  "The Stand (1994)":
     library: TV Shows
     card_type: divider
     watched-style: unique
@@ -1623,7 +1957,10 @@ series:
       title_text_position: right
       text_position: lower left
     tmdb_id: 9045
-  The Stand (2020):
+    rating_key: 126401
+    tvdb_id: 79866
+    imdb_id: tt0108941
+  "The Stand (2020)":
     library: TV Shows
     card_type: divider
     watched-style: unique
@@ -1640,13 +1977,17 @@ series:
       title_text_position: right
       text_position: lower left
     tmdb_id: 86382
-  The UnBelievable with Dan Aykroyd (2023):
+    rating_key: 126407
+    tvdb_id: 359583
+    imdb_id: tt1831804
+  "The UnBelievable with Dan Aykroyd (2023)":
     library: TV Shows
     card_type: banner
     tmdb_id: 227521
     tvdb_id: 441983
     imdb_id: tt27053309
-  The Witcher (2019):
+    rating_key: 126772
+  "The Witcher (2019)":
     library: TV Shows
     card_type: divider
     seasons:
@@ -1656,7 +1997,10 @@ series:
       size: 250%
     episode_text_format: s{season_number}e{episode_number}
     tmdb_id: 71912
-  The X-Files (1993):
+    rating_key: 127051
+    tvdb_id: 362696
+    imdb_id: tt5180504
+  "The X-Files (1993)":
     library: TV Shows
     watched_style: unique
     unwatched_style: blur
@@ -1665,7 +2009,10 @@ series:
       file: /config/fonts/typewriter.otf
       case: title
     tmdb_id: 4087
-  True Detective (2014):
+    rating_key: 127227
+    tvdb_id: 77398
+    imdb_id: tt0106179
+  "True Detective (2014)":
     library: TV Shows
     card_type: white border
     watched_style: unique
@@ -1684,7 +2031,10 @@ series:
       '3': Ozarks
       '4': Alaska
     tmdb_id: 46648
-  Twin Peaks (1990):
+    rating_key: 155616
+    tvdb_id: 270633
+    imdb_id: tt2356777
+  "Twin Peaks (1990)":
     library: TV Shows
     card_type: anime
     episode_text_format: Episode {episode_number_cardinal}
@@ -1698,7 +2048,10 @@ series:
       - language: JA
         key: Kanji
     tmdb_id: 1920
-  Under the Dome (2013):
+    rating_key: 156210
+    tvdb_id: 70533
+    imdb_id: tt0098936
+  "Under the Dome (2013)":
     library: TV Shows
     card_type: divider
     episode_text_format: Chapter {abs_number}
@@ -1713,7 +2066,10 @@ series:
       title_text_position: right
       text_position: lower left
     tmdb_id: 46331
-  Vice Principals (2016):
+    rating_key: 180069
+    tvdb_id: 264492
+    imdb_id: tt1553656
+  "Vice Principals (2016)":
     library: TV Shows
     card_type: standard
     episode_text_format: Year {season_number_cardinal}, {episode_number_ordinal} Period
@@ -1723,7 +2079,10 @@ series:
     seasons:
       hide: true
     tmdb_id: 65150
-  Westworld (2016):
+    rating_key: 156765
+    tvdb_id: 308771
+    imdb_id: tt3766376
+  "Westworld (2016)":
     library: TV Shows
     card_type: anime
     font:
@@ -1737,7 +2096,10 @@ series:
       - language: JA
         key: Kanji
     tmdb_id: 63247
-  Yellowjackets (2021):
+    rating_key: 155575
+    tvdb_id: 296762
+    imdb_id: tt0475784
+  "Yellowjackets (2021)":
     library: TV Shows
     card_type: standard
     watched_style: unique
@@ -1751,3 +2113,7 @@ series:
       logo: /config/logos/yellowjackets.png
       stroke_width: 0%
     tmdb_id: 117488
+    rating_key: 155438
+    tvdb_id: 399731
+    imdb_id: tt11041332
+rating_tmdb_lookup: {}
