@@ -16,10 +16,11 @@ tmdb:
   api_key: bd0b3698af22a3a427b63647d66c6839
   retry_count: 5
 
+
 tautulli:
   url: http://192.168.111.77:8181/          # Your Tautulli URL
   api_key: 7p6yOQnr5gvXh_rxomOJCVYCmMlZX8_q        # Your API key
   verify_ssl: false
   username: tyfighter0 #This should be dropdown.
-  use_plex_fallback: false                      # Poll Plex for watch state changes when history entries are missing
+  use_plex_fallback: true                      # Poll Plex for watch state changes when history entries are missing
   activity_poll_interval_seconds: 60            # Minimum poll interval is 15 seconds
