@@ -83,3 +83,45 @@ class UpdateWatchedStatusesTests(TestCase):
         self.episode_map["1-2"].update_statuses.assert_called_once_with(
             False, self.style_set
         )
+
+    def test_watched_to_unwatched_triggers_reload(self) -> None:
+        episode = make_stub_episode(1, 1)
+        episodes = [SimpleNamespace(parentIndex=1, index=1)]
+        series = SimpleNamespace(episodes=lambda: episodes)
+        self.interface._PlexInterface__get_series.return_value = series
+
+        self.interface._is_episode_watched = Mock(return_value=False)
+        self.interface._get_loaded_episode = Mock(
+            return_value={'spoiler': None, 'watched': True}
+        )
+        self.interface._get_condition = Mock(return_value="condition")
+
+        self.interface.update_watched_statuses(
+            "Library", self.series_info, {"1-1": episode}, self.style_set
+        )
+
+        episode.delete_card.assert_called_once()
+        self.interface.loaded_db.update.assert_called_once_with(
+            {'filesize': 0}, "condition"
+        )
+
+    def test_unwatched_to_watched_triggers_reload(self) -> None:
+        episode = make_stub_episode(1, 1)
+        episodes = [SimpleNamespace(parentIndex=1, index=1)]
+        series = SimpleNamespace(episodes=lambda: episodes)
+        self.interface._PlexInterface__get_series.return_value = series
+
+        self.interface._is_episode_watched = Mock(return_value=True)
+        self.interface._get_loaded_episode = Mock(
+            return_value={'spoiler': None, 'watched': False}
+        )
+        self.interface._get_condition = Mock(return_value="condition")
+
+        self.interface.update_watched_statuses(
+            "Library", self.series_info, {"1-1": episode}, self.style_set
+        )
+
+        episode.delete_card.assert_called_once()
+        self.interface.loaded_db.update.assert_called_once_with(
+            {'filesize': 0}, "condition"
+        )

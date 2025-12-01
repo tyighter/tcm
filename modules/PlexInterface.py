@@ -636,18 +636,22 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
                 continue
 
             # Set Episode watched/spoil statuses
-            episode.update_statuses(
-                self._is_episode_watched(plex_episode), style_set
-            )
+            watched = self._is_episode_watched(plex_episode)
+            episode.update_statuses(watched, style_set)
 
             # Get characteristics of this Episode's loaded card
             details = self._get_loaded_episode(loaded_series, episode)
             loaded = details is not None
             spoiler_status = details['spoiler'] if loaded else None
+            watched_status = details.get('watched') if loaded else None
 
-            # Delete and reset card if current spoiler type doesn't match
-            delete_and_reset = ((episode.spoil_type != spoiler_status)
-                                and bool(spoiler_status))
+            # Delete and reset card if current spoiler type or watched status
+            # doesn't match what was loaded previously
+            delete_and_reset = loaded and (
+                (spoiler_status is not None and
+                 episode.spoil_type != spoiler_status)
+                or (watched_status is not None and watched != watched_status)
+            )
 
             # Delete card, reset size in loaded map to force reload
             if delete_and_reset and loaded:
@@ -992,6 +996,7 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
                 'episode': episode.episode_info.episode_number,
                 'filesize': episode.destination.stat().st_size,
                 'spoiler': episode.spoil_type,
+                'watched': episode.watched,
             }, self._get_condition(library_name, series_info, episode))
 
         # Log load operations to user
