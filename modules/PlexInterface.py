@@ -636,7 +636,9 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
                 continue
 
             # Set Episode watched/spoil statuses
-            episode.update_statuses(plex_episode.isWatched, style_set)
+            episode.update_statuses(
+                self._is_episode_watched(plex_episode), style_set
+            )
 
             # Get characteristics of this Episode's loaded card
             details = self._get_loaded_episode(loaded_series, episode)
@@ -656,6 +658,50 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
                 )
 
         return None
+
+    def _is_episode_watched(self, plex_episode: PlexEpisode) -> bool:
+        """
+        Determine whether a Plex episode should be treated as watched.
+
+        Episodes are watched when Plex reports a positive view count, when the
+        play state indicates the episode was effectively completed (e.g., the
+        playhead is near the end), or when play history exists.
+        """
+
+        view_count = getattr(plex_episode, 'viewCount', 0) or 0
+        if view_count > 0:
+            return True
+
+        # Consider view offsets that indicate the episode is basically
+        # completed, even if the play count hasn't been incremented yet.
+        duration = getattr(plex_episode, 'duration', 0) or 0
+        view_offset = getattr(plex_episode, 'viewOffset', None)
+        if duration and view_offset is not None:
+            remaining = duration - view_offset
+            near_end_threshold = min(60000, duration * 0.1)
+            if remaining <= near_end_threshold or view_offset / duration >= 0.9:
+                log.debug(
+                    'Treating %s as watched based on play progress: %s/%s',
+                    getattr(plex_episode, 'ratingKey', 'episode'),
+                    view_offset,
+                    duration,
+                )
+                return True
+
+        history_callable = getattr(plex_episode, 'history', None)
+        if callable(history_callable):
+            try:
+                history = history_callable()
+                if history:
+                    return True
+            except Exception:
+                log.debug(
+                    'Failed to retrieve play history for %s',
+                    getattr(plex_episode, 'ratingKey', 'episode'),
+                    exc_info=True,
+                )
+
+        return False
 
 
     @catch_and_log("Error setting series ID's")
