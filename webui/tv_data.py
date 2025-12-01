@@ -9,6 +9,7 @@ from modules.Show import Show
 
 from ruamel.yaml import YAML
 from ruamel.yaml.composer import ComposerError
+from ruamel.yaml.parser import ParserError
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
@@ -44,7 +45,7 @@ class TvYamlManager:
         try:
             with self.file_path.open("r", encoding="utf-8") as handle:
                 data = self._yaml.load(handle) or CommentedMap()
-        except ComposerError:
+        except (ComposerError, ParserError):
             with self.file_path.open("r", encoding="utf-8") as handle:
                 documents = list(self._yaml.load_all(handle))
 
