@@ -89,3 +89,30 @@ class PlexWatchStateTests(TestCase):
 
     def test_watch_toggle_triggers_build_with_fallback_disabled(self) -> None:
         self._run_watch_toggle_flow(use_fallback=False)
+
+
+class ActivityDeduplicationTests(TestCase):
+    def test_repeated_watch_events_are_treated_as_new_entries(self) -> None:
+        tv_manager = DummyTvManager()
+        plex = DummyPlex("show-1")
+        context = DummyContext(plex, use_fallback=True)
+
+        previous_entry = {
+            "series": "Example",
+            "episode": "Pilot",
+            "season": "Season 1",
+            "timestamp": 1000,
+            "showRatingKey": "show-1",
+            "episodeRatingKey": "show-1-1",
+        }
+        new_entry = dict(previous_entry)
+        new_entry["timestamp"] = previous_entry["timestamp"] + 1
+
+        previous_payload = {"watched": [previous_entry], "added": []}
+        current_payload = {"watched": [previous_entry, new_entry], "added": []}
+
+        with patch("webui.tautulli.run_builder_for_series") as run_builder:
+            _trigger_builds_for_recent_changes(
+                context, tv_manager, previous_payload, current_payload
+            )
+            run_builder.assert_called_once_with(context, tv_manager, "Example")

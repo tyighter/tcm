@@ -609,9 +609,9 @@ def _store_recent_activity(payload: dict[str, Any], cache_key: str) -> None:
     )
 
 
-def _activity_identifier(entry: dict[str, Any] | None) -> tuple[str, str, str, str]:
+def _activity_identifier(entry: dict[str, Any] | None) -> tuple[str, str, str, str, str]:
     if not isinstance(entry, dict):
-        return ("", "", "", "")
+        return ("", "", "", "", "")
 
     show_identifier = str(entry.get("showRatingKey") or entry.get("series") or "").casefold()
     episode_identifier = entry.get("episodeRatingKey")
@@ -619,12 +619,14 @@ def _activity_identifier(entry: dict[str, Any] | None) -> tuple[str, str, str, s
         episode_identifier = str(episode_identifier).casefold()
     season_label = str(entry.get("season") or "").casefold()
     episode_label = str(entry.get("episode") or "").casefold()
+    timestamp = _normalize_timestamp(entry.get("timestamp"))
 
     return (
         show_identifier,
         episode_identifier or "",
         season_label,
         episode_label,
+        str(timestamp or ""),
     )
 
 
