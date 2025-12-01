@@ -8,6 +8,7 @@ from modules.CleanPath import CleanPath
 from modules.Show import Show
 
 from ruamel.yaml import YAML
+from ruamel.yaml.composer import ComposerError
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
@@ -40,8 +41,26 @@ class TvYamlManager:
             )
             return self._data
 
-        with self.file_path.open("r", encoding="utf-8") as handle:
-            data = self._yaml.load(handle) or CommentedMap()
+        try:
+            with self.file_path.open("r", encoding="utf-8") as handle:
+                data = self._yaml.load(handle) or CommentedMap()
+        except ComposerError:
+            with self.file_path.open("r", encoding="utf-8") as handle:
+                documents = list(self._yaml.load_all(handle))
+
+            data = CommentedMap()
+            for document in documents:
+                if document is None:
+                    continue
+
+                if isinstance(document, CommentedMap):
+                    update = document
+                elif isinstance(document, dict):
+                    update = CommentedMap(document)
+                else:
+                    continue
+
+                data.update(update)
 
         if not isinstance(data, CommentedMap):
             data = CommentedMap(data or {})
