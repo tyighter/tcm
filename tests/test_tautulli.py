@@ -74,9 +74,26 @@ class PlexWatchStateTests(TestCase):
 
         self.assertEqual(len(synthetic), 1)
         self.assertEqual(synthetic[0]["series"], "Example")
+        self.assertFalse(synthetic[0].get("unwatch", False))
 
         previous_payload = {"watched": [], "added": []}
         current_payload = {"watched": synthetic, "added": []}
+
+        with patch("webui.tautulli.run_builder_for_series") as run_builder:
+            _trigger_builds_for_recent_changes(
+                context, tv_manager, previous_payload, current_payload
+            )
+            run_builder.assert_called_once_with(context, tv_manager, "Example")
+
+        plex.set_watched(False)
+        unwatched = _plex_watched_changes(context, lookup)
+
+        self.assertEqual(len(unwatched), 1)
+        self.assertEqual(unwatched[0]["series"], "Example")
+        self.assertTrue(unwatched[0].get("unwatch"))
+
+        previous_payload = current_payload
+        current_payload = {"watched": synthetic + unwatched, "added": []}
 
         with patch("webui.tautulli.run_builder_for_series") as run_builder:
             _trigger_builds_for_recent_changes(
