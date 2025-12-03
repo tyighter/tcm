@@ -18,6 +18,7 @@ from .services import ActionInProgressError, run_builder_for_series
 from .user_settings import load_settings
 
 TAUTULLI_LOG_FILE = Path("/config/tautulli.log")
+PLEX_WATCHED_LOG_FILE = Path("/config/plexwatched.log")
 
 
 def _configure_logger() -> logging.Logger:
@@ -49,6 +50,19 @@ def _configure_logger() -> logging.Logger:
 
 
 tautulli_logger = _configure_logger()
+
+
+def _append_plex_watch_log(title: str, rating_key: Any, watched: bool) -> None:
+    status = "watched" if watched else "unwatched"
+    timestamp = datetime.now(tz=timezone.utc).isoformat()
+    try:
+        PLEX_WATCHED_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with PLEX_WATCHED_LOG_FILE.open("a", encoding="utf-8") as log_file:
+            log_file.write(
+                f"{timestamp} | {title or ''} | {rating_key or ''} | {status}\n"
+            )
+    except OSError as exc:  # pragma: no cover - filesystem errors are environment specific
+        tautulli_logger.warning("Unable to write Plex watch log entry: %s", exc)
 
 _recent_activity_cache: dict[str, dict[str, Any]] = {}
 _monitor_stop_event = Event()
@@ -720,15 +734,18 @@ def _plex_watched_changes(
                     continue
 
                 details = episode_details.get(episode_rating_key) or {}
+                episode_title = details.get("title") or entry.get("episode") or ""
+                episode_rating_key = details.get("episode_rating_key")
+                _append_plex_watch_log(episode_title, episode_rating_key, watched)
                 synthetic.append(
                     _activity_entry(
                         series_name=entry.get("name", ""),
-                        episode_title=details.get("title"),
+                        episode_title=episode_title,
                         season_label=_season_label(details.get("season")),
                         timestamp=now_ms,
                         show_rating_key=details.get("show_rating_key")
                         or entry.get("rating_key"),
-                        episode_rating_key=details.get("episode_rating_key"),
+                        episode_rating_key=episode_rating_key,
                         unwatch=not watched,
                     )
                 )
