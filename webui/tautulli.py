@@ -281,6 +281,7 @@ def _activity_entry(
     timestamp: Any,
     show_rating_key: Any,
     episode_rating_key: Any,
+    unwatch: bool = False,
 ) -> dict[str, Any]:
     return {
         "series": series_name,
@@ -289,6 +290,7 @@ def _activity_entry(
         "timestamp": _normalize_timestamp(timestamp),
         "showRatingKey": show_rating_key,
         "episodeRatingKey": episode_rating_key,
+        "unwatch": unwatch,
     }
 
 
@@ -609,9 +611,9 @@ def _store_recent_activity(payload: dict[str, Any], cache_key: str) -> None:
     )
 
 
-def _activity_identifier(entry: dict[str, Any] | None) -> tuple[str, str, str, str, str]:
+def _activity_identifier(entry: dict[str, Any] | None) -> tuple[str, str, str, str, str, str]:
     if not isinstance(entry, dict):
-        return ("", "", "", "", "")
+        return ("", "", "", "", "", "")
 
     show_identifier = str(entry.get("showRatingKey") or entry.get("series") or "").casefold()
     episode_identifier = entry.get("episodeRatingKey")
@@ -627,6 +629,7 @@ def _activity_identifier(entry: dict[str, Any] | None) -> tuple[str, str, str, s
         season_label,
         episode_label,
         str(timestamp or ""),
+        str(bool(entry.get("unwatch"))).lower(),
     )
 
 
@@ -698,6 +701,7 @@ def _plex_watched_changes(
             continue
 
         current_state: dict[str, bool] = {}
+        episode_details: dict[str, dict[str, Any]] = {}
         for episode in episodes:
             episode_rating_key = _normalize_rating_key(
                 episode.get("episode_rating_key")
@@ -707,20 +711,25 @@ def _plex_watched_changes(
 
             watched = bool(episode.get("watched"))
             current_state[episode_rating_key] = watched
+            episode_details[episode_rating_key] = episode
 
-            if previous_state is None:
-                continue
+        if previous_state is not None:
+            for episode_rating_key, watched in current_state.items():
+                previous_watched = previous_state.get(episode_rating_key, False)
+                if watched == previous_watched:
+                    continue
 
-            if watched and not previous_state.get(episode_rating_key, False):
+                details = episode_details.get(episode_rating_key) or {}
                 synthetic.append(
                     _activity_entry(
                         series_name=entry.get("name", ""),
-                        episode_title=episode.get("title"),
-                        season_label=_season_label(episode.get("season")),
+                        episode_title=details.get("title"),
+                        season_label=_season_label(details.get("season")),
                         timestamp=now_ms,
-                        show_rating_key=episode.get("show_rating_key")
+                        show_rating_key=details.get("show_rating_key")
                         or entry.get("rating_key"),
-                        episode_rating_key=episode.get("episode_rating_key"),
+                        episode_rating_key=details.get("episode_rating_key"),
+                        unwatch=not watched,
                     )
                 )
 
@@ -743,12 +752,21 @@ def _trigger_builds_for_recent_changes(
     previous_watched = previous_payload.get("watched", [])
 
     new_added = _new_entries(previous_added, current_payload.get("added", []))
-    new_watched = _new_entries(previous_watched, current_payload.get("watched", []))
+    new_watch_state_changes = _new_entries(
+        previous_watched, current_payload.get("watched", [])
+    )
 
     series_to_build = _series_needing_build(new_added, tv_manager)
     series_to_build.update(
         _series_needing_build(
-            new_watched,
+            [entry for entry in new_watch_state_changes if not entry.get("unwatch")],
+            tv_manager,
+            require_watch_styles=True,
+        )
+    )
+    series_to_build.update(
+        _series_needing_build(
+            [entry for entry in new_watch_state_changes if entry.get("unwatch")],
             tv_manager,
             require_watch_styles=True,
         )
