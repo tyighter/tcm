@@ -226,10 +226,18 @@ def _maybe_sync_series_files(
                 )
                 return False
 
-    manager.sync_series_files()
+    attempted_at = time.monotonic()
 
-    with _sync_lock:
-        _last_sync = time.monotonic()
+    try:
+        manager.sync_series_files()
+    except Exception:  # pragma: no cover - defensive
+        logger.exception("Series sync failed")
+        with _sync_lock:
+            _last_sync = attempted_at
+        raise
+    else:
+        with _sync_lock:
+            _last_sync = time.monotonic()
 
     return True
 
