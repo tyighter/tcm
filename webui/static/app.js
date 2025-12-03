@@ -16,6 +16,7 @@ const state = {
     plexEnabled: true,
   },
   settings: {
+    series_sync_interval_seconds: 45,
     preferences: {},
     tautulli: {
       url: '',
@@ -3846,6 +3847,7 @@ function openSettingsModal() {
   addFloatingCloseButton(modal, 'Close settings dialog');
 
   const tautulli = state.settings?.tautulli || {};
+  const seriesSyncInterval = Number(state.settings?.series_sync_interval_seconds);
   const preferences = state.settings?.preferences || {};
 
   const tautulliSection = document.createElement('div');
@@ -3911,6 +3913,37 @@ function openSettingsModal() {
   verifyInput.type = 'checkbox';
   verifyInput.checked = tautulli.verify_ssl !== false;
   verifyField.append(verifyLabel, verifyInput);
+
+  const syncSection = document.createElement('div');
+  syncSection.className = 'modal-section';
+  const syncHeader = document.createElement('div');
+  syncHeader.className = 'modal-section__header';
+  const syncTitle = document.createElement('h3');
+  syncTitle.textContent = 'Series sync';
+  const syncIntro = document.createElement('p');
+  syncIntro.className = 'helper-text';
+  syncIntro.textContent = 'Control how often series files are synced when generating previews.';
+  syncHeader.append(syncTitle, syncIntro);
+
+  const syncControls = document.createElement('div');
+  syncControls.className = 'modal-controls';
+
+  const syncField = document.createElement('label');
+  syncField.className = 'modal-controls__field';
+  const syncLabel = document.createElement('span');
+  syncLabel.className = 'modal-controls__label';
+  syncLabel.textContent = 'Sync interval (seconds)';
+  const syncInput = document.createElement('input');
+  syncInput.type = 'number';
+  syncInput.min = '0';
+  syncInput.step = '1';
+  syncInput.inputMode = 'numeric';
+  syncInput.value = Number.isFinite(seriesSyncInterval)
+    ? Math.max(0, seriesSyncInterval)
+    : 45;
+  syncField.append(syncLabel, syncInput);
+  syncControls.append(syncField);
+  syncSection.append(syncHeader, syncControls);
 
   const preferencesSection = document.createElement('div');
   preferencesSection.className = 'modal-section';
@@ -4038,8 +4071,13 @@ function openSettingsModal() {
   saveButton.addEventListener('click', async () => {
     saveButton.disabled = true;
     status.textContent = 'Saving settings...';
+    const parsedSyncInterval = Number(syncInput.value);
+    const syncIntervalSeconds = Number.isFinite(parsedSyncInterval)
+      ? Math.max(0, parsedSyncInterval)
+      : 45;
     try {
       await saveSettings({
+        series_sync_interval_seconds: syncIntervalSeconds,
         tautulli: {
           url: urlInput.value,
           api_key: keyInput.value,
@@ -4100,7 +4138,7 @@ function openSettingsModal() {
   tautulliSection.append(tautulliHeader, tautulliControls, userStatus);
   preferencesSection.prepend(preferencesHeader);
 
-  modal.content.append(tautulliSection, preferencesSection, status);
+  modal.content.append(tautulliSection, syncSection, preferencesSection, status);
   modal.footer.append(saveButton, closeButton(() => closeModal(modal.element)));
 }
 
