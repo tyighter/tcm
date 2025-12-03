@@ -16,6 +16,7 @@ _DEFAULT_SETTINGS = {
         "verify_ssl": True,
         "user_id": "",
     },
+    "series_sync_interval_seconds": 45,
     "preferences": {},
 }
 
@@ -33,6 +34,10 @@ def _merged_settings(data: dict[str, Any] | None) -> dict[str, Any]:
                 for key in ("url", "api_key", "verify_ssl", "user_id")
             }
         )
+
+    interval = data.get("series_sync_interval_seconds")
+    if isinstance(interval, (int, float)):
+        merged["series_sync_interval_seconds"] = max(0, int(interval))
 
     return merged
 
@@ -126,6 +131,14 @@ def save_settings(payload: Dict[str, Any], preference_file: Path | None = None) 
     """Persist the provided settings payload to disk."""
 
     settings = _load_web_settings()
+
+    interval = payload.get("series_sync_interval_seconds", settings["series_sync_interval_seconds"])
+    try:
+        settings["series_sync_interval_seconds"] = max(
+            0, int(str(interval).strip())
+        )
+    except (TypeError, ValueError):
+        settings["series_sync_interval_seconds"] = _DEFAULT_SETTINGS["series_sync_interval_seconds"]
 
     tautulli = payload.get("tautulli")
     if isinstance(tautulli, dict):

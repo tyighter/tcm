@@ -31,6 +31,7 @@ from modules.TMDbInterface import TMDbInterface
 
 from .config import AppContext
 from .tv_data import TvYamlManager, _to_builtin
+from .user_settings import load_settings
 
 
 class ActionInProgressError(RuntimeError):
@@ -45,7 +46,8 @@ _preview_cache: dict[str, "PreviewPayload"] = {}
 _preview_log_lock = Lock()
 _sync_lock = Lock()
 _last_sync: float = 0.0
-_SYNC_COOLDOWN_SECONDS = 45.0
+_DEFAULT_SYNC_COOLDOWN_SECONDS = 45.0
+_SYNC_COOLDOWN_SECONDS = _DEFAULT_SYNC_COOLDOWN_SECONDS
 PREVIEW_LOG_FILE = Path("/config/preview.log")
 PREVIEW_CACHE_DIR = Path("/config/preview-cache")
 
@@ -189,11 +191,29 @@ def _load_persistent_preview(cache_key: str) -> PreviewPayload | None:
 
 
 def _maybe_sync_series_files(
-    manager: Manager, *, force: bool = False, cooldown_seconds: float = _SYNC_COOLDOWN_SECONDS
+    manager: Manager,
+    *,
+    force: bool = False,
+    cooldown_seconds: float | None = None,
 ) -> bool:
     """Run ``manager.sync_series_files`` unless a recent sync was performed."""
 
     global _last_sync
+
+    def _series_sync_interval_seconds() -> float:
+        global _SYNC_COOLDOWN_SECONDS
+        try:
+            settings = load_settings()
+            interval = settings.get("series_sync_interval_seconds")
+            if isinstance(interval, (int, float)):
+                _SYNC_COOLDOWN_SECONDS = max(0.0, float(interval))
+        except Exception:  # pragma: no cover - defensive
+            _SYNC_COOLDOWN_SECONDS = max(0.0, _SYNC_COOLDOWN_SECONDS)
+
+        return _SYNC_COOLDOWN_SECONDS or _DEFAULT_SYNC_COOLDOWN_SECONDS
+
+    if cooldown_seconds is None:
+        cooldown_seconds = _series_sync_interval_seconds()
 
     if not force:
         now = time.monotonic()
