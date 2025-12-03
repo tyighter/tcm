@@ -10,6 +10,7 @@ from modules.Show import Show
 from ruamel.yaml import YAML
 from ruamel.yaml.composer import ComposerError
 from ruamel.yaml.parser import ParserError
+from ruamel.yaml.scanner import ScannerError
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
@@ -45,9 +46,16 @@ class TvYamlManager:
         try:
             with self.file_path.open("r", encoding="utf-8") as handle:
                 data = self._yaml.load(handle) or CommentedMap()
-        except (ComposerError, ParserError):
-            with self.file_path.open("r", encoding="utf-8") as handle:
-                documents = list(self._yaml.load_all(handle))
+        except (ComposerError, ParserError, ScannerError) as exc:
+            try:
+                with self.file_path.open("r", encoding="utf-8") as handle:
+                    documents = list(self._yaml.load_all(handle))
+            except Exception as inner_exc:  # pylint: disable=broad-except
+                message = (
+                    "Unable to parse tv.yml; check YAML formatting for syntax errors"
+                    f" ({exc})"
+                )
+                raise ValueError(message) from inner_exc
 
             data = CommentedMap()
             for document in documents:
