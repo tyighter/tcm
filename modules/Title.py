@@ -1,8 +1,11 @@
 from functools import lru_cache
+from math import isfinite
 from re import compile as re_compile, IGNORECASE
 from typing import TYPE_CHECKING, Literal, Optional, Union
 
+from modules import global_objects
 from modules.Debug import log
+from modules.ImageMagickInterface import ImageMagickInterface
 
 if TYPE_CHECKING:
     from modules.Profile import Profile
@@ -43,6 +46,8 @@ class Title:
         'full_title', '__title_lines', '__manually_specified', 'title_yaml',
         'match_title', '__original_title'
     )
+
+    _image_magick: Optional[ImageMagickInterface] = None
 
 
     def __init__(self,
@@ -87,6 +92,18 @@ class Title:
             self.__original_title = self.get_matching_title(original_title)
         else:
             self.__original_title = None
+
+    @classmethod
+    def _get_image_magick(cls) -> ImageMagickInterface:
+        """Lazily construct or return the shared ImageMagick interface."""
+
+        if cls._image_magick is None:
+            cls._image_magick = ImageMagickInterface(
+                global_objects.pp.imagemagick_container,
+                global_objects.pp.use_magick_prefix,
+            )
+
+        return cls._image_magick
 
 
     def __str__(self) -> str:
@@ -215,11 +232,117 @@ class Title:
 
         return all_lines
 
+    @staticmethod
+    def __normalize_measurement(measurement: Optional[dict]) -> Optional[dict]:
+        """Coerce and validate measurement settings for width splitting."""
+
+        if not measurement:
+            return None
+
+        try:
+            font_file = str(measurement['font_file'])
+            point_size = float(measurement['point_size'])
+        except (KeyError, TypeError, ValueError):
+            return None
+
+        try:
+            kerning = float(measurement.get('kerning', 0) or 0)
+        except (TypeError, ValueError):
+            kerning = 0.0
+
+        try:
+            interword_spacing = float(measurement.get('interword_spacing', 0) or 0)
+        except (TypeError, ValueError):
+            interword_spacing = 0.0
+
+        return {
+            'font_file': font_file,
+            'point_size': point_size,
+            'kerning': kerning,
+            'interword_spacing': interword_spacing,
+        }
+
+    @staticmethod
+    @lru_cache(maxsize=512)
+    def __measure_line_width(text: str,
+            font_file: str,
+            point_size: float,
+            kerning: float,
+            interword_spacing: float,
+        ) -> float:
+        """Measure the pixel width of the given text using ImageMagick."""
+
+        escaped = text.replace('"', '\\"')
+        commands = [
+            f'-font "{font_file}"',
+            f'-pointsize {point_size}',
+            f'-kerning {kerning}',
+            f'-interword-spacing {interword_spacing}',
+            f'label:"{escaped}"',
+        ]
+
+        try:
+            dimensions = Title._get_image_magick().get_text_dimensions(commands, width='max')
+        except Exception as exc: # pylint: disable=broad-except
+            log.debug(f'Cannot measure text width for wrapping: {exc}')
+            return float('inf')
+
+        return float(dimensions.width)
+
+    def __split_by_width(self,
+            width_budget: float,
+            max_line_count: int,
+            measurement: dict,
+        ) -> list[str]:
+        """Split text so each line's measured width is below the budget."""
+
+        words = self.full_title.split()
+        lines: list[list[str]] = [[]]
+
+        def fits(candidate: list[str]) -> bool:
+            if not candidate:
+                return True
+
+            joined = ' '.join(candidate)
+            width = self.__measure_line_width(
+                joined,
+                measurement['font_file'],
+                measurement['point_size'],
+                measurement['kerning'],
+                measurement['interword_spacing'],
+            )
+            return width <= width_budget
+
+        for index, word in enumerate(words):
+            current_line = lines[-1] + [word]
+            if fits(current_line):
+                lines[-1].append(word)
+                continue
+
+            # Word doesn't fit on the current line, start a new one
+            lines.append([word])
+
+            # If adding this new line would exceed the maximum, consume the rest
+            if len(lines) >= max_line_count:
+                lines[-1].extend(words[index + 1:])
+                break
+
+        split_lines = list(map(' '.join, filter(len, lines)))
+
+        if len(split_lines) > max_line_count:
+            split_lines[max_line_count - 1] = ' '.join(split_lines[max_line_count - 1:])
+            split_lines = split_lines[:max_line_count]
+
+        return split_lines
+
 
     def split(self,
             max_line_width: int,
             max_line_count: int,
             top_heavy: Union[bool, Literal['even', 'forced even']],
+            *,
+            width_budget: Optional[float] = None,
+            measurement: Optional[dict] = None,
         ) -> list[str]:
         """
         Split this title's text into multiple lines. If the title cannot
@@ -233,10 +356,25 @@ class Title:
             top_heavy: Whether to split the title in a top-heavy style.
                 This means the top lines will likely be longer than the
                 bottom ones. False for bottom-heavy splitting.
+            width_budget: Pixel width available for each line when using
+                measured width-aware wrapping.
+            measurement: Measurement settings (font, size, spacing) to
+                use when calculating rendered line widths.
 
         Returns:
             List of split title text to be read top to bottom.
         """
+
+        measurement_options = self.__normalize_measurement(measurement)
+        try:
+            width_budget_value = float(width_budget) if width_budget else None
+        except (TypeError, ValueError):
+            width_budget_value = None
+
+        if width_budget_value is not None and width_budget_value <= 0:
+            width_budget_value = None
+
+        use_measured_wrapping = bool(width_budget_value and measurement_options)
 
         # If the object was initialized with lines, return those
         if self.__manually_specified:
@@ -250,8 +388,22 @@ class Title:
         if top_heavy == 'forced even':
             return self.__evenly_split()
 
+        if use_measured_wrapping:
+            width = self.__measure_line_width(
+                self.full_title,
+                measurement_options['font_file'],
+                measurement_options['point_size'],
+                measurement_options['kerning'],
+                measurement_options['interword_spacing'],
+            )
+            if not isfinite(width):
+                use_measured_wrapping = False
+            elif width <= width_budget_value or max_line_count <= 1:
+                return [self.full_title]
+
         # If the title can fit on one line, is one line or one word, return
-        if len(self.full_title) <= max_line_width or max_line_count <= 1:
+        if not use_measured_wrapping and (len(self.full_title) <= max_line_width
+                                          or max_line_count <= 1):
             return [self.full_title]
 
         # Misformat ahead..
@@ -261,6 +413,9 @@ class Title:
         # Evenly split title
         if top_heavy == 'even':
             return self.__evenly_split()
+
+        if use_measured_wrapping:
+            return self.__split_by_width(width_budget_value, max_line_count, measurement_options)
 
         if top_heavy:
             return self.__top_split(max_line_width, max_line_count)
