@@ -1,6 +1,6 @@
 from copy import copy
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Optional, Union
+from typing import Iterable, TYPE_CHECKING, Literal, Optional, Union
 
 from tqdm import tqdm
 
@@ -74,6 +74,48 @@ class Show(YamlReader):
         'language': 'JA',
         'key': 'Kanji',
     }
+
+    @staticmethod
+    def _infer_absolute_numbers_for_infos(
+            episode_infos: Iterable[EpisodeInfo],
+        ) -> None:
+        """Infer absolute episode numbers when possible.
+
+        This method fills in any missing absolute numbers by assuming a
+        sequential progression across the provided episodes. Numbers are
+        inferred forward from the most recent known absolute number and then
+        backward from the next known value to fill any leading gaps.
+        """
+
+        ordered_infos = sorted(
+            episode_infos,
+            key=lambda info: (info.season_number, info.episode_number)
+        )
+
+        if len(ordered_infos) == 0:
+            return None
+
+        # Forward-fill from the most recent known absolute number
+        previous_abs = None
+        for info in ordered_infos:
+            if info.abs_number is not None:
+                previous_abs = info.abs_number
+                continue
+
+            if previous_abs is not None:
+                previous_abs += 1
+                info.abs_number = previous_abs
+
+        # Backward-fill any leading gaps using the next known value
+        next_abs = None
+        for info in reversed(ordered_infos):
+            if info.abs_number is not None:
+                next_abs = info.abs_number
+                continue
+
+            if next_abs is not None:
+                next_abs -= 1
+                info.abs_number = next_abs
 
     def __init__(self,
             name: str,
@@ -555,18 +597,11 @@ class Show(YamlReader):
         self.episodes = {}
 
         # Go through each entry in the file interface
-        seasons, episodes = set(), []
+        seasons = set()
         for entry, given_keys in self.file_interface.read():
             # Add season number to set
             episode_info: EpisodeInfo = entry['episode_info']
             seasons.add(episode_info.season_number)
-
-            # Update episode list(s) for maxima addition
-            episodes.append((
-                episode_info.season_number,
-                episode_info.episode_number,
-                episode_info.abs_number,
-            ))
 
             # Create Episode object for this entry, store under key
             self.episodes[episode_info.key] = Episode(
@@ -576,6 +611,21 @@ class Show(YamlReader):
                 given_keys=given_keys,
                 **entry,
             )
+
+        # Infer absolute numbers for any entries missing them
+        self._infer_absolute_numbers_for_infos(
+            episode.episode_info for episode in self.episodes.values()
+        )
+
+        # Build maxima with potentially inferred absolute numbers
+        episodes = [
+            (
+                ep.episode_info.season_number,
+                ep.episode_info.episode_number,
+                ep.episode_info.abs_number,
+            )
+            for ep in self.episodes.values()
+        ]
 
         for episode in self.episodes.values():
             episode.add_maxima(
