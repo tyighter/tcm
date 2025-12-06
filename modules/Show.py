@@ -1172,10 +1172,15 @@ class Show(YamlReader):
         def create_title_card(episode: Episode) -> None:
             # Create a TitleCard object for this episode with Show's profile
             extras = {**self.extras, **episode.extra_characteristics}
+
+            # Include font overrides when determining line breaking so that
+            # customized sizes or spacing influence how the title is wrapped.
+            wrapping_extras = {**self.profile.font.attributes, **extras}
+
             if hasattr(self.card_class, 'adjust_title_characteristics'):
                 title_characteristics = self.card_class.adjust_title_characteristics(
                     dict(self.card_class.TITLE_CHARACTERISTICS),
-                    extras,
+                    wrapping_extras,
                 )
             else:
                 title_characteristics = self.card_class.TITLE_CHARACTERISTICS
