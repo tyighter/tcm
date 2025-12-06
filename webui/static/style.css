@@ -1304,67 +1304,6 @@ button:disabled:hover {
   color: var(--muted);
 }
 
-.font-browser {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.font-browser .panel {
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 12px;
-  padding: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  overflow-y: auto;
-  max-height: 55vh;
-}
-
-.font-grid {
-  margin-top: 0.5rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.75rem;
-}
-
-.font-grid__empty {
-  grid-column: 1 / -1;
-  text-align: center;
-  color: var(--muted);
-  margin: 0.5rem 0;
-}
-
-.font-tile {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.75rem;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  cursor: pointer;
-  color: inherit;
-  text-align: left;
-  transition: border-color 120ms ease-out, background 120ms ease-out, transform 120ms ease-out;
-}
-
-.font-tile:hover,
-.font-tile:focus {
-  border-color: var(--accent);
-  background: rgba(255, 179, 71, 0.08);
-  transform: translateY(-1px);
-}
-
-.font-tile__preview {
-  font-size: 1.5rem;
-  line-height: 1.2;
-  min-height: 2.5rem;
-}
-
-.font-tile__filename {
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
 .search-results {
   display: grid;
   gap: 0.75rem;

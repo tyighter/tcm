@@ -2245,10 +2245,6 @@ function fontPicker(entry, field, value) {
   uploadInput.accept = '.ttf,.otf,.woff,.woff2';
   uploadInput.style.display = 'none';
 
-  const browse = document.createElement('button');
-  browse.textContent = 'Browse';
-  browse.addEventListener('click', () => openFontBrowser(entry, field, input));
-
   const upload = document.createElement('button');
   upload.textContent = 'Upload';
   upload.addEventListener('click', () => uploadInput.click());
@@ -2280,7 +2276,7 @@ function fontPicker(entry, field, value) {
     }
   });
 
-  wrapper.append(input, browse, uploadInput, upload);
+  wrapper.append(input, uploadInput, upload);
   return wrapper;
 }
 
@@ -3047,126 +3043,6 @@ function openFieldSelector(
     wrapper.append(intro, controls, groupsContainer, emptyState);
     modal.content.appendChild(wrapper);
   }
-
-  modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
-}
-
-const fontFaceRegistry = new Map();
-
-function registerFontPreviewFace(path) {
-  if (!path) return null;
-  if (fontFaceRegistry.has(path)) {
-    return fontFaceRegistry.get(path);
-  }
-
-  const safeName = path.replace(/[^a-zA-Z0-9]/g, '_');
-  const fontName = `fontPreview_${safeName}_${fontFaceRegistry.size}`;
-  const fontUrl = `/api/fonts/file?path=${encodeURIComponent(path)}`;
-  const extension = path.split('.').pop()?.toLowerCase();
-  const formats = {
-    ttf: 'truetype',
-    otf: 'opentype',
-    woff: 'woff',
-    woff2: 'woff2',
-    ttc: 'truetype-collection',
-  };
-  const fontFormat = formats[extension];
-  const src = fontFormat
-    ? `url('${fontUrl}') format('${fontFormat}')`
-    : `url('${fontUrl}')`;
-
-  const style = document.createElement('style');
-  style.textContent = `
-    @font-face {
-      font-family: '${fontName}';
-      font-style: normal;
-      font-weight: 400;
-      font-display: swap;
-      src: ${src};
-    }
-  `;
-  document.head.appendChild(style);
-
-  fontFaceRegistry.set(path, fontName);
-  return fontName;
-}
-
-function openFontBrowser(entry, field, input) {
-  const modal = buildModal('Select font');
-  addFloatingCloseButton(modal, 'Close font browser');
-
-  const pathDisplay = document.createElement('p');
-  pathDisplay.className = 'helper-text';
-  pathDisplay.textContent = state.fontDirectory;
-  modal.content.appendChild(pathDisplay);
-
-  const browser = document.createElement('div');
-  browser.className = 'font-browser';
-
-  const filesPanel = document.createElement('div');
-  filesPanel.className = 'panel';
-  const panelTitle = document.createElement('strong');
-  panelTitle.textContent = 'Available fonts';
-  filesPanel.appendChild(panelTitle);
-
-  const fontGrid = document.createElement('div');
-  fontGrid.className = 'font-grid';
-  filesPanel.appendChild(fontGrid);
-
-  browser.appendChild(filesPanel);
-  modal.content.appendChild(browser);
-
-  const renderFonts = (entries) => {
-    fontGrid.innerHTML = '';
-    const fonts = (entries || []).filter((fileEntry) => fileEntry.type === 'file');
-
-    if (!fonts.length) {
-      const empty = document.createElement('p');
-      empty.className = 'font-grid__empty';
-      empty.textContent = 'No fonts found in /config/fonts';
-      fontGrid.appendChild(empty);
-      return;
-    }
-
-    fonts.forEach((fileEntry) => {
-      const tile = document.createElement('button');
-      tile.type = 'button';
-      tile.className = 'font-tile';
-      tile.addEventListener('click', () => {
-        input.value = fileEntry.path;
-        updateField(entry, field, fileEntry.path);
-        closeModal(modal.element);
-      });
-
-      const fontFace = registerFontPreviewFace(fileEntry.path);
-      const preview = document.createElement('span');
-      preview.className = 'font-tile__preview';
-      if (fontFace) {
-        preview.style.fontFamily = fontFace;
-      }
-      preview.textContent = 'AaBbCc 123';
-
-      const name = document.createElement('span');
-      name.className = 'font-tile__filename';
-      name.textContent = fileEntry.name;
-
-      tile.append(preview, name);
-      fontGrid.appendChild(tile);
-    });
-  };
-
-  const loadFonts = async () => {
-    const response = await fetch(`/api/fonts?path=${encodeURIComponent(state.fontDirectory)}`);
-    if (!response.ok) {
-      showToast('Unable to load fonts', 'error');
-      return;
-    }
-    const data = await response.json();
-    pathDisplay.textContent = data.path;
-    renderFonts(data.entries || []);
-  };
-
-  loadFonts();
 
   modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
 }
