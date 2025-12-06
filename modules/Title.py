@@ -285,7 +285,27 @@ class Title:
             dimensions = Title._get_image_magick().get_text_dimensions(commands, width='max')
         except Exception as exc: # pylint: disable=broad-except
             log.debug(f'Cannot measure text width for wrapping: {exc}')
-            return float('inf')
+
+            # Fallback to measuring with ImageMagick's default font if the
+            # requested font cannot be read. An approximate measurement is
+            # better than abandoning width-aware wrapping entirely.
+            fallback_commands = [
+                f'-pointsize {point_size}',
+                f'-kerning {kerning}',
+                f'-interword-spacing {interword_spacing}',
+                f'label:"{escaped}"',
+            ]
+
+            try:
+                dimensions = Title._get_image_magick().get_text_dimensions(
+                    fallback_commands, width='max'
+                )
+            except Exception as fallback_exc: # pylint: disable=broad-except
+                log.debug(
+                    'Cannot measure text width with fallback font for wrapping: '
+                    f'{fallback_exc}'
+                )
+                return float('inf')
 
         return float(dimensions.width)
 

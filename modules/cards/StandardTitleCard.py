@@ -181,8 +181,10 @@ class StandardTitleCard(BaseCardType):
         """
         adjusted = dict(title_characteristics)
 
-        adjusted['width_budget'] = StandardTitleCard._title_width_budget()
         adjusted['measurement'] = StandardTitleCard._title_measurement(extras)
+
+        base_budget = StandardTitleCard._title_width_budget()
+        adjusted['width_budget'] = base_budget
 
         try:
             font_size = float(extras.get('font_size', 1.0))
@@ -192,6 +194,9 @@ class StandardTitleCard(BaseCardType):
         max_width = adjusted.get('max_line_width')
         if font_size > 1 and isinstance(max_width, (int, float)):
             adjusted['max_line_width'] = max(10, round(max_width / font_size))
+
+        budget_scale = max(1.0, font_size)
+        adjusted['width_budget'] = base_budget / budget_scale
 
         return adjusted
 
