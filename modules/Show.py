@@ -1,3 +1,5 @@
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import copy
 from pathlib import Path
 from typing import Iterable, TYPE_CHECKING, Literal, Optional, Union
@@ -1160,20 +1162,7 @@ class Show(YamlReader):
             for episode in self.episodes.values():
                 episode.delete_card(reason='new config')
 
-        # Go through each episode for this show
-        for episode in (pbar := tqdm(self.episodes.values(), **TQDM_KWARGS)):
-            # Skip episodes without a destination or that already exist
-            if not episode.destination or episode.destination.exists():
-                continue
-
-            # Skip episodes without souce that need them
-            if (self.card_class.USES_UNIQUE_SOURCES
-                and not episode.source.exists()):
-                continue
-
-            # Update progress bar
-            pbar.set_description(f'Creating {episode}')
-
+        def create_title_card(episode: Episode) -> None:
             # Create a TitleCard object for this episode with Show's profile
             extras = {**self.extras, **episode.extra_characteristics}
             if hasattr(self.card_class, 'adjust_title_characteristics'):
@@ -1197,10 +1186,42 @@ class Show(YamlReader):
             )
             if not valid:
                 log.warning(f'Invalid font for {episode} of {self}')
-                continue
+                return None
 
             # Source exists, create the title card
             title_card.create()
+            return None
+
+        # Gather all episodes that need title cards created
+        episodes_to_process = []
+        for episode in self.episodes.values():
+            # Skip episodes without a destination or that already exist
+            if not episode.destination or episode.destination.exists():
+                continue
+
+            # Skip episodes without souce that need them
+            if (self.card_class.USES_UNIQUE_SOURCES
+                and not episode.source.exists()):
+                continue
+
+            episodes_to_process.append(episode)
+
+        max_workers = min(len(episodes_to_process), os.cpu_count() or 1) or 1
+        with tqdm(total=len(episodes_to_process), **TQDM_KWARGS) as pbar:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_episode = {
+                    executor.submit(create_title_card, episode): episode
+                    for episode in episodes_to_process
+                }
+
+                for future in as_completed(future_to_episode):
+                    episode = future_to_episode[future]
+                    pbar.set_description(f'Creating {episode}')
+                    try:
+                        future.result()
+                    except Exception:
+                        log.exception(f'Error creating title card for {episode}')
+                    pbar.update(1)
 
         # Update record keeeper
         global_objects.show_record_keeper.add_config(self)
