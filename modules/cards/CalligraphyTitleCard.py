@@ -97,7 +97,7 @@ class CalligraphyTitleCard(BaseCardType):
         """Construct a new instance of this Card."""
 
         # Initialize the parent class - this sets up an ImageMagickInterface
-        super().__init__(blur, grayscale, preferences=preferences)
+        super().__init__(blur, grayscale, preferences=preferences, **unused)
 
         self.source_file = source_file
         self.output_file = card_file

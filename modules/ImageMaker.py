@@ -51,6 +51,7 @@ class ImageMaker(ABC):
     @abstractmethod
     def __init__(self, *,
             preferences: Optional['PreferenceParser'] = None,
+            image_magick: Optional[ImageMagickInterface] = None,
         ) -> None:
         """
         Initializes a new instance. This gives all subclasses access to
@@ -60,14 +61,20 @@ class ImageMaker(ABC):
         # No Preferences object, use global
         if preferences is None:
             self.preferences = global_objects.pp
+        # Preferences object provided, use directly
+        else:
+            self.preferences = preferences
+
+        # Use provided ImageMagickInterface if supplied
+        if image_magick is not None:
+            self.image_magick = image_magick
+        elif preferences is None:
             self.image_magick = ImageMagickInterface(
                 self.preferences.imagemagick_container,
                 self.preferences.use_magick_prefix,
                 self.preferences.imagemagick_timeout,
             )
-        # Preferences object provided, use directly
         else:
-            self.preferences = preferences
             self.image_magick = ImageMagickInterface(
                 **preferences.imagemagick_arguments,
             )

@@ -94,7 +94,7 @@ class TintedGlassTitleCard(BaseCardType):
         ) -> None:
 
         # Initialize the parent class - this sets up an ImageMagickInterface
-        super().__init__(blur, grayscale, preferences=preferences)
+        super().__init__(blur, grayscale, preferences=preferences, **unused)
 
         # Store object attributes
         self.source = source_file

@@ -15,6 +15,7 @@ from modules.EpisodeInfo import EpisodeInfo
 from modules.EpisodeMap import EpisodeMap
 from modules.Font import Font
 from modules import global_objects
+from modules.ImageMagickInterface import ImageMagickInterface
 from modules.JellyfinInterface import JellyfinInterface
 from modules.PlexInterface import PlexInterface
 from modules.Profile import Profile
@@ -59,7 +60,7 @@ class Show(YamlReader):
         'logo', 'backdrop', 'file_interface', 'profile', 'season_poster_set',
         'episodes', 'emby_interface', 'jellyfin_interface', 'plex_interface',
         'sonarr_interface', 'tmdb_interface', '__is_archive', 'media_server',
-        'image_source_priority', '_auto_hide_seasons',
+        'image_source_priority', '_auto_hide_seasons', 'image_magick',
     )
 
     # Card types that should receive a default logo when none is supplied
@@ -189,6 +190,12 @@ class Show(YamlReader):
             self.style_set = copy(preferences.plex_style_set)
         else:
             self.style_set = StyleSet()
+
+        self.image_magick = ImageMagickInterface(
+            preferences.imagemagick_container,
+            preferences.use_magick_prefix,
+            preferences.imagemagick_timeout,
+        )
         self.__parse_yaml()
 
         # Update StyleSet
@@ -1177,6 +1184,7 @@ class Show(YamlReader):
                 episode,
                 self.profile,
                 title_characteristics,
+                image_magick=self.image_magick,
                 **extras,
             )
 

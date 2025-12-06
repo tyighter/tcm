@@ -100,7 +100,7 @@ class LogoTitleCard(BaseCardType):
         """
 
         # Initialize the parent class - this sets up an ImageMagickInterface
-        super().__init__(blur, grayscale, preferences=preferences)
+        super().__init__(blur, grayscale, preferences=preferences, **unused)
 
         # Look for logo if it's a format string
         if logo is None:
