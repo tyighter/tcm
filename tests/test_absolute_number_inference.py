@@ -34,5 +34,4 @@ def test_does_not_infer_when_no_absolute_numbers_available():
 
     Show._infer_absolute_numbers_for_infos(episodes)
 
-    assert episodes[0].abs_number is None
-    assert episodes[1].abs_number is None
+    assert [episode.abs_number for episode in episodes] == [1, 2]
