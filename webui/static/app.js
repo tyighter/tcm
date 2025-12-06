@@ -3062,12 +3062,27 @@ function registerFontPreviewFace(path) {
   const safeName = path.replace(/[^a-zA-Z0-9]/g, '_');
   const fontName = `fontPreview_${safeName}_${fontFaceRegistry.size}`;
   const fontUrl = `/api/fonts/file?path=${encodeURIComponent(path)}`;
+  const extension = path.split('.').pop()?.toLowerCase();
+  const formats = {
+    ttf: 'truetype',
+    otf: 'opentype',
+    woff: 'woff',
+    woff2: 'woff2',
+    ttc: 'truetype-collection',
+  };
+  const fontFormat = formats[extension];
+  const src = fontFormat
+    ? `url('${fontUrl}') format('${fontFormat}')`
+    : `url('${fontUrl}')`;
 
   const style = document.createElement('style');
   style.textContent = `
     @font-face {
       font-family: '${fontName}';
-      src: url('${fontUrl}');
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: ${src};
     }
   `;
   document.head.appendChild(style);
