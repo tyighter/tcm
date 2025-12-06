@@ -308,7 +308,20 @@ class Title:
                     'Cannot measure text width with fallback font for wrapping: '
                     f'{fallback_exc}'
                 )
-                return float('inf')
+
+                # Provide a conservative estimate so width-aware wrapping
+                # remains enabled even when measurement fails entirely.
+                average_character_width = max(point_size * 0.6, 1.0)
+                estimated_width = average_character_width * len(text)
+
+                # Account for spacing so we err on the side of wrapping
+                # earlier than strictly necessary.
+                if kerning:
+                    estimated_width += max(kerning, 0.0) * max(len(text) - 1, 0)
+                if interword_spacing:
+                    estimated_width += max(interword_spacing, 0.0) * text.count(' ')
+
+                return float(estimated_width)
 
         return float(dimensions.width)
 
