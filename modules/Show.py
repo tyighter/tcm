@@ -1125,12 +1125,21 @@ class Show(YamlReader):
             pbar.set_description(f'Creating {episode}')
 
             # Create a TitleCard object for this episode with Show's profile
+            extras = {**self.extras, **episode.extra_characteristics}
+            merged_extras = {**self.profile.font.attributes, **extras}
+            if hasattr(self.card_class, 'adjust_title_characteristics'):
+                title_characteristics = self.card_class.adjust_title_characteristics(
+                    dict(self.card_class.TITLE_CHARACTERISTICS),
+                    merged_extras,
+                )
+            else:
+                title_characteristics = self.card_class.TITLE_CHARACTERISTICS
+
             title_card = TitleCard(
                 episode,
                 self.profile,
-                self.card_class.TITLE_CHARACTERISTICS,
-                **self.extras,
-                **episode.extra_characteristics,
+                title_characteristics,
+                **extras,
             )
 
             # Skip if title is invalid for font
