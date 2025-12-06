@@ -87,7 +87,9 @@ class Show(YamlReader):
         This method fills in any missing absolute numbers by assuming a
         sequential progression across the provided episodes. Numbers are
         inferred forward from the most recent known absolute number and then
-        backward from the next known value to fill any leading gaps.
+        backward from the next known value to fill any leading gaps. If no
+        absolute numbers are present at all, the sequence starts at one and
+        counts upward in the provided order.
         """
 
         ordered_infos = sorted(
@@ -96,6 +98,13 @@ class Show(YamlReader):
         )
 
         if len(ordered_infos) == 0:
+            return None
+
+        # If no absolute numbers are present, assume the sequence starts at 1
+        # and progresses by one for each subsequent episode.
+        if not any(info.abs_number is not None for info in ordered_infos):
+            for index, info in enumerate(ordered_infos, start=1):
+                info.abs_number = index
             return None
 
         # Forward-fill from the most recent known absolute number
