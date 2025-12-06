@@ -25,6 +25,9 @@ class FontValidator:
         # Create/read font validation database
         self.__db = PersistentDatabase(self.CHARACTER_DATABASE)
 
+        # In-memory cache of font glyph sets keyed by filepath
+        self.__font_cache: dict[str, set[int]] = {}
+
 
     def __has_character(self, font_filepath: str, character: str) -> bool:
         """
@@ -49,20 +52,27 @@ class FontValidator:
             return self.__db.get((where('file') == font_filepath) &
                                  (where('character') == character))['status']
 
+        # Load glyph set from cache or parse from font
+        if font_filepath not in self.__font_cache:
+            font = TTFont(font_filepath, fontNumber=0)
+            glyphs = set()
+            for table in font['cmap'].tables:
+                glyphs.update(table.cmap.keys())
+            self.__font_cache[font_filepath] = glyphs
+
         # Get the ordinal value of this character
         glyph = ord(character)
 
-        # Go through each table in this font, return True if in a cmap
-        for table in TTFont(font_filepath, fontNumber=0)['cmap'].tables:
-            if glyph in table.cmap:
-                # Update map for this character, return True
-                self.__db.insert({
-                    'file': font_filepath,
-                    'character': character,
-                    'status': True
-                })
+        # Return True if glyph is contained in cached font data
+        if glyph in self.__font_cache[font_filepath]:
+            # Update map for this character, return True
+            self.__db.insert({
+                'file': font_filepath,
+                'character': character,
+                'status': True
+            })
 
-                return True
+            return True
 
         # Update map for this character, return False
         self.__db.insert({
