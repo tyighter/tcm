@@ -127,6 +127,33 @@ class StandardTitleCard(BaseCardType):
         self.episode_text_vertical_shift = episode_text_vertical_shift
 
 
+    @staticmethod
+    def adjust_title_characteristics(
+            title_characteristics: dict,
+            extras: dict,
+        ) -> dict:
+        """
+        Adjust how titles are split when the font size is customized.
+
+        The standard card can overflow horizontally when the font size is
+        increased because the title splitting logic is based on character
+        counts. Shrink the maximum line width proportionally to the font size
+        so longer titles wrap earlier and stay on the card.
+        """
+
+        adjusted = dict(title_characteristics)
+        try:
+            font_size = float(extras.get('font_size', 1.0))
+        except (TypeError, ValueError):
+            return adjusted
+
+        max_width = adjusted.get('max_line_width')
+        if font_size > 1 and isinstance(max_width, (int, float)):
+            adjusted['max_line_width'] = max(10, round(max_width / font_size))
+
+        return adjusted
+
+
     @property
     def index_commands(self) -> ImageMagickCommands:
         """Subcommand for adding the index text to the image."""
