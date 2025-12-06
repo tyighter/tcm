@@ -49,6 +49,9 @@ class Title:
 
     _image_magick: Optional[ImageMagickInterface] = None
 
+    """Require measured text to be comfortably under budget to stay on one line."""
+    MEASURED_MARGIN_RATIO = 0.97
+
 
     def __init__(self,
             title: Union[str, list[str]],
@@ -333,6 +336,27 @@ class Title:
             )
             return width <= width_budget
 
+        def split_long_word(text: str) -> list[str]:
+            """Split a single word into budget-respecting segments."""
+
+            segments: list[str] = []
+            current: list[str] = []
+
+            for char in text:
+                candidate = ''.join(current + [char])
+                if fits([candidate]):
+                    current.append(char)
+                    continue
+
+                if current:
+                    segments.append(''.join(current))
+                current = [char]
+
+            if current:
+                segments.append(''.join(current))
+
+            return segments or [text]
+
         for index, word in enumerate(words):
             current_line = lines[-1] + [word]
             if fits(current_line):
@@ -340,11 +364,15 @@ class Title:
                 continue
 
             # Word doesn't fit on the current line, start a new one
-            lines.append([word])
+            for segment in split_long_word(word):
+                lines.append([segment])
 
-            # If adding this new line would exceed the maximum, consume the rest
+                # If adding this new line would exceed the maximum, consume the rest
+                if len(lines) >= max_line_count:
+                    lines[-1].extend(words[index + 1:])
+                    break
+
             if len(lines) >= max_line_count:
-                lines[-1].extend(words[index + 1:])
                 break
 
         split_lines = list(map(' '.join, filter(len, lines)))
@@ -418,8 +446,10 @@ class Title:
             )
             if not isfinite(width):
                 use_measured_wrapping = False
-            elif width <= width_budget_value or max_line_count <= 1:
-                return [self.full_title]
+            else:
+                margin_width = width_budget_value * self.MEASURED_MARGIN_RATIO
+                if max_line_count <= 1 or width <= margin_width:
+                    return [self.full_title]
 
         # If the title can fit on one line, is one line or one word, return
         if not use_measured_wrapping and (len(self.full_title) <= max_line_width
