@@ -192,10 +192,14 @@ class StandardTitleCard(BaseCardType):
             return adjusted
 
         max_width = adjusted.get('max_line_width')
-        if font_size > 1 and isinstance(max_width, (int, float)):
-            adjusted['max_line_width'] = max(10, round(max_width / font_size))
-
         budget_scale = max(1.0, font_size)
+
+        if font_size > 1:
+            budget_scale += (font_size - 1) * 0.35
+
+        if isinstance(max_width, (int, float)):
+            adjusted['max_line_width'] = max(10, round(max_width / budget_scale))
+
         adjusted['width_budget'] = base_budget / budget_scale
 
         return adjusted
