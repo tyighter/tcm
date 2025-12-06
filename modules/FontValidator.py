@@ -28,6 +28,9 @@ class FontValidator:
         # In-memory cache of font glyph sets keyed by filepath
         self.__font_cache: dict[str, set[int]] = {}
 
+        # In-memory cache of validation results keyed by (font, title)
+        self.__result_cache: dict[tuple[str, str], bool] = {}
+
 
     def __has_character(self, font_filepath: str, character: str) -> bool:
         """
@@ -96,18 +99,27 @@ class FontValidator:
             given font, False otherwise.
         """
 
-        # Map __has_character() to all characters in the title
-        has_characters = tuple(map(
-            lambda char: self.__has_character(font_filepath, char),
-            (title := title.replace('\n', ''))
-        ))
+        normalized_title = title.replace('\r\n', '\n').replace('\r', '\n')
+        normalized_title = normalized_title.replace('\n', '')
+        cache_key = (font_filepath, normalized_title)
+
+        if cache_key in self.__result_cache:
+            return self.__result_cache[cache_key]
+
+        # Map __has_character() to all characters in the normalized title
+        has_characters = tuple(
+            self.__has_character(font_filepath, char) for char in normalized_title
+        )
 
         # Log all missing characters
         for char, has_character in zip(title, has_characters):
             if not has_character:
                 log.warning(f'Character "{char}" missing from "{font_filepath}"')
 
-        return all(has_characters)
+        result = all(has_characters)
+        self.__result_cache[cache_key] = result
+
+        return result
 
 
     def get_missing_characters(self, font_filepath: str) -> set[str]:
