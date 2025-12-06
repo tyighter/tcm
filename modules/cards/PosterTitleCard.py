@@ -81,7 +81,7 @@ class PosterTitleCard(BaseCardType):
         """
 
         # Initialize the parent class - this sets up an ImageMagickInterface
-        super().__init__(blur, grayscale, preferences=preferences)
+        super().__init__(blur, grayscale, preferences=preferences, **unused)
 
         # Store indicated files
         self.source_file = source_file

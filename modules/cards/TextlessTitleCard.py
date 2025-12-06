@@ -57,7 +57,7 @@ class TextlessTitleCard(BaseCardType):
         """
 
         # Initialize the parent class - this sets up an ImageMagickInterface
-        super().__init__(blur, grayscale, preferences=preferences)
+        super().__init__(blur, grayscale, preferences=preferences, **unused)
 
         # Store input/output files
         self.source_file = source_file

@@ -9,6 +9,7 @@ from modules.ImageMaker import ImageMaker, Dimensions
 
 if TYPE_CHECKING:
     from modules.Font import Font
+    from modules.ImageMagickInterface import ImageMagickInterface
     from modules.PreferenceParser import PreferenceParser
 
 ImageMagickCommands = list[str]
@@ -313,6 +314,7 @@ class BaseCardType(ImageMaker):
             grayscale: bool = False,
             *,
             preferences: Optional['PreferenceParser'] = None,
+            image_magick: Optional['ImageMagickInterface'] = None,
             **unused,
         ) -> None:
         """
@@ -327,7 +329,7 @@ class BaseCardType(ImageMaker):
         """
 
         # Initialize parent ImageMaker
-        super().__init__(preferences=preferences)
+        super().__init__(preferences=preferences, image_magick=image_magick)
 
         # Object starts as valid
         self.valid = True

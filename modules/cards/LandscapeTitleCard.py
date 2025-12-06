@@ -95,7 +95,7 @@ class LandscapeTitleCard(BaseCardType):
         """Construct a new instance of this Card."""
 
         # Initialize the parent class - this sets up an ImageMagickInterface
-        super().__init__(blur, grayscale, preferences=preferences)
+        super().__init__(blur, grayscale, preferences=preferences, **unused)
 
         # Store object attributes
         self.source_file = source_file

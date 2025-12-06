@@ -2,7 +2,7 @@ from pathlib import Path
 from re import match, sub, IGNORECASE
 
 import inspect
-from typing import Any, TYPE_CHECKING, get_args, get_origin
+from typing import Any, Optional, TYPE_CHECKING, get_args, get_origin
 
 from modules import global_objects
 from modules.BaseCardType import BaseCardType
@@ -44,6 +44,7 @@ from modules.cards.WhiteBorderTitleCard import WhiteBorderTitleCard
 
 if TYPE_CHECKING:
     from modules.Episode import Episode, MultiEpisode
+    from modules.ImageMagickInterface import ImageMagickInterface
     from modules.Profile import Profile
 
 
@@ -137,6 +138,7 @@ class TitleCard:
             episode: 'Episode',
             profile: 'Profile',
             title_characteristics: dict,
+            image_magick: Optional['ImageMagickInterface'] = None,
             **extra_characteristics,
         ) -> None:
         """
@@ -190,6 +192,9 @@ class TitleCard:
         } | profile.font.attributes \
           | self.episode.episode_info.indices \
           | extra_characteristics
+
+        if image_magick is not None:
+            kwargs['image_magick'] = image_magick
 
         self._coerce_extra_types(kwargs)
 
