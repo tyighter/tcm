@@ -26,6 +26,9 @@ class StandardTitleCard(BaseCardType):
         'top_heavy': False,     # This class uses bottom heavy titling
     }
 
+    """Margin to reserve on each side of the title text when wrapping"""
+    TITLE_SIDE_MARGIN = 260
+
     """Characteristics of the default title font"""
     TITLE_FONT = str((REF_DIRECTORY / 'Sequel-Neue.otf').resolve())
     TITLE_COLOR = '#EBEBEB'
@@ -128,6 +131,42 @@ class StandardTitleCard(BaseCardType):
 
 
     @staticmethod
+    def _coerce_float(value, default: float) -> float:
+        """Attempt to coerce a value to float, returning default on error."""
+
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    @classmethod
+    def _title_measurement(cls, extras: dict) -> dict:
+        """Build measurement settings for width-aware title wrapping."""
+
+        font_size = cls._coerce_float(extras.get('font_size', 1.0), 1.0)
+        font_kerning = cls._coerce_float(extras.get('font_kerning', 1.0), 1.0)
+        interword_spacing = extras.get('font_interword_spacing', 0)
+        try:
+            interword_spacing = float(interword_spacing)
+        except (TypeError, ValueError):
+            interword_spacing = 0.0
+
+        font_file = extras.get('font_file', cls.TITLE_FONT)
+
+        return {
+            'font_file': font_file,
+            'point_size': 157.41 * font_size,
+            'kerning': -1.25 * font_kerning,
+            'interword_spacing': 50 + interword_spacing,
+        }
+
+    @classmethod
+    def _title_width_budget(cls) -> float:
+        """Get the pixel width budget for wrapped titles."""
+
+        return cls.WIDTH - (2 * cls.TITLE_SIDE_MARGIN)
+
+    @staticmethod
     def adjust_title_characteristics(
             title_characteristics: dict,
             extras: dict,
@@ -140,8 +179,11 @@ class StandardTitleCard(BaseCardType):
         counts. Shrink the maximum line width proportionally to the font size
         so longer titles wrap earlier and stay on the card.
         """
-
         adjusted = dict(title_characteristics)
+
+        adjusted['width_budget'] = StandardTitleCard._title_width_budget()
+        adjusted['measurement'] = StandardTitleCard._title_measurement(extras)
+
         try:
             font_size = float(extras.get('font_size', 1.0))
         except (TypeError, ValueError):
