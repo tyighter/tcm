@@ -333,6 +333,27 @@ class Title:
             )
             return width <= width_budget
 
+        def split_long_word(text: str) -> list[str]:
+            """Split a single word into budget-respecting segments."""
+
+            segments: list[str] = []
+            current: list[str] = []
+
+            for char in text:
+                candidate = ''.join(current + [char])
+                if fits([candidate]):
+                    current.append(char)
+                    continue
+
+                if current:
+                    segments.append(''.join(current))
+                current = [char]
+
+            if current:
+                segments.append(''.join(current))
+
+            return segments or [text]
+
         for index, word in enumerate(words):
             current_line = lines[-1] + [word]
             if fits(current_line):
@@ -340,11 +361,15 @@ class Title:
                 continue
 
             # Word doesn't fit on the current line, start a new one
-            lines.append([word])
+            for segment in split_long_word(word):
+                lines.append([segment])
 
-            # If adding this new line would exceed the maximum, consume the rest
+                # If adding this new line would exceed the maximum, consume the rest
+                if len(lines) >= max_line_count:
+                    lines[-1].extend(words[index + 1:])
+                    break
+
             if len(lines) >= max_line_count:
-                lines[-1].extend(words[index + 1:])
                 break
 
         split_lines = list(map(' '.join, filter(len, lines)))
