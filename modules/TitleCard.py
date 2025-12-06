@@ -133,6 +133,8 @@ class TitleCard:
 
     __slots__ = ('episode', 'profile', 'converted_title', 'maker', 'file')
 
+    _SIGNATURE_CACHE: dict[type, inspect.Signature] = {}
+
 
     def __init__(self,
             episode: 'Episode',
@@ -212,7 +214,12 @@ class TitleCard:
     def _coerce_extra_types(self, kwargs: dict[str, Any]) -> None:
         """Convert extras to expected types based on the card constructor."""
 
-        signature = inspect.signature(self.episode.card_class.__init__)
+        card_class = self.episode.card_class
+        try:
+            signature = self._SIGNATURE_CACHE[card_class]
+        except KeyError:
+            signature = inspect.signature(card_class.__init__)
+            self._SIGNATURE_CACHE[card_class] = signature
 
         for name, param in signature.parameters.items():
             if name not in kwargs or name in ('self', 'preferences'):
