@@ -795,10 +795,12 @@ button:disabled:hover {
   position: relative;
   padding: 1rem 1rem 0.85rem;
   padding-right: 3rem;
+  min-width: 0;
   border-radius: 12px;
   border: 1px solid #d1d1d1;
   background: linear-gradient(180deg, #ffffff, #f6f6f6);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), var(--shadow-sm);
+  overflow-wrap: break-word;
 }
 
 .item-remove {
