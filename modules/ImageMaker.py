@@ -45,7 +45,7 @@ class ImageMaker(ABC):
     """
     VALID_IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.tiff', '.gif', '.webp')
 
-    __slots__ = ('preferences', 'image_magick')
+    __slots__ = ('preferences', 'image_magick', '_text_dimension_cache')
 
 
     @abstractmethod
@@ -78,6 +78,8 @@ class ImageMaker(ABC):
             self.image_magick = ImageMagickInterface(
                 **preferences.imagemagick_arguments,
             )
+
+        self._text_dimension_cache: dict[tuple[str, str, str], Dimensions] = {}
 
 
     def get_text_dimensions(self,
@@ -119,6 +121,10 @@ class ImageMaker(ABC):
             f'null: 2>&1',
         ])
 
+        cache_key = (text_command, width, height)
+        if cache_key in self._text_dimension_cache:
+            return self._text_dimension_cache[cache_key]
+
         # Execute dimension command, parse output
         metrics = self.image_magick.run_get_output(text_command)
         widths = map(int, findall(r'Metrics:.*width:\s+(\d+)', metrics))
@@ -130,10 +136,12 @@ class ImageMaker(ABC):
                 return sum(v) // (2 if ' label:"' in text_command else 1)
 
             # Process according to given methods
-            return Dimensions(
+            dimensions = Dimensions(
                 sum_(widths)  if width  == 'sum' else max(widths),
                 sum_(heights) if height == 'sum' else max(heights),
             )
+            self._text_dimension_cache[cache_key] = dimensions
+            return dimensions
         except ValueError as e:
             log.debug(f'Cannot identify text dimensions - {e}')
             return Dimensions(0, 0)
