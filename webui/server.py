@@ -167,6 +167,15 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             return
 
         mime, _ = mimetypes.guess_type(file_path.as_posix())
+        if mime is None:
+            font_mimes = {
+                ".ttf": "font/ttf",
+                ".otf": "font/otf",
+                ".woff": "font/woff",
+                ".woff2": "font/woff2",
+                ".ttc": "font/collection",
+            }
+            mime = font_mimes.get(file_path.suffix.lower())
         data = file_path.read_bytes()
 
         self.send_response(HTTPStatus.OK)
