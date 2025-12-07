@@ -947,7 +947,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         return candidate
 
-def _resolve_font_file(self, raw_path: str) -> Path | None:
+    def _resolve_font_file(self, raw_path: str) -> Path | None:
         """Resolve a font file path ensuring it stays within the font directory."""
 
         if not raw_path:
