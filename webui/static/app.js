@@ -55,6 +55,7 @@ const CACHE_DB_NAME = 'tcm-preview-cache';
 const CACHE_DB_VERSION = 2;
 const PREVIEW_DB_STORE = 'previews';
 const LOGO_DB_STORE = 'logos';
+const FONT_EXTENSIONS = ['.ttf', '.otf', '.woff', '.woff2', '.ttc'];
 
 const EPISODE_TEXT_FORMAT_GROUPS = [
   {
@@ -2276,7 +2277,20 @@ function fontPicker(entry, field, value) {
     }
   });
 
-  wrapper.append(input, uploadInput, upload);
+  const browse = document.createElement('button');
+  browse.type = 'button';
+  browse.textContent = 'Browse';
+  browse.addEventListener('click', () => {
+    openFontPickerModal({
+      initialPath: PathParent(input.value) || state.fontDirectory,
+      onSelect: (path) => {
+        input.value = path;
+        updateField(entry, field, path);
+      },
+    });
+  });
+
+  wrapper.append(input, uploadInput, upload, browse);
   return wrapper;
 }
 
@@ -3045,6 +3059,169 @@ function openFieldSelector(
   }
 
   modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
+}
+
+const fontPreviewCache = new Map();
+
+function loadFontPreview(path) {
+  if (!path) return Promise.resolve(null);
+  if (fontPreviewCache.has(path)) {
+    return fontPreviewCache.get(path);
+  }
+
+  const fontId = `font-${btoa(path).replace(/=+$/g, '')}`;
+  const previewUrl = `/api/fonts/file?path=${encodeURIComponent(path)}`;
+  const loader = new FontFace(fontId, `url('${previewUrl}')`, { style: 'normal', weight: '400' })
+    .load()
+    .then((loaded) => {
+      document.fonts.add(loaded);
+      return fontId;
+    })
+    .catch((error) => {
+      console.warn('Unable to load font preview', { path, error });
+      return null;
+    });
+
+  fontPreviewCache.set(path, loader);
+  return loader;
+}
+
+function openFontPickerModal({ initialPath, onSelect }) {
+  const modal = buildModal('Choose font file');
+  addFloatingCloseButton(modal, 'Close font picker');
+
+  const status = document.createElement('p');
+  status.className = 'font-picker-status helper-text';
+
+  const header = document.createElement('div');
+  header.className = 'font-picker-header';
+
+  const location = document.createElement('div');
+  location.className = 'font-picker-path';
+
+  const actions = document.createElement('div');
+  actions.className = 'font-picker-actions';
+
+  const up = document.createElement('button');
+  up.type = 'button';
+  up.textContent = 'Up one level';
+  up.addEventListener('click', () => {
+    const parent = PathParent(currentPath);
+    if (parent) {
+      renderDirectory(parent);
+    }
+  });
+
+  const refresh = document.createElement('button');
+  refresh.type = 'button';
+  refresh.textContent = 'Refresh';
+  refresh.addEventListener('click', () => renderDirectory(currentPath));
+
+  actions.append(up, refresh);
+  header.append(location, actions);
+
+  const grid = document.createElement('div');
+  grid.className = 'font-picker-grid';
+
+  modal.content.append(header, status, grid);
+  modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
+
+  let currentPath = initialPath || state.fontDirectory;
+
+  const setStatus = (message, tone = 'muted') => {
+    status.textContent = message;
+    status.dataset.tone = tone;
+  };
+
+  const renderEntries = (entries) => {
+    grid.innerHTML = '';
+    if (!entries.length) {
+      setStatus('No items found in this directory.', 'warning');
+      return;
+    }
+
+    setStatus('Tap a font to select it.');
+
+    const directories = entries.filter((entry) => entry.type === 'directory');
+    const files = entries.filter((entry) => entry.type === 'file');
+
+    directories.forEach((entry) => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'font-card font-card--directory';
+      card.innerHTML = `<div class="font-card__meta"><div class="font-card__icon">📁</div><div class="font-card__name">${entry.name}</div><div class="font-card__hint">Open folder</div></div>`;
+      card.addEventListener('click', () => renderDirectory(entry.path));
+      grid.appendChild(card);
+    });
+
+    files
+      .filter((entry) => FONT_EXTENSIONS.some((ext) => entry.name.toLowerCase().endsWith(ext)))
+      .forEach((entry) => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'font-card font-card--file';
+
+        const preview = document.createElement('div');
+        preview.className = 'font-card__preview';
+        preview.textContent = 'Loading preview…';
+
+        const meta = document.createElement('div');
+        meta.className = 'font-card__meta';
+
+        const title = document.createElement('div');
+        title.className = 'font-card__name';
+        title.textContent = entry.name;
+
+        const hint = document.createElement('div');
+        hint.className = 'font-card__hint';
+        hint.textContent = 'Tap to use this font';
+
+        meta.append(title, hint);
+        card.append(preview, meta);
+
+        card.addEventListener('click', () => {
+          if (typeof onSelect === 'function') {
+            onSelect(entry.path);
+          }
+          closeModal(modal.element);
+        });
+
+        loadFontPreview(entry.path, entry.name).then((fontId) => {
+          if (!fontId) {
+            preview.textContent = 'Preview unavailable';
+            preview.classList.add('font-card__preview--fallback');
+            return;
+          }
+          preview.textContent = 'Aa Bb Cc 0123';
+          preview.style.fontFamily = `'${fontId}', 'Inter', system-ui, sans-serif`;
+        });
+
+        grid.appendChild(card);
+      });
+  };
+
+  const renderDirectory = async (targetPath) => {
+    try {
+      setStatus('Loading fonts…');
+      const response = await fetch(`/api/fonts?path=${encodeURIComponent(targetPath)}`);
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to browse fonts');
+      }
+
+      currentPath = data.path || targetPath;
+      location.textContent = currentPath;
+      up.disabled = currentPath === state.fontDirectory;
+      renderEntries(data.entries || []);
+    } catch (error) {
+      console.error('Unable to load font directory', error);
+      setStatus('Unable to load this directory. Please try again.', 'error');
+      grid.innerHTML = '';
+    }
+  };
+
+  renderDirectory(currentPath);
 }
 
 function PathParent(path) {
