@@ -335,6 +335,8 @@ class Title:
         words = self.full_title.split()
         lines: list[list[str]] = [[]]
 
+        margin_budget = width_budget * self.MEASURED_MARGIN_RATIO
+
         def fits(candidate: list[str]) -> bool:
             if not candidate:
                 return True
@@ -347,7 +349,7 @@ class Title:
                 measurement['kerning'],
                 measurement['interword_spacing'],
             )
-            return width <= width_budget
+            return width <= margin_budget
 
         def split_long_word(text: str) -> list[str]:
             """Split a single word into budget-respecting segments."""
