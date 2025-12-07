@@ -195,7 +195,15 @@ class StandardTitleCard(BaseCardType):
         budget_scale = max(1.0, font_size)
 
         if font_size > 1:
-            budget_scale += (font_size - 1) * 0.35
+            budget_scale += (font_size - 1) * 0.65
+
+        try:
+            stroke_width = float(extras.get('font_stroke_width', 1.0))
+        except (TypeError, ValueError):
+            stroke_width = 1.0
+
+        if stroke_width > 1:
+            budget_scale += (stroke_width - 1) * 0.25
 
         if isinstance(max_width, (int, float)):
             adjusted['max_line_width'] = max(10, round(max_width / budget_scale))
