@@ -182,7 +182,19 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", mime or "application/octet-stream")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
-        self.wfile.write(data)
+
+        try:
+            self.wfile.write(data)
+        except BrokenPipeError:
+            logger.warning(
+                "Client disconnected before file response could be sent for %s",
+                self.path,
+            )
+        except ConnectionResetError:
+            logger.warning(
+                "Client connection reset before file response could be sent for %s",
+                self.path,
+            )
 
     def _wait_for_logo(self, logo_path: Path, attempts: int = 6, delay: float = 0.5) -> Path | None:
         """Wait briefly for a logo file to appear on disk."""
