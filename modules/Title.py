@@ -275,7 +275,7 @@ class Title:
         ) -> float:
         """Measure the pixel width of the given text using ImageMagick."""
 
-        escaped = text.replace('"', '\\"')
+        escaped = ImageMagickInterface.escape_chars(text)
         commands = [
             f'-font "{font_file}"',
             f'-pointsize {point_size}',
