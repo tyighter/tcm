@@ -539,6 +539,13 @@ button:disabled:hover {
   line-height: 1.1;
 }
 
+.entry-action-settings {
+  padding: 0.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .preview-controls {
   display: flex;
   align-items: flex-end;
@@ -551,6 +558,12 @@ button:disabled:hover {
   flex-direction: column;
   gap: 0.2rem;
   min-width: 200px;
+}
+
+.entry-actions-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .preview-episode-label {

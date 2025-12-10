@@ -29,11 +29,13 @@ from .options import build_card_type_extras, build_series_fields
 from .services import (
     ActionInProgressError,
     download_logo_for_series,
+    delete_series_cards,
     forget_series_cards,
     get_or_generate_preview,
     invalidate_preview_cache,
     list_preview_episodes,
     run_asset_downloads,
+    run_asset_downloads_for_series,
     backfill_tmdb_ids,
     backfill_rating_keys,
     run_builder,
@@ -812,6 +814,30 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             self._run_manager_action(run_asset_downloads, context="download-sources")
             return
 
+        if parsed.path == "/api/actions/download-series-sources":
+            try:
+                payload = self._parse_json()
+            except ValueError as exc:
+                self._error(str(exc))
+                return
+
+            series_name = payload.get("name")
+            if not series_name:
+                self._error("Missing series name")
+                return
+
+            series_config = payload.get("config") if isinstance(payload, dict) else None
+            logger.info("Source download requested for %s", series_name)
+            logger.debug("Series config: %s", series_config)
+            invalidate_preview_cache(series_name)
+            self._run_manager_action(
+                lambda: run_asset_downloads_for_series(
+                    self.context, self.tv_manager, series_name, series_config
+                ),
+                context=f"download-series-sources:{series_name}",
+            )
+            return
+
         if parsed.path == "/api/actions/build-series":
             try:
                 payload = self._parse_json()
@@ -875,6 +901,29 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             self._run_manager_action(
                 lambda: forget_series_cards(self.tv_manager, series_name, series_config),
                 context=f"forget-cards:{series_name}",
+            )
+            return
+
+        if parsed.path == "/api/actions/delete-series-cards":
+            try:
+                payload = self._parse_json()
+            except ValueError as exc:
+                self._error(str(exc))
+                return
+
+            series_name = payload.get("name")
+            if not series_name:
+                self._error("Missing series name")
+                return
+
+            series_config = payload.get("config") if isinstance(payload, dict) else None
+            logger.info("Delete cards requested for %s", series_name)
+            logger.debug("Series config: %s", series_config)
+            self._run_manager_action(
+                lambda: delete_series_cards(
+                    self.context, self.tv_manager, series_name, series_config
+                ),
+                context=f"delete-cards:{series_name}",
             )
             return
 
