@@ -183,6 +183,32 @@ class TvYamlManager:
         shutil.copy2(self.file_path, target)
         return target
 
+    def backup_directory(self) -> Path:
+        """Return the directory used for backup files."""
+
+        return self._backup_directory()
+
+    def restore_from_backup(self, source: Path) -> Path:
+        """Restore ``tv.yml`` from a backup file inside the backup directory."""
+
+        base = self._backup_directory().resolve(strict=False)
+        base.mkdir(parents=True, exist_ok=True)
+
+        candidate = source if source.is_absolute() else (base / source)
+        candidate = candidate.resolve(strict=False)
+
+        try:
+            candidate.relative_to(base)
+        except ValueError as exc:  # pragma: no cover - safety guard
+            raise ValueError("Backup file must be within the backup directory") from exc
+
+        if not candidate.exists() or not candidate.is_file():
+            raise ValueError(f"Backup file not found: {candidate}")
+
+        shutil.copy2(candidate, self.file_path)
+        self.invalidate()
+        return candidate
+
     def invalidate(self) -> None:
         """Drop the cached YAML data so it is reloaded on next access."""
 

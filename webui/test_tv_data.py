@@ -64,3 +64,22 @@ def test_backup_on_save_creates_latest_copy(tmp_path: Path) -> None:
     manager.backup_on_save()
 
     assert backup_path.read_text() == tv_file.read_text()
+
+
+def test_restore_from_backup_replaces_tv_file(tmp_path: Path) -> None:
+    tv_file = tmp_path / "tv.yml"
+    tv_file.write_text("libraries: {}\nseries: {}\n")
+
+    manager = TvYamlManager(tv_file)
+    backup_dir = manager.backup_directory()
+    if backup_dir.exists():
+        shutil.rmtree(backup_dir)
+    backup_dir.mkdir(parents=True)
+
+    backup_file = backup_dir / "tv-latest.yml"
+    backup_file.write_text("libraries: {restored: []}\nseries: {restored: {}}\n")
+
+    restored_path = manager.restore_from_backup(backup_file)
+
+    assert restored_path == backup_file.resolve(strict=False)
+    assert tv_file.read_text() == backup_file.read_text()

@@ -54,6 +54,7 @@ const CACHE_DB_NAME = 'tcm-preview-cache';
 const CACHE_DB_VERSION = 2;
 const PREVIEW_DB_STORE = 'previews';
 const LOGO_DB_STORE = 'logos';
+const DEFAULT_BACKUP_DIRECTORY = '/config/backups';
 const FONT_EXTENSIONS = ['.ttf', '.otf', '.woff', '.woff2', '.ttc'];
 
 const EPISODE_TEXT_FORMAT_GROUPS = [
@@ -3258,12 +3259,183 @@ function openFontPickerModal({ initialPath, onSelect }) {
   renderDirectory(currentPath);
 }
 
+function openBackupPickerModal({ initialPath = DEFAULT_BACKUP_DIRECTORY, onRestore } = {}) {
+  const modal = buildModal('Load backup file');
+  addFloatingCloseButton(modal, 'Close backup picker');
+
+  const intro = document.createElement('p');
+  intro.className = 'helper-text';
+  intro.textContent = 'Choose a saved tv.yml backup to restore it.';
+
+  const status = document.createElement('p');
+  status.className = 'font-picker-status helper-text';
+
+  const header = document.createElement('div');
+  header.className = 'font-picker-header';
+
+  const location = document.createElement('div');
+  location.className = 'font-picker-path';
+
+  const actions = document.createElement('div');
+  actions.className = 'font-picker-actions';
+
+  const up = document.createElement('button');
+  up.type = 'button';
+  up.textContent = 'Up one level';
+  up.addEventListener('click', () => {
+    const parent = PathParent(currentPath);
+    if (parent) {
+      renderDirectory(parent);
+    }
+  });
+
+  const refresh = document.createElement('button');
+  refresh.type = 'button';
+  refresh.textContent = 'Refresh';
+  refresh.addEventListener('click', () => renderDirectory(currentPath));
+
+  actions.append(up, refresh);
+  header.append(location, actions);
+
+  const grid = document.createElement('div');
+  grid.className = 'font-picker-grid';
+
+  modal.content.append(intro, header, status, grid);
+  modal.footer.append(closeButton(() => closeModal(modal.element)));
+
+  let currentPath = initialPath || DEFAULT_BACKUP_DIRECTORY;
+
+  const setStatus = (message, tone = 'muted') => {
+    status.textContent = message;
+    status.dataset.tone = tone;
+  };
+
+  const renderEntries = (entries) => {
+    grid.innerHTML = '';
+    if (!entries.length) {
+      setStatus('No backups found in this directory.', 'warning');
+      return;
+    }
+
+    setStatus('Tap a backup to restore it.');
+
+    const directories = entries.filter((entry) => entry.type === 'directory');
+    const files = entries.filter((entry) => entry.type === 'file');
+
+    directories.forEach((entry) => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'font-card font-card--directory';
+      card.innerHTML = `<div class="font-card__meta"><div class="font-card__icon">📁</div><div class="font-card__name">${entry.name}</div><div class="font-card__hint">Open folder</div></div>`;
+      card.addEventListener('click', () => renderDirectory(entry.path));
+      grid.appendChild(card);
+    });
+
+    files
+      .filter((entry) => entry.name && entry.name.toLowerCase().match(/\.ya?ml$/))
+      .forEach((entry) => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'font-card font-card--file';
+
+        const meta = document.createElement('div');
+        meta.className = 'font-card__meta';
+
+        const icon = document.createElement('div');
+        icon.className = 'font-card__icon';
+        icon.textContent = '📄';
+
+        const title = document.createElement('div');
+        title.className = 'font-card__name';
+        title.textContent = entry.name;
+
+        const hint = document.createElement('div');
+        hint.className = 'font-card__hint';
+        hint.textContent = 'Tap to load this backup';
+
+        const detail = document.createElement('div');
+        detail.className = 'font-card__hint';
+        if (entry.modified) {
+          const modified = new Date(entry.modified * 1000);
+          if (!Number.isNaN(modified.getTime())) {
+            detail.textContent = `Modified ${modified.toLocaleString()}`;
+          }
+        }
+
+        meta.append(icon, title);
+        card.append(meta, hint);
+        if (detail.textContent) {
+          card.append(detail);
+        }
+
+        card.addEventListener('click', async () => {
+          setStatus('Restoring backup...', 'muted');
+          card.disabled = true;
+          try {
+            await restoreBackup(entry.path);
+            if (typeof onRestore === 'function') {
+              await onRestore();
+            }
+            showToast('Backup loaded', 'success');
+            closeModal(modal.element);
+          } catch (error) {
+            const message = error?.message || 'Unable to load backup';
+            showToast(message, 'error');
+            setStatus(message, 'error');
+          } finally {
+            card.disabled = false;
+          }
+        });
+
+        grid.appendChild(card);
+      });
+  };
+
+  const renderDirectory = async (targetPath) => {
+    try {
+      setStatus('Loading backups…');
+      const response = await fetch(`/api/backups?path=${encodeURIComponent(targetPath)}`);
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to browse backups');
+      }
+
+      currentPath = data.path || targetPath;
+      location.textContent = currentPath;
+      up.disabled = currentPath === DEFAULT_BACKUP_DIRECTORY;
+      renderEntries(data.entries || []);
+    } catch (error) {
+      console.error('Unable to load backup directory', error);
+      setStatus('Unable to load this directory. Please try again.', 'error');
+      grid.innerHTML = '';
+    }
+  };
+
+  renderDirectory(currentPath);
+}
+
 function PathParent(path) {
   if (!path) return null;
   const parts = path.split('/').filter(Boolean);
   if (parts.length === 0) return null;
   parts.pop();
   return `/${parts.join('/')}`;
+}
+
+async function restoreBackup(path) {
+  const response = await fetch('/api/backups/restore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || 'Unable to load backup');
+  }
+
+  return data;
 }
 
 async function uploadFont(file, targetDirectory) {
@@ -3947,6 +4119,27 @@ function formatSettingLabel(key) {
 function openSettingsModal() {
   const modal = buildModal('Settings');
   addFloatingCloseButton(modal, 'Close settings dialog');
+
+  const headerActions = document.createElement('div');
+  headerActions.className = 'modal-actions';
+
+  const loadBackupButton = document.createElement('button');
+  loadBackupButton.type = 'button';
+  loadBackupButton.textContent = 'Load backup';
+  loadBackupButton.addEventListener('click', () => {
+    openBackupPickerModal({
+      initialPath: DEFAULT_BACKUP_DIRECTORY,
+      onRestore: async () => {
+        await loadConfiguration();
+        renderEntries();
+        requestEntryPreviews(state.entries, { preferExisting: true });
+        closeModal(modal.element);
+      },
+    });
+  });
+
+  headerActions.append(loadBackupButton);
+  modal.header.appendChild(headerActions);
 
   const tautulli = state.settings?.tautulli || {};
   const seriesSyncInterval = Number(state.settings?.series_sync_interval_seconds);

@@ -619,6 +619,25 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             self._json_response(load_settings(self.context.preference_file))
             return
 
+        if parsed.path == "/api/backups":
+            params = parse_qs(parsed.query)
+            requested = self._resolve_backup_path(params.get("path", [""])[0])
+
+            entries = []
+            if requested.exists():
+                for item in sorted(requested.iterdir(), key=lambda p: (p.is_file(), p.name.lower())):
+                    entries.append(
+                        {
+                            "name": item.name,
+                            "path": item.as_posix(),
+                            "type": "file" if item.is_file() else "directory",
+                            "modified": item.stat().st_mtime,
+                        }
+                    )
+
+            self._json_response({"path": requested.as_posix(), "entries": entries})
+            return
+
         if parsed.path == "/api/fonts":
             params = parse_qs(parsed.query)
             requested = self._resolve_font_path(
@@ -714,6 +733,34 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
             updated = save_settings(payload, self.context.preference_file)
             self._json_response(updated)
+            return
+
+        if parsed.path == "/api/backups/restore":
+            try:
+                payload = self._parse_json()
+            except ValueError as exc:
+                self._error(str(exc))
+                return
+
+            backup_path = payload.get("path") if isinstance(payload, dict) else None
+            if not backup_path:
+                self._error("Missing backup path")
+                return
+
+            try:
+                restored = self.tv_manager.restore_from_backup(Path(backup_path))
+                config = self.tv_manager.as_payload()
+            except Exception as exc:  # pylint: disable=broad-except
+                self._error(str(exc), status=HTTPStatus.BAD_REQUEST)
+                return
+
+            self._json_response(
+                {
+                    "status": "ok",
+                    "path": restored.as_posix(),
+                    "config": config,
+                }
+            )
             return
 
         if parsed.path == "/api/client-log":
@@ -1033,6 +1080,28 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         if not candidate.exists() or not candidate.is_file():
             return None
+
+        return candidate
+
+    def _resolve_backup_path(self, raw_path: str) -> Path:
+        """Clamp the requested backup browser path to the backup directory."""
+
+        base = self.tv_manager.backup_directory().resolve(strict=False)
+        base.mkdir(parents=True, exist_ok=True)
+        candidate = Path(raw_path) if raw_path else base
+
+        if not candidate.is_absolute():
+            candidate = (base / candidate).resolve(strict=False)
+        else:
+            candidate = candidate.resolve(strict=False)
+
+        try:
+            candidate.relative_to(base)
+        except ValueError:
+            return base
+
+        if not candidate.exists() or not candidate.is_dir():
+            return base
 
         return candidate
 
