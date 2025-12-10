@@ -1306,6 +1306,16 @@ button:disabled:hover {
   font-size: 1.35rem;
 }
 
+.modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.modal-actions button {
+  white-space: nowrap;
+}
+
 .modal-close {
   width: 2.75rem;
   height: 2.75rem;
