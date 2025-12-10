@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import shutil
+
 import pytest
 
 from webui.tv_data import TvYamlManager
@@ -29,17 +31,19 @@ def test_backup_daily_creates_dated_files_and_prunes(tmp_path: Path) -> None:
     tv_file.write_text("libraries: {}\nseries: {}\n")
 
     manager = TvYamlManager(tv_file)
+    backup_dir = Path("/config/backups")
+    if backup_dir.exists():
+        shutil.rmtree(backup_dir)
 
     base_date = datetime(2024, 1, 1)
     for offset in range(9):
         manager.backup_daily(now=base_date + timedelta(days=offset), keep=7)
 
-    backup_dir = tv_file.parent / "backups"
     backups = sorted(backup_dir.glob("tv-*.yml"))
 
     assert len(backups) == 7
-    assert backups[-1].name == "tv-20240109.yml"
-    assert backups[0].name == "tv-20240103.yml"
+    assert backups[-1].name == "tv-09012024.yml"
+    assert backups[0].name == "tv-03012024.yml"
 
 
 def test_backup_on_save_creates_latest_copy(tmp_path: Path) -> None:
@@ -47,6 +51,9 @@ def test_backup_on_save_creates_latest_copy(tmp_path: Path) -> None:
     tv_file.write_text("libraries: {}\nseries: {}\n")
 
     manager = TvYamlManager(tv_file)
+    backup_dir = Path("/config/backups")
+    if backup_dir.exists():
+        shutil.rmtree(backup_dir)
     backup_path = manager.backup_on_save()
 
     assert backup_path is not None

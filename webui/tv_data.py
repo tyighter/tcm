@@ -159,7 +159,7 @@ class TvYamlManager:
         if not self.file_path.exists():
             return None
 
-        timestamp = (now or datetime.now()).strftime("%Y%m%d")
+        timestamp = (now or datetime.now()).strftime("%d%m%Y")
         backup_dir = self._backup_directory()
         backup_dir.mkdir(parents=True, exist_ok=True)
 
@@ -254,7 +254,7 @@ class TvYamlManager:
         return True
 
     def _backup_directory(self) -> Path:
-        return self.file_path.parent / "backups"
+        return Path("/config/backups")
 
     def _rotate_backups(self, *, keep: int) -> None:
         if keep < 1:
