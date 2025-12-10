@@ -42,7 +42,7 @@ from .services import (
     revert_series_cards,
     search_plex,
 )
-from .tv_data import TvYamlManager, _to_builtin
+from .tv_data import TvYamlManager, _to_builtin, start_daily_tv_yaml_backup
 from .user_settings import load_settings, save_settings
 from .tautulli import (
     TautulliSettings,
@@ -691,6 +691,10 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             try:
+                try:
+                    self.tv_manager.backup_on_save()
+                except Exception as exc:  # pylint: disable=broad-except
+                    logger.warning("Unable to create backup prior to save: %s", exc)
                 self.tv_manager.write(payload)
             except Exception as exc:  # pylint: disable=broad-except
                 self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
@@ -1034,6 +1038,7 @@ def run(port: int = 4343) -> None:
     _run_startup_tasks_async(context, tv_manager)
 
     start_recent_activity_monitor(context, tv_manager)
+    start_daily_tv_yaml_backup(tv_manager)
 
     WebRequestHandler.context = context
     WebRequestHandler.tv_manager = tv_manager

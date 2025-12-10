@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import logging
+import re
+import shutil
 from copy import deepcopy
+from datetime import datetime, timedelta
 from pathlib import Path
+from threading import Event, Thread
 from typing import Any
 
 from modules.CleanPath import CleanPath
@@ -13,6 +18,14 @@ from ruamel.yaml.parser import ParserError
 from ruamel.yaml.scanner import ScannerError
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
+
+
+logger = logging.getLogger(__name__)
+
+
+_DAILY_BACKUP_INTERVAL = timedelta(days=1)
+_backup_thread: Thread | None = None
+_backup_stop_event = Event()
 
 
 class TvYamlManager:
@@ -140,6 +153,36 @@ class TvYamlManager:
 
         self._data = current
 
+    def backup_daily(self, *, now: datetime | None = None, keep: int = 7) -> Path | None:
+        """Create a dated backup of the tv.yml file and prune old copies."""
+
+        if not self.file_path.exists():
+            return None
+
+        timestamp = (now or datetime.now()).strftime("%Y%m%d")
+        backup_dir = self._backup_directory()
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+        target = backup_dir / f"{self.file_path.stem}-{timestamp}{self.file_path.suffix}"
+        if not target.exists():
+            shutil.copy2(self.file_path, target)
+
+        self._rotate_backups(keep=keep)
+        return target
+
+    def backup_on_save(self) -> Path | None:
+        """Create a single rolling backup for manual saves."""
+
+        if not self.file_path.exists():
+            return None
+
+        backup_dir = self._backup_directory()
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+        target = backup_dir / f"{self.file_path.stem}-latest{self.file_path.suffix}"
+        shutil.copy2(self.file_path, target)
+        return target
+
     def invalidate(self) -> None:
         """Drop the cached YAML data so it is reloaded on next access."""
 
@@ -209,6 +252,60 @@ class TvYamlManager:
 
         self._data = tv_data
         return True
+
+    def _backup_directory(self) -> Path:
+        return self.file_path.parent / "backups"
+
+    def _rotate_backups(self, *, keep: int) -> None:
+        if keep < 1:
+            keep = 1
+
+        pattern = re.compile(
+            rf"^{re.escape(self.file_path.stem)}-\d{{8}}{re.escape(self.file_path.suffix)}$"
+        )
+
+        backups = [
+            path
+            for path in self._backup_directory().glob("*")
+            if path.is_file() and pattern.match(path.name)
+        ]
+
+        backups.sort(key=lambda p: p.name, reverse=True)
+        for extra in backups[keep:]:
+            try:
+                extra.unlink()
+            except OSError as exc:  # pylint: disable=broad-except
+                logger.warning("Unable to prune old tv.yml backup %s: %s", extra, exc)
+
+
+def start_daily_tv_yaml_backup(
+    tv_manager: TvYamlManager,
+    *,
+    keep: int = 7,
+    interval: timedelta = _DAILY_BACKUP_INTERVAL,
+) -> Thread:
+    """Start a background thread that creates daily tv.yml backups."""
+
+    global _backup_thread
+
+    if _backup_thread and _backup_thread.is_alive():
+        return _backup_thread
+
+    _backup_stop_event.clear()
+
+    def _task() -> None:
+        while not _backup_stop_event.is_set():
+            try:
+                tv_manager.backup_daily(keep=keep)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.warning("Unable to create daily tv.yml backup: %s", exc)
+
+            if _backup_stop_event.wait(interval.total_seconds()):
+                break
+
+    _backup_thread = Thread(target=_task, name="tv.yml-backups", daemon=True)
+    _backup_thread.start()
+    return _backup_thread
 
 
 # ----------------------------------------------------------------------
