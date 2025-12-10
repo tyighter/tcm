@@ -36,7 +36,6 @@ const dom = {
   save: document.getElementById('save-config'),
   expandAll: document.getElementById('expand-all-entries'),
   collapseAll: document.getElementById('collapse-all-entries'),
-  downloadSources: document.getElementById('download-sources'),
   runBuilder: document.getElementById('run-builder'),
   unmatchedIssues: document.getElementById('unmatched-issues'),
   recents: document.getElementById('open-recents'),
@@ -615,17 +614,6 @@ function registerEvents() {
     dom.collapseAll.addEventListener('click', () => setAllEntriesCollapsed(true));
   }
 
-  if (dom.downloadSources) {
-    dom.downloadSources.addEventListener('click', () =>
-      triggerServerAction(
-        dom.downloadSources,
-        '/api/actions/download-sources',
-        'Downloaded logos and sources',
-        { workingLabel: 'Downloading...' }
-      )
-    );
-  }
-
   if (dom.runBuilder) {
     dom.runBuilder.addEventListener('click', () =>
       triggerServerAction(
@@ -652,6 +640,70 @@ function registerEvents() {
   if (dom.settings) {
     dom.settings.addEventListener('click', () => openSettingsModal());
   }
+}
+
+function openEntryActionsModal(entry, entryPayload) {
+  const modal = buildModal(`Manage ${entry.name}`);
+  addFloatingCloseButton(modal, `Close actions for ${entry.name}`);
+
+  const description = document.createElement('p');
+  description.className = 'helper-text';
+  description.textContent = 'Choose an action to run for this series.';
+  modal.content.appendChild(description);
+
+  const actions = document.createElement('div');
+  actions.className = 'entry-actions-modal';
+
+  const downloadButton = document.createElement('button');
+  downloadButton.textContent = 'Download sources';
+  downloadButton.addEventListener('click', () =>
+    triggerServerAction(
+      downloadButton,
+      '/api/actions/download-series-sources',
+      `Downloaded sources for ${entry.name}`,
+      { workingLabel: 'Downloading...', refresh: false, payload: entryPayload() }
+    )
+  );
+
+  const revertButton = document.createElement('button');
+  revertButton.textContent = 'Revert cards';
+  revertButton.addEventListener('click', () =>
+    triggerServerAction(
+      revertButton,
+      '/api/actions/revert-series',
+      `Reverted cards for ${entry.name}`,
+      { workingLabel: 'Reverting...', refresh: false, payload: entryPayload() }
+    )
+  );
+
+  const forgetButton = document.createElement('button');
+  forgetButton.textContent = 'Forget cards';
+  forgetButton.addEventListener('click', () =>
+    triggerServerAction(
+      forgetButton,
+      '/api/actions/forget-cards',
+      `Forgot loaded cards for ${entry.name}`,
+      { workingLabel: 'Forgetting...', refresh: false, payload: entryPayload() }
+    )
+  );
+
+  const deleteButton = document.createElement('button');
+  deleteButton.className = 'danger';
+  deleteButton.textContent = 'Delete cards';
+  deleteButton.addEventListener('click', () =>
+    triggerServerAction(
+      deleteButton,
+      '/api/actions/delete-series-cards',
+      `Deleted cards for ${entry.name}`,
+      { workingLabel: 'Deleting...', refresh: false, payload: entryPayload() }
+    )
+  );
+
+  actions.append(downloadButton, revertButton, forgetButton, deleteButton);
+  modal.content.appendChild(actions);
+
+  const dismiss = closeButton(() => closeModal(modal.element));
+  modal.footer.appendChild(dismiss);
 }
 
 // -----------------------------------------------------------------------------
@@ -956,28 +1008,6 @@ function renderEntry(entry) {
     )
   );
 
-  const revertButton = document.createElement('button');
-  revertButton.textContent = 'Revert cards';
-  revertButton.addEventListener('click', () =>
-    triggerServerAction(
-      revertButton,
-      '/api/actions/revert-series',
-      `Reverted cards for ${entry.name}`,
-      { workingLabel: 'Reverting...', refresh: false, payload: entryPayload() }
-    )
-  );
-
-  const forgetButton = document.createElement('button');
-  forgetButton.textContent = 'Forget cards';
-  forgetButton.addEventListener('click', () =>
-    triggerServerAction(
-      forgetButton,
-      '/api/actions/forget-cards',
-      `Forgot loaded cards for ${entry.name}`,
-      { workingLabel: 'Forgetting...', refresh: false, payload: entryPayload() }
-    )
-  );
-
   const previewEpisodeControl = document.createElement('div');
   previewEpisodeControl.className = 'preview-episode-control';
 
@@ -1057,12 +1087,16 @@ function renderEntry(entry) {
   syncPreviewEpisodeControls();
   ensurePreviewEpisodes(entry, syncPreviewEpisodeControls);
 
-  actions.append(
-    buildButton,
-    revertButton,
-    forgetButton,
-    previewControls
+  const manageButton = document.createElement('button');
+  manageButton.className = 'icon-button entry-action-settings';
+  manageButton.setAttribute('aria-label', `Open actions for ${entry.name}`);
+  manageButton.innerHTML =
+    '<span class="material-symbols-rounded" aria-hidden="true">settings</span>';
+  manageButton.addEventListener('click', () =>
+    openEntryActionsModal(entry, entryPayload)
   );
+
+  actions.append(buildButton, manageButton, previewControls);
   header.append(summary, actions);
 
   const body = document.createElement('div');

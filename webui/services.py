@@ -922,7 +922,54 @@ def download_logo_for_series(
                 return
 
 
-def _run_fixer_command(arguments: list[str]) -> None:
+def run_asset_downloads_for_series(
+    context: AppContext,
+    tv_manager: TvYamlManager,
+    series_name: str,
+    series_config: dict[str, Any] | None = None,
+    *,
+    force_sync: bool = False,
+) -> None:
+    """Download logos and sources for a single series."""
+
+    config = _prepare_series_context(tv_manager, series_name, series_config)
+    runtime_config = merge_series_configuration(
+        context, tv_manager, series_name, config
+    )
+
+    show = Show(
+        series_name,
+        runtime_config,
+        context.preference_parser.source_directory,
+        context.preference_parser,
+    )
+
+    if not show.valid:
+        raise RuntimeError("Series configuration is invalid; check required fields")
+
+    def _run(manager: Manager) -> None:
+        _maybe_sync_series_files(manager, force=force_sync)
+        manager.shows = [show]
+        manager.archives = []
+
+        if manager.preferences.create_archive and show.archive:
+            manager.archives = [
+                ShowArchive(manager.preferences.archive_directory, show)
+            ]
+
+        manager.assign_interfaces()
+        manager.set_show_ids()
+        manager.read_show_source()
+        manager.add_new_episodes()
+        manager.set_episode_ids()
+        manager.add_translations()
+        manager.download_logos()
+        manager.select_source_images()
+
+    _run_manager_job(_run)
+
+
+def _run_fixer_command(arguments: list[str], *, input_text: str | None = None) -> None:
     """Execute fixer.py with the supplied arguments, ensuring exclusivity."""
 
     if not _action_lock.acquire(blocking=False):
@@ -930,7 +977,11 @@ def _run_fixer_command(arguments: list[str]) -> None:
 
     try:
         result = subprocess.run(
-            arguments, capture_output=True, check=False, text=True
+            arguments,
+            capture_output=True,
+            check=False,
+            text=True,
+            input=input_text,
         )
     finally:
         _action_lock.release()
@@ -992,6 +1043,42 @@ def forget_series_cards(
         tv_manager, series_name, series_config, "--forget-cards"
     )
     _run_fixer_command(args)
+
+
+def delete_series_cards(
+    context: AppContext,
+    tv_manager: TvYamlManager,
+    series_name: str,
+    series_config: dict[str, Any] | None = None,
+) -> None:
+    """Delete generated cards for a single series using fixer.py."""
+
+    config = _prepare_series_context(tv_manager, series_name, series_config)
+    card_directory = config.get("card_directory")
+    if not card_directory:
+        raise ValueError("Series must specify a card_directory to delete cards")
+
+    target = CleanPath(card_directory).sanitize()
+    if not target.is_absolute():
+        target = (context.preference_parser.source_directory / target).resolve()
+
+    extension = getattr(
+        context.preference_parser,
+        "card_extension",
+        TitleCard.DEFAULT_CARD_EXTENSION,
+    )
+
+    fixer_script = Path(__file__).resolve().parent.parent / "fixer.py"
+    args = [
+        sys.executable,
+        str(fixer_script),
+        "--delete-cards",
+        str(target),
+        "--delete-extension",
+        extension,
+    ]
+
+    _run_fixer_command(args, input_text="Y\n")
 
 
 def _run_manager_job(task: Callable[[Manager], None]) -> None:
