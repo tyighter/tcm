@@ -655,49 +655,87 @@ function openEntryActionsModal(entry, entryPayload) {
   const actions = document.createElement('div');
   actions.className = 'entry-actions-modal';
 
-  const downloadButton = document.createElement('button');
-  downloadButton.textContent = 'Download sources';
-  downloadButton.addEventListener('click', () =>
-    triggerServerAction(
-      downloadButton,
-      '/api/actions/download-series-sources',
-      `Downloaded sources for ${entry.name}`,
-      { workingLabel: 'Downloading...', refresh: false, payload: entryPayload() }
-    )
+  const createActionButton = (label, description, icon, handler, variant) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'entry-action-card';
+    if (variant) {
+      button.classList.add(`entry-action-card--${variant}`);
+    }
+
+    const iconElement = document.createElement('span');
+    iconElement.className = 'material-symbols-rounded';
+    iconElement.textContent = icon;
+
+    const text = document.createElement('span');
+    text.className = 'entry-action-card__text';
+
+    const title = document.createElement('span');
+    title.className = 'entry-action-card__title';
+    title.textContent = label;
+
+    const desc = document.createElement('span');
+    desc.className = 'entry-action-card__description';
+    desc.textContent = description;
+
+    text.append(title, desc);
+    button.append(iconElement, text);
+    button.addEventListener('click', handler);
+
+    return button;
+  };
+
+  const downloadButton = createActionButton(
+    'Download sources',
+    'Fetch latest metadata and artwork',
+    'cloud_download',
+    () =>
+      triggerServerAction(
+        downloadButton,
+        '/api/actions/download-series-sources',
+        `Downloaded sources for ${entry.name}`,
+        { workingLabel: 'Downloading...', refresh: false, payload: entryPayload() }
+      )
   );
 
-  const revertButton = document.createElement('button');
-  revertButton.textContent = 'Revert cards';
-  revertButton.addEventListener('click', () =>
-    triggerServerAction(
-      revertButton,
-      '/api/actions/revert-series',
-      `Reverted cards for ${entry.name}`,
-      { workingLabel: 'Reverting...', refresh: false, payload: entryPayload() }
-    )
+  const revertButton = createActionButton(
+    'Revert cards',
+    'Restore cards back to the last saved set',
+    'history',
+    () =>
+      triggerServerAction(
+        revertButton,
+        '/api/actions/revert-series',
+        `Reverted cards for ${entry.name}`,
+        { workingLabel: 'Reverting...', refresh: false, payload: entryPayload() }
+      )
   );
 
-  const forgetButton = document.createElement('button');
-  forgetButton.textContent = 'Forget cards';
-  forgetButton.addEventListener('click', () =>
-    triggerServerAction(
-      forgetButton,
-      '/api/actions/forget-cards',
-      `Forgot loaded cards for ${entry.name}`,
-      { workingLabel: 'Forgetting...', refresh: false, payload: entryPayload() }
-    )
+  const forgetButton = createActionButton(
+    'Forget cards',
+    'Clear loaded cards and metadata cache',
+    'layers_clear',
+    () =>
+      triggerServerAction(
+        forgetButton,
+        '/api/actions/forget-cards',
+        `Forgot loaded cards for ${entry.name}`,
+        { workingLabel: 'Forgetting...', refresh: false, payload: entryPayload() }
+      )
   );
 
-  const deleteButton = document.createElement('button');
-  deleteButton.className = 'danger';
-  deleteButton.textContent = 'Delete cards';
-  deleteButton.addEventListener('click', () =>
-    triggerServerAction(
-      deleteButton,
-      '/api/actions/delete-series-cards',
-      `Deleted cards for ${entry.name}`,
-      { workingLabel: 'Deleting...', refresh: false, payload: entryPayload() }
-    )
+  const deleteButton = createActionButton(
+    'Delete cards',
+    'Remove generated cards for this series',
+    'delete_forever',
+    () =>
+      triggerServerAction(
+        deleteButton,
+        '/api/actions/delete-series-cards',
+        `Deleted cards for ${entry.name}`,
+        { workingLabel: 'Deleting...', refresh: false, payload: entryPayload() }
+      ),
+    'danger'
   );
 
   actions.append(downloadButton, revertButton, forgetButton, deleteButton);
@@ -4125,7 +4163,10 @@ function openSettingsModal() {
 
   const loadBackupButton = document.createElement('button');
   loadBackupButton.type = 'button';
-  loadBackupButton.textContent = 'Load backup';
+  loadBackupButton.innerHTML = `
+    <span class="material-symbols-rounded" aria-hidden="true">backup</span>
+    <span>Load backup</span>
+  `;
   loadBackupButton.addEventListener('click', () => {
     openBackupPickerModal({
       initialPath: DEFAULT_BACKUP_DIRECTORY,
