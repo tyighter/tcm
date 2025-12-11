@@ -1056,6 +1056,21 @@ def delete_series_cards(
     config = _prepare_series_context(tv_manager, series_name, series_config)
     card_directory = config.get("card_directory")
     if not card_directory:
+        library_name = config.get("library")
+        library_config = tv_manager.load().get("libraries", {}).get(library_name)
+
+        library_path = None
+        if isinstance(library_config, dict):
+            library_path = library_config.get("path")
+        elif isinstance(library_config, str):
+            library_path = library_config
+
+        if library_path:
+            card_directory = str(
+                CleanPath(library_path) / CleanPath.sanitize_name(series_name)
+            )
+
+    if not card_directory:
         raise ValueError("Series must specify a card_directory to delete cards")
 
     target = CleanPath(card_directory).sanitize()
