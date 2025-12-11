@@ -3,6 +3,8 @@ from pathlib import Path
 from sys import exit as sys_exit
 from typing import Any, Callable, Iterable, Optional
 
+import requests
+
 from tinydb import Query, where
 from tmdbapis import TMDbAPIs, NotFound, Unauthorized, TMDbException
 from tmdbapis.objs.reload import Episode as TMDbEpisode
@@ -126,6 +128,9 @@ class TMDbInterface(EpisodeDataSource, WebInterface):
         'zh-SG': 'Chinese (Singapore)'
     }
     LANGUAGE_CODES = tuple(LANGUAGES.keys())
+
+    """Endpoint for a simple fallback translator."""
+    TRANSLATION_API = 'https://api.mymemory.translated.net/get'
 
     """Generic translated episode format strings for each language code"""
     GENERIC_TITLE_FORMATS = {
@@ -835,6 +840,43 @@ class TMDbInterface(EpisodeDataSource, WebInterface):
         return title == generic.format(number=episode_info.episode_number)
 
 
+    def __translate_title_online(self, text: str, language_code: str) -> Optional[str]:
+        """
+        Fallback to an online translation service when TMDb lacks a title.
+
+        Args:
+            text: Title to translate.
+            language_code: Requested language code.
+
+        Returns:
+            Translated title, or None if no translation could be sourced.
+        """
+
+        if not text:
+            return None
+
+        target_language = language_code.split('-', maxsplit=1)[0].lower()
+        if target_language != 'ja':
+            return None
+
+        try:
+            response = requests.get(
+                self.TRANSLATION_API,
+                params={'q': text, 'langpair': f'en|{target_language}'},
+                timeout=10,
+            )
+            response.raise_for_status()
+            translated = response.json().get('responseData', {}).get('translatedText')
+        except Exception:
+            log.debug('Unable to fetch fallback translation', exc_info=True)
+            return None
+
+        if translated and translated.lower() != text.lower():
+            return translated
+
+        return None
+
+
     @catch_and_log('Error getting episode title', default=None)
     def get_episode_title(self,
             series_info: SeriesInfo,
@@ -889,6 +931,12 @@ class TMDbInterface(EpisodeDataSource, WebInterface):
                     return None
 
                 return title
+
+        # As a fallback, attempt to source a translation online (e.g., for kanji).
+        if (translated := self.__translate_title_online(
+                episode_info.title.full_title, language_code)):
+            log.debug(f'Using online translation for {episode_info}: "{translated}"')
+            return translated
 
         return None
 
