@@ -172,43 +172,12 @@ class StandardTitleCard(BaseCardType):
             extras: dict,
         ) -> dict:
         """
-        Adjust how titles are split when the font size is customized.
-
-        The standard card can overflow horizontally when the font size is
-        increased because the title splitting logic is based on character
-        counts. Shrink the maximum line width proportionally to the font size
-        so longer titles wrap earlier and stay on the card.
+        Adjust how titles are split using measured text widths.
         """
         adjusted = dict(title_characteristics)
 
         adjusted['measurement'] = StandardTitleCard._title_measurement(extras)
-
-        base_budget = StandardTitleCard._title_width_budget()
-        adjusted['width_budget'] = base_budget
-
-        try:
-            font_size = float(extras.get('font_size', 1.0))
-        except (TypeError, ValueError):
-            return adjusted
-
-        max_width = adjusted.get('max_line_width')
-        budget_scale = max(1.0, font_size)
-
-        if font_size > 1:
-            budget_scale += (font_size - 1) * 0.65
-
-        try:
-            stroke_width = float(extras.get('font_stroke_width', 1.0))
-        except (TypeError, ValueError):
-            stroke_width = 1.0
-
-        if stroke_width > 1:
-            budget_scale += (stroke_width - 1) * 0.25
-
-        if isinstance(max_width, (int, float)):
-            adjusted['max_line_width'] = max(10, round(max_width / budget_scale))
-
-        adjusted['width_budget'] = base_budget / budget_scale
+        adjusted['width_budget'] = StandardTitleCard._title_width_budget()
 
         return adjusted
 
