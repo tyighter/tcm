@@ -949,6 +949,7 @@ function renderEntry(entry) {
   const syncLogoBackground = () => {
     const isDarkBackground = getLogoBackgroundPreference(entry.name) === 'dark';
     logo.classList.toggle('entry-logo--dark-surface', isDarkBackground);
+    logo.classList.toggle('entry-logo--light-surface', !isDarkBackground);
     logoBackgroundToggle.dataset.mode = isDarkBackground ? 'dark' : 'light';
     logoBackgroundToggle.setAttribute('aria-pressed', String(isDarkBackground));
     const toggleLabel = isDarkBackground
@@ -4159,6 +4160,46 @@ function openSettingsModal() {
   const seriesSyncInterval = Number(state.settings?.series_sync_interval_seconds);
   const preferences = state.settings?.preferences || {};
 
+  const quickActions = document.createElement('div');
+  quickActions.className = 'modal-section modal-section--muted';
+
+  const quickActionsHeader = document.createElement('div');
+  quickActionsHeader.className = 'modal-section__header';
+  const quickActionsTitle = document.createElement('h3');
+  quickActionsTitle.textContent = 'Tools';
+  const quickActionsIntro = document.createElement('p');
+  quickActionsIntro.className = 'helper-text';
+  quickActionsIntro.textContent = 'Open helpful dialogs from one place.';
+  quickActionsHeader.append(quickActionsTitle, quickActionsIntro);
+
+  const quickActionsButtons = document.createElement('div');
+  quickActionsButtons.className = 'modal-actions';
+
+  const unmatchedButton = document.createElement('button');
+  unmatchedButton.type = 'button';
+  unmatchedButton.innerHTML = `
+    <span class="material-symbols-rounded" aria-hidden="true">warning</span>
+    <span>Unmatched</span>
+  `;
+  unmatchedButton.addEventListener('click', () => {
+    closeModal(modal.element);
+    openUnmatchedItemsModal();
+  });
+
+  const recentsButton = document.createElement('button');
+  recentsButton.type = 'button';
+  recentsButton.innerHTML = `
+    <span class="material-symbols-rounded" aria-hidden="true">history</span>
+    <span>Recents</span>
+  `;
+  recentsButton.addEventListener('click', () => {
+    closeModal(modal.element);
+    openRecentsModal();
+  });
+
+  quickActionsButtons.append(unmatchedButton, recentsButton);
+  quickActions.append(quickActionsHeader, quickActionsButtons);
+
   const tautulliSection = document.createElement('div');
   tautulliSection.className = 'modal-section';
 
@@ -4447,7 +4488,7 @@ function openSettingsModal() {
   tautulliSection.append(tautulliHeader, tautulliControls, userStatus);
   preferencesSection.prepend(preferencesHeader);
 
-  modal.content.append(tautulliSection, syncSection, preferencesSection, status);
+  modal.content.append(quickActions, tautulliSection, syncSection, preferencesSection, status);
   modal.footer.append(saveButton, closeButton(() => closeModal(modal.element)));
 }
 
