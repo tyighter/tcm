@@ -4362,8 +4362,11 @@ function openSettingsModal() {
   };
 
   const preferencesKeys = Object.keys(preferences || {});
-  if (preferencesKeys.length) {
-    preferencesKeys.forEach((key) => {
+  const filteredPreferencesKeys = preferencesKeys.filter(
+    (key) => key !== 'tautulli',
+  );
+  if (filteredPreferencesKeys.length) {
+    filteredPreferencesKeys.forEach((key) => {
       const section = document.createElement('div');
       section.className = 'modal-section__group';
       const heading = document.createElement('h4');
