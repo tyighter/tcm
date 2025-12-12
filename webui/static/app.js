@@ -1724,9 +1724,7 @@ function normalizeFontSize(value) {
     return undefined;
   }
 
-  const withoutPercent = trimmed.endsWith('%')
-    ? trimmed.slice(0, -1).trim()
-    : trimmed;
+  const withoutPercent = trimmed.replace(/%+$/u, '').trim();
   if (withoutPercent === '') {
     return undefined;
   }
@@ -1741,15 +1739,18 @@ function textInput(entry, field, value) {
   input.addEventListener('input', (event) => {
     const rawValue = event.target.value;
     if (field.id === 'font.size') {
-      const normalized = normalizeFontSize(rawValue);
-      updateField(entry, field, normalized);
-      if (normalized && normalized !== rawValue) {
-        input.value = normalized;
-      }
+      updateField(entry, field, rawValue.trim() === '' ? undefined : rawValue);
       return;
     }
     updateField(entry, field, rawValue || undefined);
   });
+  if (field.id === 'font.size') {
+    input.addEventListener('blur', () => {
+      const normalized = normalizeFontSize(input.value);
+      updateField(entry, field, normalized);
+      input.value = normalized ?? '';
+    });
+  }
   if (field.id === 'episode_text_format') {
     enableEpisodeTextFormatHelper(input);
   }
