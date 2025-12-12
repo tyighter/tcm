@@ -1720,12 +1720,41 @@ function renderFieldRow(entry, field, value) {
 // -----------------------------------------------------------------------------
 // Field renderers
 // -----------------------------------------------------------------------------
+function normalizeFontSize(value) {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  const trimmed = value.toString().trim();
+  if (trimmed === '') {
+    return undefined;
+  }
+
+  const withoutPercent = trimmed.endsWith('%')
+    ? trimmed.slice(0, -1).trim()
+    : trimmed;
+  if (withoutPercent === '') {
+    return undefined;
+  }
+
+  return `${withoutPercent}%`;
+}
+
 function textInput(entry, field, value) {
   const input = document.createElement('input');
   input.type = 'text';
-  input.value = value ?? '';
+  input.value = field.id === 'font.size' ? normalizeFontSize(value) ?? '' : value ?? '';
   input.addEventListener('input', (event) => {
-    updateField(entry, field, event.target.value || undefined);
+    const rawValue = event.target.value;
+    if (field.id === 'font.size') {
+      const normalized = normalizeFontSize(rawValue);
+      updateField(entry, field, normalized);
+      if (normalized && normalized !== rawValue) {
+        input.value = normalized;
+      }
+      return;
+    }
+    updateField(entry, field, rawValue || undefined);
   });
   if (field.id === 'episode_text_format') {
     enableEpisodeTextFormatHelper(input);
