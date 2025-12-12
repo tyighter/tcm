@@ -1231,13 +1231,6 @@ function renderEntry(entry) {
   addFontLineButton.addEventListener('click', () =>
     openFieldSelector(entry, {
       title: 'Add font line',
-      introHeadingText: 'Add a new font option',
-      introCopyText: 'Search across font settings to adjust typography for this card.',
-      tips: [
-        'Font file controls the typeface used for the card.',
-        'Size, color, spacing, and casing let you fine-tune typography.',
-        'You can revisit this menu anytime to add more font controls.',
-      ],
       emptyMessage: 'All font options are already configured for this entry.',
       availableFilter: (field) => field.path?.[0] === 'font',
     })
@@ -2676,28 +2669,6 @@ function openExtrasPicker(cardType, rows, renderRows, updateRows) {
   const wrapper = document.createElement('div');
   wrapper.className = 'card-type-modal';
 
-  const overview = document.createElement('div');
-  overview.className = 'modal-section modal-section--muted';
-
-  const heading = document.createElement('h3');
-  heading.textContent = 'Choose an extra option';
-
-  const helper = document.createElement('p');
-  helper.className = 'helper-text';
-  helper.textContent = `Pick from documented extras for ${cardType || 'the selected card type'} or add your own.`;
-
-  const helperList = document.createElement('ul');
-  helperList.className = 'modal-list';
-  ['Avoid duplicates—the list only shows options not already added.', 'Extras are added with an empty value so you can fill them in next.', 'You can always add another custom key if you need it.'].forEach(
-    (tip) => {
-      const item = document.createElement('li');
-      item.textContent = tip;
-      helperList.appendChild(item);
-    }
-  );
-
-  overview.append(heading, helper, helperList);
-
   const optionsWrapper = document.createElement('div');
   optionsWrapper.className = 'search-results card-type-results';
 
@@ -2773,7 +2744,7 @@ function openExtrasPicker(cardType, rows, renderRows, updateRows) {
 
   customWrapper.append(customHeader, customLabel, customInput, customButton);
 
-  wrapper.append(overview, optionsWrapper, customWrapper);
+  wrapper.append(optionsWrapper, customWrapper);
   modal.content.appendChild(wrapper);
 }
 
@@ -3058,13 +3029,6 @@ function openFieldSelector(
   entry,
   {
     title = 'Add field',
-    introHeadingText = 'Add a new line to this entry',
-    introCopyText = 'Search by name or description to quickly find the field you need.',
-    tips = [
-      'Each category is collapsible so you can focus on what matters.',
-      'Searching filters across labels, types, and nested paths.',
-      'Select a field to add it with sensible defaults—you can edit it right after.',
-    ],
     emptyMessage = 'All available options are already configured.',
     availableFilter,
   } = {}
@@ -3086,26 +3050,6 @@ function openFieldSelector(
   } else {
     const wrapper = document.createElement('div');
     wrapper.className = 'field-selector';
-
-    const intro = document.createElement('div');
-    intro.className = 'modal-section modal-section--muted';
-
-    const introHeading = document.createElement('h3');
-    introHeading.textContent = introHeadingText;
-
-    const introCopy = document.createElement('p');
-    introCopy.className = 'helper-text';
-    introCopy.textContent = introCopyText;
-
-    const introList = document.createElement('ul');
-    introList.className = 'modal-list';
-    tips.forEach((tip) => {
-      const item = document.createElement('li');
-      item.textContent = tip;
-      introList.appendChild(item);
-    });
-
-    intro.append(introHeading, introCopy, introList);
 
     const search = document.createElement('input');
     search.type = 'search';
@@ -3156,7 +3100,7 @@ function openFieldSelector(
     search.addEventListener('input', render);
     render();
 
-    wrapper.append(intro, controls, groupsContainer, emptyState);
+    wrapper.append(controls, groupsContainer, emptyState);
     modal.content.appendChild(wrapper);
   }
 
@@ -3242,7 +3186,7 @@ function openFontPickerModal({ initialPath, onSelect }) {
       return;
     }
 
-    setStatus('Tap a font to select it.');
+    setStatus('');
 
     const directories = entries.filter((entry) => entry.type === 'directory');
     const files = entries.filter((entry) => entry.type === 'file');
