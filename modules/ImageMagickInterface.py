@@ -63,6 +63,9 @@ class ImageMagickInterface:
         'executable', 'container', 'use_docker', 'prefix', 'timeout', '__history'
     )
 
+    TEXT_LOG_PATH = Path('/config/text.log')
+    __text_log_initialized = False
+
 
     def __init__(self,
             container: Optional[str] = None,
@@ -92,6 +95,33 @@ class ImageMagickInterface:
 
         # Command history for debug purposes
         self.__history: list[tuple[str, bytes, bytes]] = []
+
+        self.__initialize_text_log()
+
+    @classmethod
+    def __initialize_text_log(cls) -> None:
+        """Ensure the text dimension log exists and is truncated once per container."""
+
+        if cls.__text_log_initialized:
+            return
+
+        try:
+            cls.TEXT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            cls.TEXT_LOG_PATH.write_text('')
+        except OSError as error:
+            log.debug(f'Unable to initialize text log - {error}')
+        else:
+            cls.__text_log_initialized = True
+
+    @classmethod
+    def __append_text_log(cls, message: str) -> None:
+        """Append a single log entry to the text dimension log."""
+
+        try:
+            with cls.TEXT_LOG_PATH.open('a', encoding='utf-8') as log_file:
+                log_file.write(f"{message}\n")
+        except OSError as error:
+            log.debug(f'Unable to write text log - {error}')
 
 
     def validate_interface(self) -> bool:
@@ -289,7 +319,7 @@ class ImageMagickInterface:
         if not text_command:
             return Dimensions(0, 0)
 
-        text_command = ' '.join([
+        command = ' '.join([
             f'convert',
             f'-debug annotate',
             f'-density {density}' if density else '',
@@ -297,9 +327,10 @@ class ImageMagickInterface:
             *text_command,
             f'null: 2>&1',
         ])
+        command_contains_label = ' label:"' in command
 
         # Execute dimension command, parse output
-        metrics = self.run_get_output(text_command)
+        metrics = self.run_get_output(command)
         widths = list(map(int, findall(r'Metrics:.*width:\s+(\d+)', metrics)))
         heights = list(map(int, findall(r'Metrics:.*height:\s+(\d+)', metrics)))
         ascents = list(map(int, findall(r'Metrics:.*ascent:\s+(\d+)', metrics)))
@@ -308,17 +339,43 @@ class ImageMagickInterface:
         try:
             # Label text produces duplicate Metrics
             def sum_(dims: Iterable[float]) -> int:
-                return sum(dims) / (2 if ' label:"' in text_command else 1)
+                return sum(dims) / (2 if command_contains_label else 1)
 
             # Process according to given methods
             height_adjustment = interline_spacing * (line_count - 1)
-            return Dimensions(
+            dimensions = Dimensions(
                 sum_(widths)  if width  == 'sum' else max(widths),
                 (sum_(ascents) + sum_(descents)) + height_adjustment,
             )
+            self.__append_text_log(
+                '\n'.join([
+                    '---',
+                    f'COMMAND: {command}',
+                    f'DENSITY: {density or "default"}',
+                    f'WIDTH_MODE: {width}',
+                    f'HEIGHT_MODE: {height}',
+                    f'INTERLINE_SPACING: {interline_spacing}',
+                    f'LINE_COUNT: {line_count}',
+                    f'WIDTHS: {widths}',
+                    f'ASCENTS: {ascents}',
+                    f'DESCENTS: {descents}',
+                    f'RESULT: {dimensions}',
+                ])
+            )
+            return dimensions
         except ValueError as e:
             log.debug(f'Cannot identify text dimensions - {e}')
             log.trace(f'{widths=} {heights=}')
+            self.__append_text_log(
+                '\n'.join([
+                    '---',
+                    f'COMMAND: {command}',
+                    'ERROR: Cannot identify text dimensions',
+                    f'EXCEPTION: {e}',
+                    f'WIDTHS: {widths}',
+                    f'HEIGHTS: {heights}',
+                ])
+            )
             return Dimensions(0, 0)
 
 
