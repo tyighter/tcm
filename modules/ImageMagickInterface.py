@@ -100,14 +100,15 @@ class ImageMagickInterface:
 
     @classmethod
     def __initialize_text_log(cls) -> None:
-        """Ensure the text dimension log exists and is truncated once per container."""
+        """Ensure the text dimension log exists without clearing previous entries."""
 
         if cls.__text_log_initialized:
             return
 
         try:
             cls.TEXT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-            cls.TEXT_LOG_PATH.write_text('')
+            if not cls.TEXT_LOG_PATH.exists():
+                cls.TEXT_LOG_PATH.touch()
         except OSError as error:
             log.debug(f'Unable to initialize text log - {error}')
         else:
