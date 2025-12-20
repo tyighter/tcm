@@ -703,6 +703,17 @@ def generate_preview(
     if not episode.source.exists():
         raise RuntimeError("Episode source image is missing; run sync first")
 
+    extras = {**show.extras, **episode.extra_characteristics}
+    wrapping_extras = {**show.profile.font.attributes, **extras}
+
+    if hasattr(show.card_class, "adjust_title_characteristics"):
+        title_characteristics = show.card_class.adjust_title_characteristics(
+            dict(show.card_class.TITLE_CHARACTERISTICS),
+            wrapping_extras,
+        )
+    else:
+        title_characteristics = show.card_class.TITLE_CHARACTERISTICS
+
     temp_dir = Path(tempfile.mkdtemp(prefix="tcm-preview-"))
     destination = temp_dir / "preview.jpg"
 
@@ -712,9 +723,9 @@ def generate_preview(
     title_card = TitleCard(
         episode,
         show.profile,
-        show.card_class.TITLE_CHARACTERISTICS,
-        **show.extras,
-        **episode.extra_characteristics,
+        title_characteristics,
+        image_magick=show.image_magick,
+        **extras,
     )
 
     title_card.converted_title, valid = show.font.validate_title(
