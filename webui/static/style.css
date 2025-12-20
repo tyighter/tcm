@@ -254,10 +254,10 @@ button:disabled:hover {
   box-shadow: var(--shadow-sm);
   overflow: hidden;
   transition: box-shadow 0.3s ease, border-color 0.3s ease;
-  height: 100%;
   display: flex;
   flex-direction: column;
   position: relative;
+  align-self: start;
 }
 
 .entry:hover {
@@ -719,6 +719,58 @@ button:disabled:hover {
 .field-row .field-controls {
   display: flex;
   gap: 0.75rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.field-collapsible {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  width: 100%;
+  overflow: hidden;
+}
+
+.field-collapsible__summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.65rem 0.9rem;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.field-collapsible__summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+.field-collapsible__summary::-webkit-details-marker {
+  display: none;
+}
+
+.field-collapsible__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.field-collapsible__meta {
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.field-collapsible__content {
+  padding: 0.85rem 0.9rem 1rem;
+  border-top: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .card-type-control {
@@ -1173,40 +1225,27 @@ button:disabled:hover {
 .add-line-controls {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
   flex-wrap: wrap;
 }
 
-.add-line-search {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.6rem;
-  border-radius: 0.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.add-line-search input {
-  border: none;
-  outline: none;
-  background: transparent;
-  color: inherit;
-  min-width: 240px;
-}
-
 .add-line-search__button {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, #182233, #111926);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: none;
-  background: transparent;
-  padding: 0.25rem;
-  color: inherit;
+  padding: 0;
+  color: var(--text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--shadow-sm);
 }
 
 .add-line-search__button:hover {
-  color: var(--accent);
+  background: linear-gradient(180deg, #1b2638, #131c2a);
+  border-color: rgba(229, 160, 13, 0.3);
 }
 
 .empty-state {
@@ -1924,6 +1963,19 @@ fieldset legend {
 .table-list-row button {
   padding: 0.4rem 0.65rem;
   border-radius: 8px;
+}
+
+.entry-section--extras .table-list-row {
+  grid-template-columns: minmax(150px, 1.2fr) minmax(200px, 1.8fr) auto;
+  align-items: center;
+}
+
+.entry-section--extras .table-list-row .inline-actions {
+  align-items: center;
+}
+
+.entry-section--extras .table-list-row .item-remove {
+  margin-left: auto;
 }
 
 .tag {
