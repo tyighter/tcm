@@ -90,7 +90,8 @@ class FormulaOneTitleCard(BaseCardType):
         'episode_text', 'hide_season_text', 'hide_episode_text', 'font_color',
         'font_interline_spacing', 'font_interword_spacing', 'font_file',
         'font_kerning', 'font_size', 'font_vertical_shift', 'country',
-        'episode_text_color', 'episode_text_font_size', 'race', 'year',
+        'episode_text_color', 'episode_text_font_size', 'episode_text_font',
+        'race', 'year',
     )
 
 
@@ -115,6 +116,7 @@ class FormulaOneTitleCard(BaseCardType):
             country: Optional[Country] = None,
             episode_text_color: str = TITLE_COLOR,
             episode_text_font_size: float = 1.0,
+            episode_text_font: Path = EPISODE_TEXT_FONT,
             flag: Optional[Path] = None,
             race: str = 'GRAND PRIX',
             frame_year: int = 2024,
@@ -170,6 +172,7 @@ class FormulaOneTitleCard(BaseCardType):
             )
             self.episode_text_font_size = 1.0
             self.valid = False
+        self.episode_text_font = self._resolve_font_path(episode_text_font)
         self.race = race
         if airdate is not None and airdate.year:
             self.year = airdate.year
@@ -265,7 +268,7 @@ class FormulaOneTitleCard(BaseCardType):
 
         return [
             f'-gravity north',
-            f'-font "{self.EPISODE_TEXT_FONT.resolve()}"',
+            f'-font "{self.episode_text_font}"',
             f'-fill "{self.episode_text_color}"',
             f'-pointsize {170 * self.episode_text_font_size}',
             f'-annotate +0+390',
@@ -283,7 +286,7 @@ class FormulaOneTitleCard(BaseCardType):
 
         return [
             f'-gravity north',
-            f'-font "{self.EPISODE_TEXT_FONT.resolve()}"',
+            f'-font "{self.episode_text_font}"',
             f'-fill "{self.episode_text_color}"',
             f'-pointsize {82 * self.episode_text_font_size}',
             f'-annotate +0+275',
@@ -327,6 +330,8 @@ class FormulaOneTitleCard(BaseCardType):
                 extras['episode_text_color'] = FormulaOneTitleCard.EPISODE_TEXT_COLOR
             if 'episode_text_font_size' in extras:
                 extras['episode_text_font_size'] = 1.0
+            if 'episode_text_font' in extras:
+                extras['episode_text_font'] = FormulaOneTitleCard.EPISODE_TEXT_FONT
 
 
     @staticmethod
@@ -348,6 +353,8 @@ class FormulaOneTitleCard(BaseCardType):
                 and extras['episode_text_color'] != FormulaOneTitleCard.EPISODE_TEXT_COLOR)
             or ('episode_text_font_size' in extras
                 and extras['episode_text_font_size'] != 1.0)
+            or ('episode_text_font' in extras
+                and extras['episode_text_font'] != FormulaOneTitleCard.EPISODE_TEXT_FONT)
         )
 
         return (custom_extras

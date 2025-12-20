@@ -199,7 +199,7 @@ class TintedFrameTitleCard(BaseCardType):
             self.valid = False
 
         try:
-            self.episode_text_font = Path(episode_text_font)
+            self.episode_text_font = Path(self._resolve_font_path(episode_text_font))
         except Exception as exc:
             log.exception(f'Invalid episode text font', exc)
             self.valid = False

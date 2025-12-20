@@ -345,6 +345,7 @@ def build_card_type_extras() -> dict[str, list[str]]:
         "episode_text_stroke_width",
         "episode_title_stroke_color",
         "episode_title_stroke_width",
+        "episode_text_font",
     }
 
     extras: dict[str, list[str]] = {}
