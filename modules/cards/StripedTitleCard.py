@@ -321,7 +321,7 @@ class StripedTitleCard(BaseCardType):
         'episode_text', 'hide_season_text', 'hide_episode_text', 'font_color',
         'font_interline_spacing', 'font_interword_spacing', 'font_file',
         'font_kerning', 'font_size', 'font_vertical_shift', 'angle',
-        'episode_text_color', 'episode_text_font_size', 'inset',
+        'episode_text_color', 'episode_text_font_size', 'episode_text_font', 'inset',
         'inter_shape_spacing', 'overlay_color', 'polygon_distribution',
         'separator', 'text_position',
     )
@@ -347,6 +347,7 @@ class StripedTitleCard(BaseCardType):
             angle: float = DEFAULT_ANGLE,
             episode_text_color: str = EPISODE_TEXT_COLOR,
             episode_text_font_size: float = 1.0,
+            episode_text_font: Path = EPISODE_TEXT_FONT,
             inset: int = DEFAULT_INSET,
             inter_stripe_spacing: int = DEFAULT_INTER_STRIPE_SPACING,
             overlay_color: str = DEFAULT_OVERLAY_COLOR,
@@ -410,6 +411,7 @@ class StripedTitleCard(BaseCardType):
             )
             self.episode_text_font_size = 1.0
             self.valid = False
+        self.episode_text_font = self._resolve_font_path(episode_text_font)
         self.inset = inset
         self.inter_shape_spacing = inter_stripe_spacing
         self.overlay_color = overlay_color
@@ -484,7 +486,7 @@ class StripedTitleCard(BaseCardType):
         x, y = 55, 50 + self.font_interline_spacing + height - 25
 
         return [
-            f'-font "{self.EPISODE_TEXT_FONT}"',
+            f'-font "{self.episode_text_font}"',
             f'-fill "{self.episode_text_color}"',
             f'-pointsize {45 * self.episode_text_font_size}',
             f'-kerning 1.0',
@@ -631,6 +633,8 @@ class StripedTitleCard(BaseCardType):
                 extras['episode_text_color'] = StripedTitleCard.EPISODE_TEXT_COLOR
             if 'episode_text_font_size' in extras:
                 extras['episode_text_font_size'] = 1.0
+            if 'episode_text_font' in extras:
+                extras['episode_text_font'] = StripedTitleCard.EPISODE_TEXT_FONT
 
 
     @staticmethod
@@ -652,6 +656,8 @@ class StripedTitleCard(BaseCardType):
                 and extras['episode_text_color'] != StripedTitleCard.EPISODE_TEXT_COLOR)
             or ('episode_text_font_size' in extras
                 and extras['episode_text_font_size'] != 1.0)
+            or ('episode_text_font' in extras
+                and extras['episode_text_font'] != StripedTitleCard.EPISODE_TEXT_FONT)
         )
 
         return (custom_extras

@@ -54,6 +54,7 @@ class PosterTitleCard(BaseCardType):
         'source_file', 'output_file', 'logo', 'title_text', 'episode_text',
         'font_color', 'font_file', 'font_interline_spacing',
         'font_interword_spacing', 'font_size', 'episode_text_color',
+        'episode_text_font',
     )
 
 
@@ -67,6 +68,7 @@ class PosterTitleCard(BaseCardType):
             font_interline_spacing: int = 0,
             font_interword_spacing: int = 0,
             font_size: float = 1.0,
+            episode_text_font: str | Path = EPISODE_TEXT_FONT,
             blur: bool = False,
             grayscale: bool = False,
             season_number: int = 1,
@@ -121,6 +123,7 @@ class PosterTitleCard(BaseCardType):
         self.font_interline_spacing = font_interline_spacing
         self.font_interword_spacing = font_interword_spacing
         self.font_size = font_size
+        self.episode_text_font = self._resolve_font_path(episode_text_font)
 
         # Extras
         if episode_text_color is None:
@@ -150,6 +153,8 @@ class PosterTitleCard(BaseCardType):
             if 'episode_text_color' in extras:
                 extras['episode_text_color'] =\
                     PosterTitleCard.EPISODE_TEXT_COLOR
+            if 'episode_text_font' in extras:
+                extras['episode_text_font'] = PosterTitleCard.EPISODE_TEXT_FONT
 
 
     @staticmethod
@@ -170,6 +175,8 @@ class PosterTitleCard(BaseCardType):
         custom_extras = (
             ('episode_text_color' in extras
                 and extras['episode_text_color'] != PosterTitleCard.EPISODE_TEXT_COLOR)
+            or ('episode_text_font' in extras
+                and extras['episode_text_font'] != PosterTitleCard.EPISODE_TEXT_FONT)
         )
 
         return (custom_extras
@@ -249,7 +256,7 @@ class PosterTitleCard(BaseCardType):
             *logo_command,
             # Add episode text
             f'-gravity south',
-            f'-font "{self.font_file}"',
+            f'-font "{self.episode_text_font}"',
             f'-pointsize {75 * self.font_size}',
             f'-fill "{self.episode_text_color}"',
             f'-annotate +649+50 "{self.episode_text}"',

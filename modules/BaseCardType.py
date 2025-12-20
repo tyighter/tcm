@@ -398,6 +398,16 @@ class BaseCardType(ImageMaker):
 
 
     @staticmethod
+    def _resolve_font_path(font: Union[str, Path]) -> str:
+        """Convert a font path or name into a usable string."""
+
+        if isinstance(font, Path):
+            return str(font.resolve())
+
+        return str(font)
+
+
+    @staticmethod
     @abstractmethod
     def is_custom_font(font: 'Font', extras: dict) -> bool:
         """

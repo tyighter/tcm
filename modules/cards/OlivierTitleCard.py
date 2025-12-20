@@ -52,7 +52,8 @@ class OlivierTitleCard(BaseCardType):
         'font_interline_spacing', 'font_interword_spacing', 'font_kerning',
         'font_size', 'font_stroke_width', 'font_vertical_shift', 'omit_gradient',
         'stroke_color', 'episode_text_color', 'episode_text_font_size',
-        'episode_text_vertical_shift',
+        'episode_text_vertical_shift', 'episode_text_font',
+        'episode_prefix_font', 'font_replacements', 'text_vertical_shift',
     )
 
     def __init__(self,
@@ -74,8 +75,11 @@ class OlivierTitleCard(BaseCardType):
             episode_text_color: str = EPISODE_TEXT_COLOR,
             episode_text_font_size: float = 1.0,
             episode_text_vertical_shift: int = 0,
+            episode_text_font: str | Path | None = None,
             omit_gradient: bool = True,
             stroke_color: str = STROKE_COLOR,
+            font_replacements: Optional[dict[str, str]] = None,
+            text_vertical_shift: int = 0,
             preferences: Optional['Preferences'] = None, # type: ignore
             **unused,
         ) -> None:
@@ -91,6 +95,10 @@ class OlivierTitleCard(BaseCardType):
         self.output_file = card_file
 
         # Store attributes of the text
+        self.font_replacements = font_replacements or self.FONT_REPLACEMENTS
+
+        for old, new in self.font_replacements.items():
+            title_text = title_text.replace(old, new)
         self.title_text = self.image_magick.escape_chars(title_text)
 
         # Determine episode prefix, modify text to remove prefix
@@ -98,11 +106,17 @@ class OlivierTitleCard(BaseCardType):
         self.hide_episode_text = hide_episode_text or len(episode_text) == 0
         if not self.hide_episode_text and ' ' in episode_text:
             prefix, number = episode_text.split(' ', 1)
-            self.episode_prefix = prefix.upper()
+            replaced_prefix = prefix.upper()
+            for old, new in self.font_replacements.items():
+                replaced_prefix = replaced_prefix.replace(old, new)
+            self.episode_prefix = replaced_prefix
             episode_text = number
         else:
             episode_text = episode_text
-        self.episode_text = self.image_magick.escape_chars(episode_text.upper())
+        episode_text = episode_text.upper()
+        for old, new in self.font_replacements.items():
+            episode_text = episode_text.replace(old, new)
+        self.episode_text = self.image_magick.escape_chars(episode_text)
 
         # Font customizations
         self.font_color = font_color
@@ -113,6 +127,7 @@ class OlivierTitleCard(BaseCardType):
         self.font_size = font_size
         self.font_stroke_width = font_stroke_width
         self.font_vertical_shift = font_vertical_shift
+        self.text_vertical_shift = text_vertical_shift
 
         # Optional extras
         self.omit_gradient = omit_gradient
@@ -128,8 +143,18 @@ class OlivierTitleCard(BaseCardType):
             )
             self.episode_text_font_size = 1.0
             self.valid = False
-        self.episode_text_vertical_shift = episode_text_vertical_shift
         self.stroke_color = stroke_color
+        self.episode_text_vertical_shift = episode_text_vertical_shift
+
+        default_prefix_font = self._resolve_font_path(self.EPISODE_PREFIX_FONT)
+        default_number_font = self._resolve_font_path(self.EPISODE_NUMBER_FONT)
+        if episode_text_font is None:
+            self.episode_prefix_font = default_prefix_font
+            self.episode_text_font = default_number_font
+        else:
+            resolved_font = self._resolve_font_path(episode_text_font)
+            self.episode_prefix_font = resolved_font
+            self.episode_text_font = resolved_font
 
 
     @property
@@ -158,7 +183,7 @@ class OlivierTitleCard(BaseCardType):
         stroke_width = 8.0 * self.font_stroke_width
         kerning = 0.5 * self.font_kerning
         interline_spacing = -20 + self.font_interline_spacing
-        vertical_shift = 785 + self.font_vertical_shift
+        vertical_shift = 785 + self.font_vertical_shift + self.text_vertical_shift
 
         return [
             f'\( -font "{self.font_file}"',
@@ -189,11 +214,11 @@ class OlivierTitleCard(BaseCardType):
         size = 60 * self.episode_text_font_size
         kerning = 19 * self.episode_text_font_size
         stroke_width = 5 * self.episode_text_font_size
-        vertical_shift = -150 + self.episode_text_vertical_shift
+        vertical_shift = -150 + self.episode_text_vertical_shift + self.text_vertical_shift
 
         return [
             f'-gravity west',
-            f'-font "{self.EPISODE_PREFIX_FONT.resolve()}"',
+            f'-font "{self.episode_prefix_font}"',
             f'-pointsize {size}',
             f'-kerning {kerning}',
             f'-fill black',
@@ -233,11 +258,11 @@ class OlivierTitleCard(BaseCardType):
                 * self.episode_text_font_size
 
         horizontal_offset = 325 + float(offset)
-        vertical_shift = -150 + float(self.episode_text_vertical_shift)
+        vertical_shift = -150 + float(self.episode_text_vertical_shift) + self.text_vertical_shift
 
         return [
             f'-gravity west',
-            f'-font "{self.EPISODE_NUMBER_FONT.resolve()}"',
+            f'-font "{self.episode_text_font}"',
             f'-pointsize {size}',
             f'-kerning {kerning}',
             f'-fill black',
@@ -276,6 +301,10 @@ class OlivierTitleCard(BaseCardType):
                 extras['episode_text_font_size'] = 1.0
             if 'episode_text_vertical_shift' in extras:
                 extras['episode_text_vertical_shift'] = 0
+            if 'episode_text_font' in extras:
+                extras['episode_text_font'] = OlivierTitleCard.EPISODE_NUMBER_FONT
+            if 'text_vertical_shift' in extras:
+                extras['text_vertical_shift'] = 0
             if 'stroke_color' in extras:
                 extras['stroke_color'] = 'black'
 
@@ -301,8 +330,16 @@ class OlivierTitleCard(BaseCardType):
                 and extras['episode_text_font_size'] != 1.0)
             or ('episode_text_vertical_shift' in extras
                 and extras['episode_text_vertical_shift'] != 0)
+            or ('episode_text_font' in extras
+                and extras['episode_text_font']
+                != OlivierTitleCard.EPISODE_NUMBER_FONT)
+            or ('text_vertical_shift' in extras
+                and extras['text_vertical_shift'] != 0)
             or ('stroke_color' in extras
                 and extras['stroke_color'] != 'black')
+            or ('font_replacements' in extras
+                and extras['font_replacements']
+                != OlivierTitleCard.FONT_REPLACEMENTS)
         )
 
         return custom_extras or OlivierTitleCard._is_custom_font(font)

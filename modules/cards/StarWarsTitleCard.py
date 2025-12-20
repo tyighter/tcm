@@ -49,6 +49,7 @@ class StarWarsTitleCard(BaseCardType):
         'hide_episode_text', 'font_color', 'font_file',
         'font_interline_spacing', 'font_interword_spacing', 'font_size',
         'font_vertical_shift', 'episode_text_color', 'episode_prefix',
+        'episode_prefix_font', 'episode_number_font',
     )
 
     def __init__(self,
@@ -66,6 +67,7 @@ class StarWarsTitleCard(BaseCardType):
             blur: bool = False,
             grayscale: bool = False,
             episode_text_color: str = EPISODE_TEXT_COLOR,
+            episode_text_font: Path | None = None,
             preferences: Optional['Preferences'] = None,
             **unused,
         ) -> None:
@@ -90,6 +92,15 @@ class StarWarsTitleCard(BaseCardType):
         self.font_interword_spacing = font_interword_spacing
         self.font_size = font_size
         self.font_vertical_shift = font_vertical_shift
+        default_prefix_font = self._resolve_font_path(self.EPISODE_TEXT_FONT)
+        default_number_font = self._resolve_font_path(self.EPISODE_NUMBER_FONT)
+        if episode_text_font is None:
+            self.episode_prefix_font = default_prefix_font
+            self.episode_number_font = default_number_font
+        else:
+            resolved_font = self._resolve_font_path(episode_text_font)
+            self.episode_prefix_font = resolved_font
+            self.episode_number_font = resolved_font
 
         # Attempt to detect prefix text
         self.hide_episode_text = hide_episode_text or len(episode_text) == 0
@@ -149,10 +160,10 @@ class StarWarsTitleCard(BaseCardType):
             f'-fill "{self.episode_text_color}"',
             f'-background transparent',
             # Create prefix text
-            f'\( -font "{self.EPISODE_TEXT_FONT.resolve()}"',
+            f'\( -font "{self.episode_prefix_font}"',
             f'label:"{self.episode_prefix}"',
             # Create actual episode text
-            f'-font "{self.EPISODE_NUMBER_FONT.resolve()}"',
+            f'-font "{self.episode_number_font}"',
             f'label:"{self.episode_text}"',
             # Combine prefix and episode text
             f'+smush 65 \)',
@@ -183,6 +194,8 @@ class StarWarsTitleCard(BaseCardType):
             if 'episode_text_color' in extras:
                 extras['episode_text_color'] =\
                     StarWarsTitleCard.EPISODE_TEXT_COLOR
+            if 'episode_text_font' in extras:
+                extras['episode_text_font'] = None
 
 
     @staticmethod
@@ -202,6 +215,7 @@ class StarWarsTitleCard(BaseCardType):
         custom_extras = (
             ('episode_text_color' in extras
                 and extras['episode_text_color'] != StarWarsTitleCard.EPISODE_TEXT_COLOR)
+            or ('episode_text_font' in extras and extras['episode_text_font'] is not None)
         )
 
         return (custom_extras
