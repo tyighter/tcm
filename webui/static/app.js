@@ -1432,9 +1432,17 @@ async function loadEntryPreview(entry, options = {}) {
   const { preferExisting = true } = options;
   if (
     !entry ||
-    entry.previewLoading ||
-    (entry.previewSrc && !entry.previewStale)
+    entry.previewLoading
   ) {
+    return;
+  }
+
+  if (!entry.previewSrc && preferExisting) {
+    await restoreCachedPreview(entry);
+  }
+
+  if (entry.previewSrc && !entry.previewStale) {
+    updateEntryPreview(entry);
     return;
   }
 
