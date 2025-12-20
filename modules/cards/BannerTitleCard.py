@@ -98,7 +98,7 @@ class BannerTitleCard(BaseCardType):
         self.top_title_text = self.image_magick.escape_chars(top_title)
         self.bottom_title_text = self.image_magick.escape_chars(bottom_title)
         self.season_text = self.image_magick.escape_chars(season_text.upper())
-        self.episode_text = self.image_magick.escape_chars(episode_text.upper())
+        self.episode_text = self.image_magick.escape_chars(episode_text)
         self.hide_season_text = hide_season_text or len(season_text) == 0
         self.hide_episode_text = hide_episode_text or len(episode_text) == 0
 

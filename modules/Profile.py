@@ -33,7 +33,8 @@ class Profile:
 
     __slots__ = (
         '__series_info', 'font', 'hide_season_title', '__episode_map',
-        'episode_text_format', '__use_custom_seasons', '__use_custom_font',
+        'episode_text_case', 'episode_text_format', '__use_custom_seasons',
+        '__use_custom_font', '__episode_case',
     )
 
 
@@ -43,6 +44,7 @@ class Profile:
             hide_seasons: bool,
             episode_map: EpisodeMap,
             episode_text_format: str,
+            episode_text_case: str,
         ) -> None:
         """
         Construct a new instance of a Profile. All given arguments will
@@ -63,6 +65,10 @@ class Profile:
         self.hide_season_title = hide_seasons
         self.__episode_map = episode_map
         self.episode_text_format = episode_text_format
+        self.episode_text_case = episode_text_case
+        self.__episode_case = BaseCardType.CASE_FUNCTIONS.get(
+            episode_text_case, BaseCardType.CASE_FUNCTIONS[BaseCardType.DEFAULT_FONT_CASE]
+        )
 
         # These flags are only modified when the profile is converted
         self.__use_custom_seasons = True
@@ -81,7 +87,7 @@ class Profile:
         """Custom hash string for this Profile"""
 
         return (f'{self.hide_season_title}|{self.__use_custom_seasons}|'
-                f'{self.__use_custom_font}')
+                f'{self.__use_custom_font}|{self.episode_text_case}')
 
 
     def get_valid_profiles(self,
@@ -252,25 +258,27 @@ class Profile:
         # Format MultiEpisode episode text
         if isinstance(episode, MultiEpisode):
             try:
-                return episode.modify_format_string(format_string).format(
+                formatted = episode.modify_format_string(format_string).format(
                     **self.__series_info.characteristics,
                     **episode.characteristics,
                 )
             except Exception as e: # pylint: disable=broad-except
                 log.error(f'Cannot format episode text "{format_string}" for '
                           f'{episode} ({e})')
-                return f'EPISODES {episode.episode_range}'
+                formatted = f'EPISODES {episode.episode_range}'
+            return self.__episode_case(formatted)
 
         # Standard Episode object
         try:
-            return format_string.format(
+            formatted = format_string.format(
                 **self.__series_info.characteristics,
                 **episode.characteristics
             )
         except Exception as e: # pylint: disable=broad-except
             log.error(f'Cannot format episode text "{format_string}" for '
                       f'{episode} ({e})')
-            return f'EPISODE {episode.episode_info.episode_number}'
+            formatted = f'EPISODE {episode.episode_info.episode_number}'
+        return self.__episode_case(formatted)
 
 
     def __remove_episode_text_format(self, title_text: str) -> str:
