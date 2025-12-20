@@ -66,6 +66,30 @@ def test_backup_on_save_creates_latest_copy(tmp_path: Path) -> None:
     assert backup_path.read_text() == tv_file.read_text()
 
 
+def test_backup_on_save_recovers_when_copy_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    tv_file = tmp_path / "tv.yml"
+    tv_file.write_text("libraries: {}\nseries: {}\n")
+
+    manager = TvYamlManager(tv_file)
+    backup_dir = Path("/config/backups")
+    if backup_dir.exists():
+        shutil.rmtree(backup_dir)
+    backup_dir.mkdir(parents=True)
+
+    target = backup_dir / "tv-latest.yml"
+    target.write_text("stale backup\n")
+
+    def _fail_copy(src: Path, dst: Path) -> None:  # type: ignore[override]
+        raise ValueError("I/O operation on closed file.")
+
+    monkeypatch.setattr(shutil, "copy2", _fail_copy)
+
+    backup_path = manager.backup_on_save()
+
+    assert backup_path == target
+    assert backup_path.read_text() == tv_file.read_text()
+
+
 def test_restore_from_backup_replaces_tv_file(tmp_path: Path) -> None:
     tv_file = tmp_path / "tv.yml"
     tv_file.write_text("libraries: {}\nseries: {}\n")

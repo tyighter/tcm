@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import shutil
+import tempfile
 from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -180,7 +181,22 @@ class TvYamlManager:
         backup_dir.mkdir(parents=True, exist_ok=True)
 
         target = backup_dir / f"{self.file_path.stem}-latest{self.file_path.suffix}"
-        shutil.copy2(self.file_path, target)
+        try:
+            shutil.copy2(self.file_path, target)
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning("Unable to create backup via copy2: %s; retrying with replace", exc)
+            temp_file: Path | None = None
+            try:
+                with self.file_path.open("rb") as source, tempfile.NamedTemporaryFile(
+                    dir=backup_dir, delete=False
+                ) as destination:
+                    shutil.copyfileobj(source, destination)
+                    temp_file = Path(destination.name)
+                temp_file.replace(target)
+            finally:
+                if temp_file is not None:
+                    temp_file.unlink(missing_ok=True)
+
         return target
 
     def backup_directory(self) -> Path:
