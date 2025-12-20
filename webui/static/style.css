@@ -1170,6 +1170,45 @@ button:disabled:hover {
   margin-top: 0;
 }
 
+.add-line-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.add-line-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.add-line-search input {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  min-width: 240px;
+}
+
+.add-line-search__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  padding: 0.25rem;
+  color: inherit;
+}
+
+.add-line-search__button:hover {
+  color: var(--accent);
+}
+
 .empty-state {
   text-align: center;
   padding: 4rem;

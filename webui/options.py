@@ -31,6 +31,13 @@ SERIES_FIELD_TEMPLATE = [
         "type": "text",
     },
     {
+        "id": "episode_text_case",
+        "label": "Episode text casing",
+        "path": ["episode_text_case"],
+        "type": "font-case",
+        "default": BaseCardType.DEFAULT_FONT_CASE,
+    },
+    {
         "id": "episode_data_source",
         "label": "Episode data source",
         "path": ["episode_data_source"],
@@ -298,7 +305,7 @@ def build_series_fields(libraries: dict[str, Any]) -> list[dict[str, Any]]:
             filled["choices"] = [
                 {"value": value, "label": value} for value in episode_sources
             ]
-        elif field["id"] == "font.case":
+        elif field["id"] == "font.case" or field["id"] == "episode_text_case":
             filled["choices"] = [
                 {"value": value, "label": value} for value in font_cases
             ]

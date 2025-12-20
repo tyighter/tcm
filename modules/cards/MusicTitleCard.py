@@ -193,7 +193,7 @@ class MusicTitleCard(BaseCardType):
         # Ensure characters that need to be escaped are
         self.title_text = self.image_magick.escape_chars(title_text)
         self.season_text = self.image_magick.escape_chars(season_text.upper())
-        self.episode_text = self.image_magick.escape_chars(episode_text.upper())
+        self.episode_text = self.image_magick.escape_chars(episode_text)
         self.hide_season_text = hide_season_text or not season_text
         self.hide_episode_text = hide_episode_text or not episode_text
 

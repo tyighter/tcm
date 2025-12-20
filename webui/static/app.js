@@ -1163,6 +1163,9 @@ function renderEntry(entry) {
     }
   });
 
+  const addLineControls = document.createElement('div');
+  addLineControls.className = 'add-line-controls';
+
   const addLineButton = document.createElement('button');
   addLineButton.className = 'add-line';
   addLineButton.textContent = '+ Add line';
@@ -1171,7 +1174,33 @@ function renderEntry(entry) {
       availableFilter: (field) => field.path?.[0] !== 'font' && field.id !== 'extras',
     })
   );
-  body.appendChild(addLineButton);
+
+  const addLineSearchWrapper = document.createElement('div');
+  addLineSearchWrapper.className = 'add-line-search';
+
+  const addLineSearch = document.createElement('input');
+  addLineSearch.type = 'search';
+  addLineSearch.placeholder = 'Search fields, font options, extras...';
+  addLineSearch.setAttribute('aria-label', 'Search configuration options');
+
+  const addLineSearchButton = document.createElement('button');
+  addLineSearchButton.type = 'button';
+  addLineSearchButton.className = 'icon-button add-line-search__button';
+  addLineSearchButton.setAttribute('aria-label', 'Open option search');
+  addLineSearchButton.innerHTML =
+    '<span class="material-symbols-rounded" aria-hidden="true">search</span>';
+
+  const openSearchModal = () => openOptionSearch(entry, addLineSearch.value);
+  addLineSearchButton.addEventListener('click', openSearchModal);
+  addLineSearch.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      openSearchModal();
+    }
+  });
+
+  addLineSearchWrapper.append(addLineSearch, addLineSearchButton);
+  addLineControls.append(addLineButton, addLineSearchWrapper);
+  body.appendChild(addLineControls);
 
   const extrasSection = document.createElement('section');
   extrasSection.className = 'entry-section entry-section--extras';
@@ -1780,6 +1809,10 @@ function isColorFieldKey(key) {
   return normalised.includes('color') || normalised.includes('colour');
 }
 
+function isEpisodeTextFontKey(key) {
+  return key && key.toString().toLowerCase() === 'episode_text_font';
+}
+
 function colorInput(entry, field, value) {
   const wrapper = document.createElement('div');
   wrapper.className = 'inline-actions color-input';
@@ -2335,7 +2368,8 @@ function translationEditor(entry, field, value) {
   return container;
 }
 
-function fontPicker(entry, field, value) {
+function fontPicker(entry, field, value, options = {}) {
+  const { onChange } = options;
   const wrapper = document.createElement('div');
   wrapper.className = 'inline-actions';
 
@@ -2343,7 +2377,11 @@ function fontPicker(entry, field, value) {
   input.type = 'text';
   input.value = value ?? '';
   input.addEventListener('input', (event) => {
-    updateField(entry, field, event.target.value || undefined);
+    const nextValue = event.target.value || undefined;
+    updateField(entry, field, nextValue);
+    if (onChange) {
+      onChange(nextValue);
+    }
   });
 
   const uploadInput = document.createElement('input');
@@ -2370,6 +2408,9 @@ function fontPicker(entry, field, value) {
       if (path) {
         input.value = path;
         updateField(entry, field, path);
+        if (onChange) {
+          onChange(path);
+        }
         showToast(`Uploaded ${file.name}`, 'success');
       }
     } catch (error) {
@@ -2391,6 +2432,9 @@ function fontPicker(entry, field, value) {
       onSelect: (path) => {
         input.value = path;
         updateField(entry, field, path);
+        if (onChange) {
+          onChange(path);
+        }
       },
     });
   });
@@ -2535,9 +2579,23 @@ function mapEditor(entry, field, value, keyLabel, valueLabel, onUpdate, options 
         }
       });
 
+      const renderFontValue = isEpisodeTextFontKey(row.key);
       const renderColorValue = isColorFieldKey(row.key);
       let valueInput;
-      if (renderColorValue) {
+      if (renderFontValue) {
+        const fieldForFont = {
+          id: `extras.${row.key}`,
+          label: options.formatKeyLabel ? options.formatKeyLabel(row.key) : row.key,
+          path: ['extras', row.key],
+          type: 'font',
+        };
+        valueInput = fontPicker(entry, fieldForFont, row.value, {
+          onChange: (nextValue) => {
+            row.value = nextValue;
+            update();
+          },
+        });
+      } else if (renderColorValue) {
         const wrapper = document.createElement('div');
         wrapper.className = 'inline-actions color-input';
 
@@ -2849,6 +2907,7 @@ const BASICS_FIELDS = new Set([
   'library',
   'card_type',
   'episode_text_format',
+  'episode_text_case',
   'episode_data_source',
   'watched_style',
   'unwatched_style',
@@ -2899,6 +2958,7 @@ const FIELD_DISPLAY_ORDER = [
   'library',
   'card_type',
   'episode_text_format',
+  'episode_text_case',
   'episode_data_source',
   'watched_style',
   'unwatched_style',
@@ -3115,6 +3175,158 @@ function openFieldSelector(
   }
 
   modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
+}
+
+function openOptionSearch(entry, initialTerm = '') {
+  const modal = buildModal('Search options');
+  addFloatingCloseButton(modal, 'Close option search dialog');
+
+  const extrasField = state.fields.find((field) => field.id === 'extras');
+
+  const buildOptions = () => {
+    const availableFields = state.fields.filter(
+      (field) => getValue(entry.config, field.path) === undefined
+    );
+
+    const cardType = getValue(entry.config, ['card_type']) || getDefaultCardType();
+    const existingExtras = getValue(entry.config, ['extras']) || {};
+    const availableExtras = extrasForCardType(cardType).filter(
+      (key) => existingExtras[key] === undefined
+    );
+
+    const options = [];
+
+    availableFields.forEach((field) => {
+      const category = field.path?.[0] === 'font' ? 'Font option' : 'Field';
+      const metaParts = [field.type, field.path?.join(' › ')].filter(Boolean);
+      options.push({
+        id: field.id,
+        label: field.label || field.id,
+        category,
+        meta: metaParts.join(' • '),
+        keywords: [field.label, field.type, field.path?.join(' '), field.id]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase(),
+        onSelect: () => {
+          const defaultValue = defaultValueForField(field);
+          updateField(entry, field, defaultValue);
+          closeModal(modal.element);
+          renderEntries();
+        },
+      });
+    });
+
+    availableExtras.forEach((key) => {
+      const label = formatExtraLabel(key);
+      options.push({
+        id: `extra:${key}`,
+        label,
+        category: 'Extra option',
+        meta: 'extras',
+        keywords: `${key} ${label} extras extra option`.toLowerCase(),
+        onSelect: () => {
+          const extrasValue = getValue(entry.config, ['extras']) || {};
+          const updated = { ...extrasValue, [key]: extrasValue[key] ?? '' };
+          if (extrasField) {
+            updateField(entry, extrasField, updated);
+          } else {
+            setValue(entry.config, ['extras'], updated);
+          }
+          closeModal(modal.element);
+          renderEntries();
+        },
+      });
+    });
+
+    return options;
+  };
+
+  const options = buildOptions();
+
+  if (options.length === 0) {
+    const message = document.createElement('p');
+    message.className = 'helper-text';
+    message.textContent = 'All available options are already configured.';
+    modal.content.appendChild(message);
+    modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
+    return;
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'field-selector';
+
+  const search = document.createElement('input');
+  search.type = 'search';
+  search.placeholder = 'Search fields, font options, and extras...';
+  search.className = 'modal-search';
+  search.value = initialTerm;
+
+  const status = document.createElement('p');
+  status.className = 'helper-text field-selector__status';
+
+  const controls = document.createElement('div');
+  controls.className = 'field-selector__controls';
+  controls.append(search, status);
+
+  const list = document.createElement('div');
+  list.className = 'field-groups';
+
+  const emptyState = document.createElement('div');
+  emptyState.className = 'empty-state field-selector__empty';
+  emptyState.textContent = 'No options match your search. Try a different term.';
+  emptyState.hidden = true;
+
+  const render = () => {
+    const term = search.value.trim().toLowerCase();
+    const terms = term.split(/\s+/).filter(Boolean);
+    const filtered = options.filter((option) => {
+      if (terms.length === 0) {
+        return true;
+      }
+      return terms.every((part) => option.keywords.includes(part));
+    });
+
+    status.textContent = `${filtered.length} of ${options.length} options shown`;
+    list.innerHTML = '';
+    emptyState.hidden = filtered.length > 0;
+    if (filtered.length === 0) {
+      return;
+    }
+
+    filtered
+      .sort((a, b) => (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' }))
+      .forEach((option) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'field-option';
+
+        const title = document.createElement('span');
+        title.className = 'field-option__title';
+        title.textContent = option.label;
+
+        const meta = document.createElement('span');
+        meta.className = 'field-option__meta';
+        const parts = [option.category, option.meta].filter(Boolean);
+        meta.textContent = parts.join(' • ');
+
+        button.append(title, meta);
+        button.addEventListener('click', option.onSelect);
+        list.appendChild(button);
+      });
+  };
+
+  search.addEventListener('input', render);
+  render();
+
+  wrapper.append(controls, list, emptyState);
+  modal.content.appendChild(wrapper);
+  modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
+
+  requestAnimationFrame(() => {
+    search.focus();
+    search.select();
+  });
 }
 
 const fontPreviewCache = new Map();
@@ -5290,4 +5502,3 @@ async function triggerServerAction(
     button.textContent = originalText;
   }
 }
-

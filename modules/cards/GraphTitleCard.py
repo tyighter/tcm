@@ -192,12 +192,12 @@ class GraphTitleCard(BaseCardType):
         self.title_text = self.image_magick.escape_chars(title_text)
         if '/' in episode_text:
             numerator, denominator = map(
-                str.strip, episode_text.upper().split('/', maxsplit=1)
+                str.strip, episode_text.split('/', maxsplit=1)
             )
             if percentage is None:
                 percentage = float(numerator) / float(denominator)
         else:
-            numerator, denominator = '-', episode_text.upper()
+            numerator, denominator = '-', episode_text
         self.numerator = self.image_magick.escape_chars(numerator)
         self.denominator = self.image_magick.escape_chars(denominator)
         self.hide_episode_text = hide_episode_text or not episode_text

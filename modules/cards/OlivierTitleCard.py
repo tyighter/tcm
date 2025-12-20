@@ -106,14 +106,14 @@ class OlivierTitleCard(BaseCardType):
         self.hide_episode_text = hide_episode_text or len(episode_text) == 0
         if not self.hide_episode_text and ' ' in episode_text:
             prefix, number = episode_text.split(' ', 1)
-            replaced_prefix = prefix.upper()
+            replaced_prefix = prefix
             for old, new in self.font_replacements.items():
                 replaced_prefix = replaced_prefix.replace(old, new)
             self.episode_prefix = replaced_prefix
             episode_text = number
         else:
             episode_text = episode_text
-        episode_text = episode_text.upper()
+        episode_text = episode_text
         for old, new in self.font_replacements.items():
             episode_text = episode_text.replace(old, new)
         self.episode_text = self.image_magick.escape_chars(episode_text)

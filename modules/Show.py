@@ -52,7 +52,7 @@ class Show(YamlReader):
 
     __slots__ = (
         'preferences', 'info_set', 'series_info', 'card_filename_format',
-        'episode_text_format', 'library_name', 'library', 'media_directory',
+        'episode_text_case', 'episode_text_format', 'library_name', 'library', 'media_directory',
         'archive', 'archive_name', 'archive_all_variations',
         'episode_data_source', 'refresh_titles', 'sonarr_sync', 'sync_specials',
         'tmdb_sync', 'tmdb_skip_localized_images', 'style_set', 'hide_seasons',
@@ -173,6 +173,7 @@ class Show(YamlReader):
         # Setup default values that may be overwritten by YAML
         self.card_filename_format = preferences.card_filename_format
         self.card_class = preferences.card_class
+        self.episode_text_case = self.card_class.DEFAULT_FONT_CASE
         self.episode_text_format = self.card_class.EPISODE_TEXT_FORMAT
         self.library_name: Optional[str] = None
         self.library: Optional[str] = None
@@ -256,6 +257,7 @@ class Show(YamlReader):
             self.hide_seasons,
             self.__episode_map,
             self.episode_text_format,
+            self.episode_text_case,
         )
 
         # Create the SeasonPosterSet
@@ -371,9 +373,19 @@ class Show(YamlReader):
             self.card_class = self._parse_card_type(value) \
                 or self._parse_card_type('standard')
             self.episode_text_format = self.card_class.EPISODE_TEXT_FORMAT
+            self.episode_text_case = self.card_class.DEFAULT_FONT_CASE
 
         if (value := self.get('episode_text_format', type_=str)) is not None:
             self.episode_text_format = value
+
+        if (value := self.get('episode_text_case', type_=self.TYPE_LOWER_STR)) is not None:
+            if value in self.card_class.CASE_FUNCTIONS:
+                self.episode_text_case = value
+            else:
+                log.error(
+                    f'Invalid episode text case "{value}" in series {self.series_info}'
+                )
+                self.valid = False
 
         if (value := self.get('archive', type_=bool)) is not None:
             self.archive = value
