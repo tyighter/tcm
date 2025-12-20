@@ -1106,8 +1106,9 @@ function renderEntry(entry) {
 
   previewEpisodeSelect.addEventListener('change', async () => {
     entry.previewEpisode = previewEpisodeSelect.value || 'random';
+    const preferCachedPreview = entry.previewEpisode === 'random';
     await invalidateEntryPreview(entry);
-    loadEntryPreview(entry);
+    loadEntryPreview(entry, { preferExisting: preferCachedPreview });
   });
 
   previewEpisodeControl.append(
@@ -1175,31 +1176,16 @@ function renderEntry(entry) {
     })
   );
 
-  const addLineSearchWrapper = document.createElement('div');
-  addLineSearchWrapper.className = 'add-line-search';
-
-  const addLineSearch = document.createElement('input');
-  addLineSearch.type = 'search';
-  addLineSearch.placeholder = 'Search fields, font options, extras...';
-  addLineSearch.setAttribute('aria-label', 'Search configuration options');
-
   const addLineSearchButton = document.createElement('button');
   addLineSearchButton.type = 'button';
   addLineSearchButton.className = 'icon-button add-line-search__button';
-  addLineSearchButton.setAttribute('aria-label', 'Open option search');
+  addLineSearchButton.setAttribute('aria-label', 'Search configuration options');
   addLineSearchButton.innerHTML =
     '<span class="material-symbols-rounded" aria-hidden="true">search</span>';
 
-  const openSearchModal = () => openOptionSearch(entry, addLineSearch.value);
-  addLineSearchButton.addEventListener('click', openSearchModal);
-  addLineSearch.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      openSearchModal();
-    }
-  });
+  addLineSearchButton.addEventListener('click', () => openOptionSearch(entry));
 
-  addLineSearchWrapper.append(addLineSearch, addLineSearchButton);
-  addLineControls.append(addLineButton, addLineSearchWrapper);
+  addLineControls.append(addLineButton, addLineSearchButton);
   body.appendChild(addLineControls);
 
   const extrasSection = document.createElement('section');
@@ -1288,6 +1274,33 @@ function renderEntry(entry) {
 
 let previewObserver = null;
 const previewLoadOptions = new WeakMap();
+const previewRefreshTimers = new Map();
+
+function cancelScheduledPreviewRefresh(entry) {
+  if (!entry?.id) {
+    return;
+  }
+  const pending = previewRefreshTimers.get(entry.id);
+  if (pending) {
+    clearTimeout(pending);
+    previewRefreshTimers.delete(entry.id);
+  }
+}
+
+function schedulePreviewRefresh(entry, { preferExisting = true, delay = 650 } = {}) {
+  if (!entry?.id) {
+    return;
+  }
+  cancelScheduledPreviewRefresh(entry);
+  const timer = setTimeout(async () => {
+    previewRefreshTimers.delete(entry.id);
+    await invalidateEntryPreview(entry);
+    entry.previewLoadingStrategy = preferExisting ? 'load' : 'generate';
+    updateEntryPreview(entry);
+    requestEntryPreviews([entry], { preferExisting });
+  }, Math.max(0, delay));
+  previewRefreshTimers.set(entry.id, timer);
+}
 
 function updateEntryPreview(entry) {
   const wrapper = dom.entries.querySelector(
@@ -1447,6 +1460,7 @@ async function fetchStaticPreview(entry, options = {}) {
 }
 
 async function invalidateEntryPreview(entry) {
+  cancelScheduledPreviewRefresh(entry);
   entry.previewSrc = null;
   entry.previewError = null;
   entry.previewLoading = false;
@@ -1466,38 +1480,41 @@ async function loadEntryPreview(entry, options = {}) {
     return;
   }
 
-  if (!entry.previewSrc && preferExisting) {
+  const previewEpisode =
+    entry.previewEpisode && entry.previewEpisode !== 'random'
+      ? entry.previewEpisode
+      : null;
+  const previewSeason = previewSeasonForEntry(entry, previewEpisode);
+  const allowCachedPreview = preferExisting && !previewEpisode;
+
+  if (!entry.previewSrc && allowCachedPreview) {
     await restoreCachedPreview(entry);
   }
 
-  if (entry.previewSrc && !entry.previewStale) {
+  if (entry.previewSrc && !entry.previewStale && allowCachedPreview) {
     updateEntryPreview(entry);
     return;
   }
 
   entry.previewLoading = true;
-  entry.previewLoadingStrategy = preferExisting ? 'load' : 'generate';
+  entry.previewLoadingStrategy = allowCachedPreview ? 'load' : 'generate';
   const requestId = (entry.previewRequestId || 0) + 1;
   entry.previewRequestId = requestId;
   entry.previewError = null;
   updateEntryPreview(entry);
-  const previewEpisode =
-    entry.previewEpisode && entry.previewEpisode !== 'random'
-      ? entry.previewEpisode
-      : null;
-
-  const previewSeason = previewSeasonForEntry(entry, previewEpisode);
 
   try {
-    const staticPreview = await fetchStaticPreview(entry, { season: previewSeason });
-    if (entry.previewRequestId === requestId && staticPreview) {
-      entry.previewSrc = staticPreview;
-      entry.previewError = null;
-      entry.previewLoading = false;
-      entry.previewLoadingStrategy = undefined;
-      await updatePreviewCache(entry);
-      updateEntryPreview(entry);
-      return;
+    if (allowCachedPreview) {
+      const staticPreview = await fetchStaticPreview(entry, { season: previewSeason });
+      if (entry.previewRequestId === requestId && staticPreview) {
+        entry.previewSrc = staticPreview;
+        entry.previewError = null;
+        entry.previewLoading = false;
+        entry.previewLoadingStrategy = undefined;
+        await updatePreviewCache(entry);
+        updateEntryPreview(entry);
+        return;
+      }
     }
   } catch (error) {
     console.warn('Static preview unavailable', error);
@@ -1512,7 +1529,7 @@ async function loadEntryPreview(entry, options = {}) {
         slug: resolveEntrySlug(entry),
         season: previewSeason,
         config: entry.config,
-        preferExisting,
+        preferExisting: allowCachedPreview,
         previewEpisode,
       }),
     });
@@ -1730,7 +1747,9 @@ function renderFieldRow(entry, field, value) {
       controls.appendChild(extrasEditor(entry, field, value));
       break;
     case 'season-map':
-      controls.appendChild(seasonEditor(entry, field, value));
+      controls.appendChild(
+        wrapSeasonTitlesControl(entry, field, value, seasonEditor(entry, field, value))
+      );
       break;
     case 'range-map':
       controls.appendChild(mapEditor(entry, field, value, 'Name', 'Range'));
@@ -2846,19 +2865,85 @@ function seasonEditor(entry, field, value) {
   return editor;
 }
 
+function wrapSeasonTitlesControl(entry, field, value, content) {
+  const container = document.createElement('details');
+  container.className = 'field-collapsible';
+
+  const totalSeasons = Object.keys(value || {})
+    .filter((key) => key !== 'hide')
+    .length;
+  if (entry.seasonTitlesCollapsed === undefined) {
+    entry.seasonTitlesCollapsed = totalSeasons >= 6;
+  }
+  container.open = !entry.seasonTitlesCollapsed;
+
+  const summary = document.createElement('summary');
+  summary.className = 'field-collapsible__summary';
+
+  const summaryLabel = document.createElement('span');
+  summaryLabel.className = 'field-collapsible__label';
+  summaryLabel.textContent = entry.seasonTitlesCollapsed
+    ? 'Show season titles'
+    : 'Hide season titles';
+
+  const summaryMeta = document.createElement('span');
+  summaryMeta.className = 'field-collapsible__meta';
+  summaryMeta.textContent = `${totalSeasons || 0} title${totalSeasons === 1 ? '' : 's'}`;
+
+  summary.append(summaryLabel, summaryMeta);
+
+  const contentWrapper = document.createElement('div');
+  contentWrapper.className = 'field-collapsible__content';
+  contentWrapper.appendChild(content);
+
+  container.append(summary, contentWrapper);
+
+  container.addEventListener('toggle', () => {
+    entry.seasonTitlesCollapsed = !container.open;
+    summaryLabel.textContent = entry.seasonTitlesCollapsed
+      ? 'Show season titles'
+      : 'Hide season titles';
+  });
+
+  return container;
+}
+
 // -----------------------------------------------------------------------------
 // Field manipulation helpers
 // -----------------------------------------------------------------------------
+function shouldForcePreviewRefresh(field) {
+  if (!field) {
+    return false;
+  }
+  if (PREVIEW_FORCE_FIELDS.has(field.id)) {
+    return true;
+  }
+  return field.path?.[0] === 'font';
+}
+
+function handleEntryConfigChange(entry, field) {
+  if (!entry || !field || PREVIEW_NEUTRAL_FIELDS.has(field.id)) {
+    return;
+  }
+  const forceRefresh = shouldForcePreviewRefresh(field);
+  schedulePreviewRefresh(entry, {
+    preferExisting: !forceRefresh,
+    delay: forceRefresh ? 300 : 700,
+  });
+}
+
 function updateField(entry, field, value) {
   if (value === undefined) {
     removeField(entry, field);
     return;
   }
   setValue(entry.config, field.path, value);
+  handleEntryConfigChange(entry, field);
 }
 
 function removeField(entry, field) {
   deleteValue(entry.config, field.path);
+  handleEntryConfigChange(entry, field);
   renderEntries();
 }
 
@@ -2922,6 +3007,14 @@ const ID_FIELDS = new Set([
   'emby_id',
   'jellyfin_id',
   'sonarr_id',
+]);
+
+const PREVIEW_NEUTRAL_FIELDS = new Set(['library', ...ID_FIELDS]);
+const PREVIEW_FORCE_FIELDS = new Set([
+  'card_type',
+  'episode_text_case',
+  'episode_text_format',
+  'extras',
 ]);
 
 const TEXT_FIELDS = new Set(['translation']);
