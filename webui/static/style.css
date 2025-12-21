@@ -1039,9 +1039,7 @@ button:disabled:hover {
 }
 
 .item-card {
-  position: relative;
   padding: 1rem 1rem 0.85rem;
-  padding-right: 3rem;
   min-width: 0;
   border-radius: 12px;
   border: 1px solid var(--border);
@@ -1051,25 +1049,21 @@ button:disabled:hover {
 }
 
 .item-remove {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: 999px;
+  width: auto;
+  height: auto;
+  padding: 0.45rem 0.75rem;
+  border-radius: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
   box-shadow: none;
+  margin-left: auto;
 }
 
 .sub-card-list .item-remove {
-  width: 36px;
-  height: 36px;
-  top: 0.6rem;
-  right: 0.6rem;
+  width: auto;
+  height: auto;
 }
 
 .item-remove:hover {
@@ -1976,6 +1970,51 @@ fieldset legend {
 
 .entry-section--extras .table-list-row .item-remove {
   margin-left: auto;
+}
+
+.extras-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.extra-card__header {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.extra-card__title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.extra-card__hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.extra-card__key-group {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.extra-card__controls {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.extra-card__value {
+  flex: 1;
+}
+
+.extra-card__controls input,
+.extra-card__controls select {
+  width: 100%;
+}
+
+.item-remove--inline {
+  align-self: center;
 }
 
 .tag {

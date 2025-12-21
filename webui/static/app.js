@@ -2735,18 +2735,46 @@ function formatExtraLabel(key) {
   return parts.join(' ');
 }
 
+function normalizeExtraDefinition(definition) {
+  if (!definition) {
+    return null;
+  }
+  if (typeof definition === 'string') {
+    return {
+      key: definition,
+      label: formatExtraLabel(definition),
+    };
+  }
+  return {
+    ...definition,
+    key: definition.key,
+    label: definition.label || formatExtraLabel(definition.key),
+    choices: Array.isArray(definition.choices) ? definition.choices : undefined,
+  };
+}
+
+function normalizeExtraKey(key) {
+  return (key || '').toString().trim().toLowerCase();
+}
+
 function extrasForCardType(cardType) {
   const normalized = normalizeCardType(cardType);
   const availableExtras = state.cardTypeExtras || {};
-  if (availableExtras[normalized]) {
-    return availableExtras[normalized];
+  const extras =
+    availableExtras[normalized] ||
+    availableExtras[Object.keys(availableExtras).find((key) => normalizeCardType(key) === normalized)];
+  if (!extras) {
+    return [];
   }
+  return extras
+    .map((item) => normalizeExtraDefinition(item))
+    .filter(Boolean);
+}
 
-  const match = Object.keys(availableExtras).find(
-    (key) => normalizeCardType(key) === normalized
-  );
-
-  return match ? availableExtras[match] : [];
+function findExtraDefinition(cardType, key) {
+  const extras = extrasForCardType(cardType);
+  const normalizedKey = normalizeExtraKey(key);
+  return extras.find((item) => normalizeExtraKey(item.key) === normalizedKey) || null;
 }
 
 function openExtrasPicker(cardType, rows, renderRows, updateRows) {
@@ -2760,8 +2788,8 @@ function openExtrasPicker(cardType, rows, renderRows, updateRows) {
   optionsWrapper.className = 'search-results card-type-results';
 
   const available = extrasForCardType(cardType);
-  const existingKeys = rows.map((row) => normalizeCardType(row.key)).filter(Boolean);
-  const remaining = available.filter((key) => !existingKeys.includes(normalizeCardType(key)));
+  const existingKeys = rows.map((row) => normalizeExtraKey(row.key)).filter(Boolean);
+  const remaining = available.filter((item) => !existingKeys.includes(normalizeExtraKey(item.key)));
 
   if (remaining.length === 0) {
     const empty = document.createElement('p');
@@ -2773,13 +2801,13 @@ function openExtrasPicker(cardType, rows, renderRows, updateRows) {
     optionsWrapper.appendChild(empty);
   }
 
-  remaining.forEach((key) => {
+  remaining.forEach((definition) => {
     const option = document.createElement('button');
     option.type = 'button';
     option.className = 'card-type-option';
-    option.textContent = formatExtraLabel(key);
+    option.textContent = formatExtraLabel(definition.label || definition.key);
     option.addEventListener('click', () => {
-      rows.push({ key, value: '' });
+      rows.push({ key: definition.key, value: '' });
       updateRows();
       renderRows();
       closeModal(modal.element);
@@ -2837,13 +2865,230 @@ function openExtrasPicker(cardType, rows, renderRows, updateRows) {
 
 function extrasEditor(entry, field, value) {
   const cardType = getValue(entry.config, ['card_type']) || getDefaultCardType();
-  return mapEditor(entry, field, value, 'Key', 'Value', undefined, {
-    onAddRow: ({ rows, render, update }) => {
-      openExtrasPicker(cardType, rows, render, update);
-    },
-    formatKeyLabel: formatExtraLabel,
-    showRawKeyHint: true,
-  });
+  const rows = Object.entries(value || {}).map(([key, val]) => ({ key, value: val }));
+
+  const container = document.createElement('div');
+  container.className = 'extras-list';
+
+  const updateExtras = () => {
+    const map = {};
+    rows
+      .filter((row) => row.key.trim() !== '')
+      .forEach((row) => {
+        map[row.key] = row.value ?? '';
+      });
+    updateField(entry, field, map);
+  };
+
+  const renderValueControl = (row) => {
+    const definition = findExtraDefinition(cardType, row.key);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'extra-card__value';
+
+    const apply = (nextValue) => {
+      row.value = nextValue;
+      updateExtras();
+    };
+
+    const choices = definition?.choices;
+    if (choices && choices.length > 0) {
+      const select = document.createElement('select');
+      select.className = 'extras-select';
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Select value';
+      placeholder.disabled = true;
+      placeholder.selected = row.value === undefined || row.value === null || row.value === '';
+      select.appendChild(placeholder);
+      choices.forEach((choice) => {
+        const opt = document.createElement('option');
+        opt.value = choice;
+        opt.textContent = choice;
+        if (String(row.value) === String(choice)) {
+          opt.selected = true;
+          placeholder.selected = false;
+        }
+        select.appendChild(opt);
+      });
+      select.addEventListener('change', (event) => {
+        apply(event.target.value);
+      });
+      wrapper.appendChild(select);
+      return wrapper;
+    }
+
+    if (definition?.expectedType === 'boolean') {
+      const select = document.createElement('select');
+      ['true', 'false'].forEach((option) => {
+        const opt = document.createElement('option');
+        opt.value = option;
+        opt.textContent = option;
+        if (String(row.value) === option) {
+          opt.selected = true;
+        }
+        select.appendChild(opt);
+      });
+      select.addEventListener('change', (event) => {
+        apply(event.target.value === 'true');
+      });
+      wrapper.appendChild(select);
+      return wrapper;
+    }
+
+    if (isEpisodeTextFontKey(row.key)) {
+      const fieldForFont = {
+        id: `extras.${row.key}`,
+        label: definition?.label || row.key,
+        path: ['extras', row.key],
+        type: 'font',
+      };
+      wrapper.appendChild(
+        fontPicker(entry, fieldForFont, row.value, {
+          onChange: (nextValue) => {
+            apply(nextValue);
+          },
+        })
+      );
+      return wrapper;
+    }
+
+    if (isColorFieldKey(row.key)) {
+      const colorWrapper = document.createElement('div');
+      colorWrapper.className = 'inline-actions color-input';
+
+      const color = document.createElement('input');
+      color.type = 'color';
+      color.value = isValidHexColor(row.value) ? row.value : '#ffffff';
+
+      const text = document.createElement('input');
+      text.type = 'text';
+      text.placeholder = '#RRGGBB';
+      text.value = row.value ?? '';
+
+      const setValue = (newValue) => {
+        apply(newValue);
+      };
+
+      color.addEventListener('input', (event) => {
+        const selected = event.target.value;
+        text.value = selected;
+        setValue(selected);
+      });
+
+      text.addEventListener('input', (event) => {
+        const rawValue = event.target.value.trim();
+        setValue(rawValue);
+        if (isValidHexColor(rawValue)) {
+          color.value = rawValue;
+        }
+      });
+
+      colorWrapper.append(color, text);
+      wrapper.appendChild(colorWrapper);
+      return wrapper;
+    }
+
+    if (definition?.expectedType === 'int' || definition?.expectedType === 'float') {
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.step = definition.expectedType === 'float' ? 'any' : '1';
+      input.value = row.value ?? '';
+      input.addEventListener('input', (event) => {
+        const raw = event.target.value;
+        if (raw === '') {
+          apply('');
+          return;
+        }
+        apply(definition.expectedType === 'int' ? parseInt(raw, 10) : parseFloat(raw));
+      });
+      wrapper.appendChild(input);
+      return wrapper;
+    }
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = row.key || 'Value';
+    input.value = row.value ?? '';
+    input.addEventListener('input', (event) => {
+      apply(event.target.value);
+    });
+    wrapper.appendChild(input);
+    return wrapper;
+  };
+
+  const renderRows = () => {
+    container.innerHTML = '';
+    rows.forEach((row, index) => {
+      const definition = findExtraDefinition(cardType, row.key);
+      const card = document.createElement('div');
+      card.className = 'item-card extra-card';
+
+      const header = document.createElement('div');
+      header.className = 'extra-card__header';
+
+      const title = document.createElement('div');
+      title.className = 'extra-card__title';
+      title.textContent = definition?.label || formatExtraLabel(row.key);
+      header.appendChild(title);
+
+      if (definition) {
+        const hint = document.createElement('div');
+        hint.className = 'extra-card__hint';
+        hint.textContent = row.key;
+        header.appendChild(hint);
+      } else {
+        const keyGroup = document.createElement('div');
+        keyGroup.className = 'extra-card__key-group';
+        const keyLabel = document.createElement('div');
+        keyLabel.className = 'extra-card__hint';
+        keyLabel.textContent = 'Key';
+
+        const keyInput = document.createElement('input');
+        keyInput.type = 'text';
+        keyInput.placeholder = 'Custom extra key';
+        keyInput.value = row.key;
+        keyInput.addEventListener('input', (event) => {
+          row.key = event.target.value;
+          updateExtras();
+          renderRows();
+        });
+
+        keyGroup.append(keyLabel, keyInput);
+        header.appendChild(keyGroup);
+      }
+
+      const controls = document.createElement('div');
+      controls.className = 'extra-card__controls';
+
+      controls.appendChild(renderValueControl(row));
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'item-remove item-remove--inline';
+      remove.textContent = 'Remove';
+      remove.setAttribute('aria-label', `Remove ${row.key || 'extra option'}`);
+      remove.addEventListener('click', () => {
+        rows.splice(index, 1);
+        updateExtras();
+        renderRows();
+      });
+
+      controls.appendChild(remove);
+      card.append(header, controls);
+      container.appendChild(card);
+    });
+
+    const add = document.createElement('button');
+    add.textContent = '+ Add extra option';
+    add.className = 'add-line add-line--inline';
+    add.addEventListener('click', () => {
+      openExtrasPicker(cardType, rows, renderRows, updateExtras);
+    });
+    container.appendChild(add);
+  };
+
+  renderRows();
+  return container;
 }
 
 function seasonEditor(entry, field, value) {
@@ -3284,7 +3529,7 @@ function openOptionSearch(entry, initialTerm = '') {
     const cardType = getValue(entry.config, ['card_type']) || getDefaultCardType();
     const existingExtras = getValue(entry.config, ['extras']) || {};
     const availableExtras = extrasForCardType(cardType).filter(
-      (key) => existingExtras[key] === undefined
+      (extra) => existingExtras[extra.key] === undefined
     );
 
     const options = [];
@@ -3310,17 +3555,17 @@ function openOptionSearch(entry, initialTerm = '') {
       });
     });
 
-    availableExtras.forEach((key) => {
-      const label = formatExtraLabel(key);
+    availableExtras.forEach((extra) => {
+      const label = extra.label || formatExtraLabel(extra.key);
       options.push({
-        id: `extra:${key}`,
+        id: `extra:${extra.key}`,
         label,
         category: 'Extra option',
         meta: 'extras',
-        keywords: `${key} ${label} extras extra option`.toLowerCase(),
+        keywords: `${extra.key} ${label} extras extra option`.toLowerCase(),
         onSelect: () => {
           const extrasValue = getValue(entry.config, ['extras']) || {};
-          const updated = { ...extrasValue, [key]: extrasValue[key] ?? '' };
+          const updated = { ...extrasValue, [extra.key]: extrasValue[extra.key] ?? '' };
           if (extrasField) {
             updateField(entry, extrasField, updated);
           } else {
