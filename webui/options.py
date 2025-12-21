@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any
+from typing import Any, Literal, get_args, get_origin
 
 from modules.BaseCardType import BaseCardType
 from modules.PreferenceParser import PreferenceParser
@@ -314,8 +314,73 @@ def build_series_fields(libraries: dict[str, Any]) -> list[dict[str, Any]]:
     return fields
 
 
-def build_card_type_extras() -> dict[str, list[str]]:
-    """Return a mapping of card types to supported extra options."""
+def _format_extra_label(key: str) -> str:
+    parts = [part.capitalize() for part in key.split('_') if part]
+    return ' '.join(parts) or 'Custom extra'
+
+
+def _literal_choices(annotation: Any) -> list[str]:
+    origin = get_origin(annotation)
+    if origin is Literal:
+        return [str(value) for value in get_args(annotation)]
+
+    if origin in (tuple, list, set):
+        # Handle nested Literal definitions like tuple[Literal['foo', 'bar'], int]
+        choices: list[str] = []
+        for arg in get_args(annotation):
+            choices.extend(_literal_choices(arg))
+        return choices
+
+    if origin is None:
+        return []
+
+    choices: list[str] = []
+    for arg in get_args(annotation):
+        choices.extend(_literal_choices(arg))
+    return choices
+
+
+def _expected_type_label(param: inspect.Parameter | None) -> str | None:
+    if param is None:
+        return None
+
+    expected = TitleCard._expected_type(param)
+    if expected is bool:
+        return 'boolean'
+    if expected is float:
+        return 'float'
+    if expected is int:
+        return 'int'
+    return None
+
+
+def _build_extra_definition(name: str, param: inspect.Parameter | None = None) -> dict[str, Any]:
+    definition: dict[str, Any] = {
+        "key": name,
+        "label": _format_extra_label(name),
+    }
+
+    expected_type = _expected_type_label(param)
+    if expected_type:
+        definition["expectedType"] = expected_type
+
+    choices = _literal_choices(param.annotation) if param else []
+    if expected_type == 'boolean':
+        choices = choices or ['true', 'false']
+
+    unique_choices: list[str] = []
+    for choice in choices:
+        if choice not in unique_choices:
+            unique_choices.append(choice)
+
+    if unique_choices:
+        definition["choices"] = unique_choices
+
+    return definition
+
+
+def build_card_type_extras() -> dict[str, list[dict[str, Any]]]:
+    """Return a mapping of card types to supported extra option definitions."""
 
     base_parameters = {
         "source_file",
@@ -355,17 +420,19 @@ def build_card_type_extras() -> dict[str, list[str]]:
         "episode_text_font",
     }
 
-    extras: dict[str, list[str]] = {}
+    extras: dict[str, list[dict[str, Any]]] = {}
     for identifier, card_type in TitleCard.BUILTIN_CARD_TYPES.items():
         parameters = list(inspect.signature(card_type.__init__).parameters.values())[1:]
-        supported = sorted(
-            {
-                parameter.name
-                for parameter in parameters
-                if parameter.name not in base_parameters
-            }
-            | universal_extras
-        )
-        extras[identifier] = supported
+        definitions: dict[str, dict[str, Any]] = {}
+
+        for parameter in parameters:
+            if parameter.name in base_parameters:
+                continue
+            definitions[parameter.name] = _build_extra_definition(parameter.name, parameter)
+
+        for key in universal_extras:
+            definitions.setdefault(key, _build_extra_definition(key))
+
+        extras[identifier] = sorted(definitions.values(), key=lambda item: item["label"].casefold())
 
     return extras
