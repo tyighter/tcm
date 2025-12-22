@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import shutil
 import tempfile
@@ -127,7 +128,7 @@ class TvYamlManager:
         rating_lookup = payload.get("rating_tmdb_lookup")
         series_payload = payload.get("series", [])
 
-        current = self.load()
+        current = deepcopy(self.load())
         if libraries is not None:
             current["libraries"] = _to_commented(libraries)
         if rating_lookup is not None:
@@ -149,9 +150,7 @@ class TvYamlManager:
 
         current["series"] = series_map
 
-        with self.file_path.open("w", encoding="utf-8") as handle:
-            self._yaml.dump(current, handle)
-
+        self._atomic_write(current)
         self._data = current
 
     def backup_daily(self, *, now: datetime | None = None, keep: int = 7) -> Path | None:
@@ -256,7 +255,7 @@ class TvYamlManager:
         if not episode_keys_by_label:
             return False
 
-        tv_data = self.load()
+        tv_data = deepcopy(self.load())
         series_entries = tv_data.get("series", CommentedMap())
         if series_name not in series_entries:
             return False
@@ -289,11 +288,30 @@ class TvYamlManager:
 
         series_entries[series_name] = _to_commented(config)
 
-        with self.file_path.open("w", encoding="utf-8") as handle:
-            self._yaml.dump(tv_data, handle)
-
+        self._atomic_write(tv_data)
         self._data = tv_data
         return True
+
+    def _atomic_write(self, data: CommentedMap) -> None:
+        """Write YAML data to disk atomically to avoid partial files."""
+
+        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        temp_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w", encoding="utf-8", dir=self.file_path.parent, delete=False
+            ) as handle:
+                temp_path = Path(handle.name)
+                self._yaml.dump(data, handle)
+                handle.flush()
+                os.fsync(handle.fileno())
+
+            temp_path.replace(self.file_path)
+            temp_path = None
+        finally:
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
 
     def _backup_directory(self) -> Path:
         return Path("/config/backups")
