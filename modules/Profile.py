@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Callable, Literal, Optional, TypedDict
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypedDict
 
 from re import compile as re_compile, match, IGNORECASE
 
@@ -228,17 +228,32 @@ class Profile:
         return self.__episode_map.get_season_title(episode_info,default=default)
 
 
-    def get_episode_text(self, episode: 'Episode') -> str:
+    def get_episode_text(self, episode: 'Episode',
+            episode_text_case: Optional[str] = None) -> str:
         """
         Gets the episode text for the given episode info, as defined by
         this profile.
 
         Args:
             episode_info: Episode info to get the episode text of.
+            episode_text_case: Optional override for the configured
+                episode text casing.
 
         Returns:
             The episode text defined by this profile.
         """
+
+        episode_case = self.__episode_case
+        if episode_text_case is not None:
+            episode_text_case = str(episode_text_case).lower()
+            if episode_text_case in BaseCardType.CASE_FUNCTIONS:
+                episode_case = BaseCardType.CASE_FUNCTIONS[episode_text_case]
+            else:
+                log.error(
+                    'Invalid episode text case "%s" in series %s',
+                    episode_text_case,
+                    self.__series_info,
+                )
 
         # Get format string to utilize
         if self.__use_custom_seasons:
@@ -266,7 +281,9 @@ class Profile:
                 log.error(f'Cannot format episode text "{format_string}" for '
                           f'{episode} ({e})')
                 formatted = f'EPISODES {episode.episode_range}'
-            return self.__apply_episode_font_replacements(formatted)
+            return self.__apply_episode_font_replacements(
+                formatted, case_function=episode_case
+            )
 
         # Standard Episode object
         try:
@@ -278,20 +295,25 @@ class Profile:
             log.error(f'Cannot format episode text "{format_string}" for '
                       f'{episode} ({e})')
             formatted = f'EPISODE {episode.episode_info.episode_number}'
-        return self.__apply_episode_font_replacements(formatted)
+        return self.__apply_episode_font_replacements(
+            formatted, case_function=episode_case
+        )
 
-    def __apply_episode_font_replacements(self, episode_text: str) -> str:
+    def __apply_episode_font_replacements(self, episode_text: str,
+            *, case_function: Optional[Callable[[Any], str]] = None) -> str:
         """
         Apply the configured episode text casing and font replacements.
 
         Args:
             episode_text: The formatted episode text.
+            case_function: Optional casing function to apply instead of
+                the profile's configured case.
 
         Returns:
             The episode text with case adjustments and font replacements applied.
         """
 
-        formatted = self.__episode_case(episode_text)
+        formatted = (case_function or self.__episode_case)(episode_text)
         for old, new in self.font.replacements.items():
             formatted = formatted.replace(old, new)
         return formatted
