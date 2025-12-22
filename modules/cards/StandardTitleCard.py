@@ -55,8 +55,8 @@ class StandardTitleCard(BaseCardType):
         'episode_text', 'hide_season_text', 'hide_episode_text', 'font_color',
         'font_file', 'font_interline_spacing', 'font_interword_spacing',
         'font_kerning', 'font_size', 'font_stroke_width', 'font_vertical_shift',
-        'episode_text_color', 'omit_gradient', 'stroke_color', 'separator',
-        'episode_text_font_size', 'episode_text_vertical_shift',
+        'episode_text_color', 'episode_text_font', 'omit_gradient', 'stroke_color',
+        'separator', 'episode_text_font_size', 'episode_text_vertical_shift',
     )
 
     def __init__(self,
@@ -80,6 +80,7 @@ class StandardTitleCard(BaseCardType):
             separator: str = '•',
             stroke_color: str = 'black',
             episode_text_color: str = SERIES_COUNT_TEXT_COLOR,
+            episode_text_font: Path | str = EPISODE_COUNT_FONT,
             episode_text_font_size: float = 1.0,
             episode_text_vertical_shift: int = 0,
             omit_gradient: bool = False,
@@ -116,6 +117,14 @@ class StandardTitleCard(BaseCardType):
         self.omit_gradient = omit_gradient
         self.stroke_color = stroke_color
         self.episode_text_color = episode_text_color
+        try:
+            self.episode_text_font = Path(self._resolve_font_path(
+                episode_text_font
+            ))
+        except Exception as exc: # pylint: disable=broad-except
+            log.exception('Invalid episode text font', exc)
+            self.episode_text_font = self.EPISODE_COUNT_FONT
+            self.valid = False
         try:
             self.episode_text_font_size = float(episode_text_font_size)
         except (TypeError, ValueError) as exc:
@@ -205,7 +214,7 @@ class StandardTitleCard(BaseCardType):
         if self.hide_season_text:
             return [
                 *base_commands,
-                f'-font "{self.EPISODE_COUNT_FONT.resolve()}"',
+                f'-font "{self.episode_text_font.resolve()}"',
                 f'-fill black',
                 f'-stroke black',
                 f'-strokewidth 6',
@@ -245,7 +254,7 @@ class StandardTitleCard(BaseCardType):
             f'-font "{self.SEASON_COUNT_FONT.resolve()}"',
             f'label:"{self.season_text} {self.separator}"',
             # Add episode text
-            f'-font "{self.EPISODE_COUNT_FONT.resolve()}"',
+            f'-font "{self.episode_text_font.resolve()}"',
             f'label:"{self.episode_text}"',
             # Combine season+episode text into one "image"
             f'+smush 25 \)',
@@ -262,7 +271,7 @@ class StandardTitleCard(BaseCardType):
             f'-font "{self.SEASON_COUNT_FONT.resolve()}"',
             f'label:"{self.season_text} {self.separator}"',
             # Add episode text
-            f'-font "{self.EPISODE_COUNT_FONT.resolve()}"',
+            f'-font "{self.episode_text_font.resolve()}"',
             f'label:"{self.episode_text}"',
             f'+smush 30 \)',
             # Add text to source image
@@ -312,6 +321,9 @@ class StandardTitleCard(BaseCardType):
             if 'episode_text_color' in extras:
                 extras['episode_text_color'] = \
                     StandardTitleCard.SERIES_COUNT_TEXT_COLOR
+            if 'episode_text_font' in extras:
+                extras['episode_text_font'] = \
+                    StandardTitleCard.EPISODE_COUNT_FONT
             if 'episode_text_font_size' in extras:
                 extras['episode_text_font_size'] = 1.0
             if 'episode_text_vertical_shift' in extras:
@@ -338,6 +350,9 @@ class StandardTitleCard(BaseCardType):
             ('episode_text_color' in extras
                 and extras['episode_text_color'] != \
                     StandardTitleCard.SERIES_COUNT_TEXT_COLOR)
+            or ('episode_text_font' in extras
+                and extras['episode_text_font'] != \
+                    StandardTitleCard.EPISODE_COUNT_FONT)
             or ('episode_text_font_size' in extras
                 and extras['episode_text_font_size'] != 1.0)
             or ('episode_text_vertical_shift' in extras
