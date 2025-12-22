@@ -77,6 +77,7 @@ class FrameTitleCard(BaseCardType):
             grayscale: bool = False,
             episode_text_color: str = EPISODE_TEXT_COLOR,
             episode_text_position: Position = 'surround',
+            episode_text_font_size: float = 1.0,
             preferences: Optional['Preferences'] = None, # type: ignore
             **unused,
         ) -> None:
@@ -114,6 +115,9 @@ class FrameTitleCard(BaseCardType):
             self.valid = False
         else:
             self.episode_text_position = episode_text_position.lower()
+        self.episode_text_font_size = self._parse_episode_text_font_size(
+            episode_text_font_size
+        )
 
 
     @property
@@ -143,7 +147,7 @@ class FrameTitleCard(BaseCardType):
         return [
             f'-background transparent',
             f'-font "{self.EPISODE_TEXT_FONT.resolve()}"',
-            f'-pointsize 50',
+            f'-pointsize {50 * self.episode_text_font_size}',
             f'-fill "{self.episode_text_color}"',
         ]
 

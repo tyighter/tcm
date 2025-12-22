@@ -65,7 +65,7 @@ class MarvelTitleCard(BaseCardType):
         'font_interword_spacing', 'font_kerning', 'font_vertical_shift',
         'border_color', 'border_size', 'episode_text_color', 'fit_text',
         'episode_text_position', 'hide_border', 'text_box_color',
-        'text_box_height', 'font_size_modifier',
+        'text_box_height', 'font_size_modifier', 'episode_text_font_size',
     )
 
     def __init__(self, *,
@@ -88,6 +88,7 @@ class MarvelTitleCard(BaseCardType):
             border_color: str = DEFAULT_BORDER_COLOR,
             border_size: int = DEFAULT_BORDER_SIZE,
             episode_text_color: str = EPISODE_TEXT_COLOR,
+            episode_text_font_size: float = 1.0,
             episode_text_location: Literal['compact', 'fixed'] = 'fixed',
             fit_text: bool = True,
             hide_border: bool = False,
@@ -125,6 +126,9 @@ class MarvelTitleCard(BaseCardType):
         self.border_color = border_color
         self.border_size = border_size
         self.episode_text_color = episode_text_color
+        self.episode_text_font_size = self._parse_episode_text_font_size(
+            episode_text_font_size
+        )
         self.episode_text_position = episode_text_location
         self.fit_text = fit_text
         self.hide_border = hide_border
@@ -195,7 +199,7 @@ class MarvelTitleCard(BaseCardType):
                 f'-annotate +{self.border_size}{y_position:+} "{self.season_text}"',
             ]
 
-        font_size = 70 * self.font_size_modifier
+        font_size = 70 * self.font_size_modifier * self.episode_text_font_size
 
         return [
             f'-font "{self.EPISODE_TEXT_FONT.resolve()}"',
@@ -241,7 +245,7 @@ class MarvelTitleCard(BaseCardType):
                 f'-annotate +{self.border_size}{y_position:+} "{self.episode_text}"',
             ]
 
-        font_size = 70 * self.font_size_modifier
+        font_size = 70 * self.font_size_modifier * self.episode_text_font_size
 
         return [
             f'-font "{self.EPISODE_TEXT_FONT.resolve()}"',

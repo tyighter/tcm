@@ -93,6 +93,7 @@ class ShapeTitleCard(BaseCardType):
         'shape_inset', 'length', 'shape_stroke_color',
         'shape_stroke_width', 'shape_width', 'stroke_color', 'text_position',
         '__title_width', '__title_height', '__line_count',
+        'episode_text_font_size',
     )
 
 
@@ -128,6 +129,7 @@ class ShapeTitleCard(BaseCardType):
             shape_stroke_width: float = 0.0,
             shape_width: int = SHAPE_WIDTH,
             stroke_color: str = 'black',
+            episode_text_font_size: float = 1.0,
             text_position: TextPosition = 'lower left',
             preferences: Optional['PreferenceParser'] = None,
             **unused,
@@ -163,6 +165,9 @@ class ShapeTitleCard(BaseCardType):
         self.omit_gradient = omit_gradient
         self.season_text_color = season_text_color
         self.season_text_font_size = season_text_font_size
+        self.episode_text_font_size = self._parse_episode_text_font_size(
+            episode_text_font_size
+        )
         self.season_text_position: SeasonTextPosition = season_text_position
         self.shape: Shape = self.__select_shape(shape)
         self.shape_color = shape_color

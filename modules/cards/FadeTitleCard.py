@@ -51,7 +51,7 @@ class FadeTitleCard(BaseCardType):
         'source_file', 'output_file', 'title_text', 'index_text', 'font_file',
         'font_size', 'font_color', 'font_interline_spacing',
         'font_interword_spacing', 'font_kerning', 'font_vertical_shift', 'logo',
-        'episode_text_color',
+        'episode_text_color', 'episode_text_font_size',
     )
 
     def __init__(self,
@@ -75,6 +75,7 @@ class FadeTitleCard(BaseCardType):
             grayscale: bool = False,
             logo: Optional[Path] = None,
             episode_text_color: str = EPISODE_TEXT_COLOR,
+            episode_text_font_size: float = 1.0,
             separator: str = '•',
             preferences: Optional['Preferences'] = None, # type: ignore
             **unused,
@@ -138,6 +139,9 @@ class FadeTitleCard(BaseCardType):
 
         # Extras
         self.episode_text_color = episode_text_color
+        self.episode_text_font_size = self._parse_episode_text_font_size(
+            episode_text_font_size
+        )
 
 
     @property
@@ -193,7 +197,7 @@ class FadeTitleCard(BaseCardType):
         return [
             f'-gravity northwest',
             f'-font "{self.EPISODE_TEXT_FONT.resolve()}"',
-            f'-pointsize 65',
+            f'-pointsize {65 * self.episode_text_font_size}',
             f'-kerning 5',
             f'-fill "{self.episode_text_color}"',
             f'-annotate +105+725 "{self.index_text}"',

@@ -51,6 +51,7 @@ class CutoutTitleCard(BaseCardType):
         'font_interword_spacing', 'font_kerning', 'font_size',
         'font_vertical_shift', 'overlay_color', 'blur_edges',
         'number_blur_profile', 'overlay_transparency',
+        'episode_text_font_size',
     )
 
     def __init__(self,
@@ -71,6 +72,7 @@ class CutoutTitleCard(BaseCardType):
             blur_profile: str = NUMBER_BLUR_PROFILE,
             overlay_color: str = 'black',
             overlay_transparency: float = 0.0,
+            episode_text_font_size: float = 1.0,
             preferences: Optional['Preferences'] = None,
             **unused,
         ) -> None:
@@ -105,6 +107,9 @@ class CutoutTitleCard(BaseCardType):
         self.number_blur_profile = blur_profile
         self.overlay_color = overlay_color
         self.overlay_transparency = overlay_transparency
+        self.episode_text_font_size = self._parse_episode_text_font_size(
+            episode_text_font_size
+        )
 
 
     def _format_episode_text(self, episode_text: str) -> str:
@@ -245,7 +250,7 @@ class CutoutTitleCard(BaseCardType):
             f'\( -set colorspace sRGB',
             f'-background transparent',
             f'-density 200',
-            f'-pointsize 500',
+            f'-pointsize {500 * self.episode_text_font_size}',
             f'-gravity center',
             f'-interline-spacing -300',
             f'-font "{self.EPISODE_TEXT_FONT.resolve()}"',

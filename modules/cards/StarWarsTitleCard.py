@@ -49,7 +49,7 @@ class StarWarsTitleCard(BaseCardType):
         'hide_episode_text', 'font_color', 'font_file',
         'font_interline_spacing', 'font_interword_spacing', 'font_size',
         'font_vertical_shift', 'episode_text_color', 'episode_prefix',
-        'episode_prefix_font', 'episode_number_font',
+        'episode_prefix_font', 'episode_number_font', 'episode_text_font_size',
     )
 
     def __init__(self,
@@ -68,6 +68,7 @@ class StarWarsTitleCard(BaseCardType):
             grayscale: bool = False,
             episode_text_color: str = EPISODE_TEXT_COLOR,
             episode_text_font: Path | None = None,
+            episode_text_font_size: float = 1.0,
             preferences: Optional['Preferences'] = None,
             **unused,
         ) -> None:
@@ -121,6 +122,9 @@ class StarWarsTitleCard(BaseCardType):
 
         # Extras
         self.episode_text_color = episode_text_color
+        self.episode_text_font_size = self._parse_episode_text_font_size(
+            episode_text_font_size
+        )
 
 
     @property
@@ -154,7 +158,7 @@ class StarWarsTitleCard(BaseCardType):
         return [
             # Global font options
             f'-gravity west',
-            f'-pointsize 53',
+            f'-pointsize {53 * self.episode_text_font_size}',
             f'-kerning 19',
             f'+interword-spacing',
             f'-fill "{self.episode_text_color}"',

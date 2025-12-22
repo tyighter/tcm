@@ -57,7 +57,7 @@ class DividerTitleCard(BaseCardType):
         'font_file', 'font_interline_spacing', 'font_interword_spacing',
         'font_kerning', 'font_size', 'font_stroke_width', 'stroke_color',
         'title_text_position', 'text_position', 'font_vertical_shift',
-        'divider_color', 'text_gravity',
+        'divider_color', 'text_gravity', 'episode_text_font_size',
     )
 
     def __init__(self,
@@ -83,6 +83,7 @@ class DividerTitleCard(BaseCardType):
             text_gravity: Optional[TextGravity] = None,
             title_text_position: TitleTextPosition = 'left',
             text_position: TextPosition = 'lower right',
+            episode_text_font_size: float = 1.0,
             preferences: Optional['Preferences'] = None, # type: ignore
             **unused,
         ) -> None:
@@ -126,6 +127,9 @@ class DividerTitleCard(BaseCardType):
         self.text_position = str(text_position).lower()
         self.divider_color = divider_color
         self.text_gravity = text_gravity
+        self.episode_text_font_size = self._parse_episode_text_font_size(
+            episode_text_font_size
+        )
 
 
     @property
@@ -146,14 +150,14 @@ class DividerTitleCard(BaseCardType):
             text = self.episode_text if self.hide_season_text else self.season_text
             return [
                 f'-gravity {gravity}',
-                f'-pointsize {100 * self.font_size}',
+                f'-pointsize {100 * self.font_size * self.episode_text_font_size}',
                 f'label:"{text}"',
             ]
 
         # Showing all text, add all text and divider
         return [
             f'-gravity {gravity}',
-            f'-pointsize {100 * self.font_size}',
+            f'-pointsize {100 * self.font_size * self.episode_text_font_size}',
             f'label:"{self.season_text}\n{self.episode_text}"',
         ]
 
