@@ -354,15 +354,20 @@ def _expected_type_label(param: inspect.Parameter | None) -> str | None:
     return None
 
 
-def _build_extra_definition(name: str, param: inspect.Parameter | None = None) -> dict[str, Any]:
+def _build_extra_definition(
+        name: str,
+        param: inspect.Parameter | None = None,
+        *,
+        expected_type: str | None = None,
+    ) -> dict[str, Any]:
     definition: dict[str, Any] = {
         "key": name,
         "label": _format_extra_label(name),
     }
 
-    expected_type = _expected_type_label(param)
-    if expected_type:
-        definition["expectedType"] = expected_type
+    expected_type_label = expected_type or _expected_type_label(param)
+    if expected_type_label:
+        definition["expectedType"] = expected_type_label
 
     choices = _literal_choices(param.annotation) if param else []
     if expected_type == 'boolean':
@@ -421,7 +426,9 @@ def build_card_type_extras() -> dict[str, list[dict[str, Any]]]:
         "episode_text_case": {
             "choices": list(BaseCardType.CASE_FUNCTIONS.keys()),
         },
-        "episode_text_vertical_shift": {},
+        "episode_text_vertical_shift": {
+            "expectedType": "int",
+        },
     }
 
     extras: dict[str, list[dict[str, Any]]] = {}
@@ -435,7 +442,10 @@ def build_card_type_extras() -> dict[str, list[dict[str, Any]]]:
             definitions[parameter.name] = _build_extra_definition(parameter.name, parameter)
 
         for key, options in universal_extras.items():
-            definition = definitions.setdefault(key, _build_extra_definition(key))
+            definition = definitions.setdefault(
+                key,
+                _build_extra_definition(key, expected_type=options.get("expectedType")),
+            )
             if choices := options.get("choices"):
                 definition.setdefault("choices", choices)
 
