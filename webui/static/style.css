@@ -291,7 +291,8 @@ button:disabled:hover {
   border-radius: 999px;
   border: 1px solid var(--border);
   background: linear-gradient(180deg, #182233, #111926);
-  color: var(--muted);
+  color: var(--danger);
+  border-color: rgba(255, 123, 114, 0.55);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -344,13 +345,16 @@ button:disabled:hover {
   align-items: flex-start;
   gap: 0.6rem;
   flex-wrap: wrap;
+  justify-content: space-between;
+  flex: 1 1 0;
 }
 
 .entry-preview-actions {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  align-items: flex-start;
+  align-items: flex-end;
+  margin-left: auto;
 }
 
 .entry-logo-wrapper {
@@ -713,6 +717,12 @@ button:disabled:hover {
 .entry-section__fields {
   display: grid;
   gap: 0.75rem;
+}
+
+.entry-section__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .entry-section__empty {
@@ -1138,13 +1148,28 @@ button:disabled:hover {
   margin-left: auto;
 }
 
+.remove-button,
+.item-remove {
+  color: var(--danger);
+  border-color: rgba(255, 123, 114, 0.55);
+}
+
+.remove-button:hover,
+.remove-button:focus-visible,
+.item-remove:hover,
+.item-remove:focus-visible {
+  color: var(--danger);
+  border-color: rgba(255, 123, 114, 0.75);
+}
+
 .sub-card-list .item-remove {
   width: auto;
   height: auto;
 }
 
-.item-remove:hover {
-  background: #f1f3f4;
+.item-remove:hover,
+.remove-button:hover {
+  background: rgba(255, 123, 114, 0.12);
 }
 
 .helper-text {
@@ -1298,6 +1323,12 @@ button:disabled:hover {
   align-items: center;
   gap: 0.35rem;
   flex-wrap: wrap;
+}
+
+.add-line-controls--footer {
+  width: 100%;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
 }
 
 .add-line-search__button {
@@ -1981,13 +2012,15 @@ button:disabled:hover {
 
 .font-picker__actions {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 0.35rem;
-  min-width: 110px;
+  justify-content: flex-end;
 }
 
 .font-picker__actions button {
-  width: 100%;
+  width: auto;
+  min-width: 44px;
   justify-content: center;
 }
 

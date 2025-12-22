@@ -853,13 +853,9 @@ function renderEntry(entry) {
 
   const removeEntryButton = document.createElement('button');
   removeEntryButton.type = 'button';
-  removeEntryButton.className = 'entry-remove';
+  removeEntryButton.className = 'entry-remove remove-button';
   removeEntryButton.setAttribute('aria-label', `Remove ${entry.name}`);
-  const removeEntryIcon = document.createElement('span');
-  removeEntryIcon.className = 'material-symbols-rounded';
-  removeEntryIcon.setAttribute('aria-hidden', 'true');
-  removeEntryIcon.textContent = 'close';
-  removeEntryButton.appendChild(removeEntryIcon);
+  removeEntryButton.textContent = '✕';
   removeEntryButton.addEventListener('click', () => removeEntry(entry));
   container.appendChild(removeEntryButton);
 
@@ -1155,9 +1151,11 @@ function renderEntry(entry) {
   body.className = 'entry-body';
 
   const usedFields = new Set();
+  const generalFieldRows = [];
   const fontFieldRows = [];
   let extrasFieldRow = null;
   let extrasFieldDefinition = null;
+  let libraryFieldRow = null;
   state.fields.forEach((field) => {
     const value = getValue(entry.config, field.path);
     if (field.id === 'extras') {
@@ -1168,44 +1166,28 @@ function renderEntry(entry) {
     }
     if (value !== undefined) {
       usedFields.add(field.id);
-      if (field.path?.[0] === 'font') {
-        fontFieldRows.push(renderFieldRow(entry, field, value));
+      const row = renderFieldRow(entry, field, value);
+      if (field.id === 'library') {
+        libraryFieldRow = row;
+      } else if (field.path?.[0] === 'font') {
+        fontFieldRows.push(row);
       } else if (field.id === 'extras') {
-        extrasFieldRow = renderFieldRow(entry, field, value);
+        extrasFieldRow = row;
       } else {
-        body.appendChild(renderFieldRow(entry, field, value));
+        generalFieldRows.push(row);
       }
     }
   });
 
-  const addLineControls = document.createElement('div');
-  addLineControls.className = 'add-line-controls';
-
-  const addLineButton = document.createElement('button');
-  addLineButton.className = 'add-line';
-  addLineButton.textContent = '+ Add line';
-  addLineButton.addEventListener('click', () =>
-    openFieldSelector(entry, {
-      availableFilter: (field) =>
-        field.path?.[0] !== 'font' && field.id !== 'extras' && !ID_FIELDS.has(field.id),
-    })
-  );
-
-  const addLineSearchButton = document.createElement('button');
-  addLineSearchButton.type = 'button';
-  addLineSearchButton.className = 'icon-button add-line-search__button';
-  addLineSearchButton.setAttribute('aria-label', 'Search configuration options');
-  addLineSearchButton.innerHTML =
-    '<span class="material-symbols-rounded" aria-hidden="true">search</span>';
-
-  addLineSearchButton.addEventListener('click', () => openOptionSearch(entry));
-
-  addLineControls.append(addLineButton, addLineSearchButton);
-  body.appendChild(addLineControls);
+  generalFieldRows.forEach((row) => body.appendChild(row));
 
   const identifierSection = renderIdentifierSection(entry);
   if (identifierSection) {
     body.appendChild(identifierSection);
+  }
+
+  if (libraryFieldRow) {
+    body.appendChild(libraryFieldRow);
   }
 
   const extrasSection = document.createElement('section');
@@ -1232,6 +1214,9 @@ function renderEntry(entry) {
     renderEntries();
   };
 
+  const extrasFooter = document.createElement('div');
+  extrasFooter.className = 'entry-section__footer';
+
   if (extrasFieldRow) {
     extrasFieldsContainer.appendChild(extrasFieldRow);
   } else if (extrasFieldDefinition) {
@@ -1244,11 +1229,11 @@ function renderEntry(entry) {
     addExtrasButton.textContent = '+ Add extra option';
     addExtrasButton.addEventListener('click', () => enableExtras());
 
-    extrasHeader.appendChild(addExtrasButton);
     extrasFieldsContainer.appendChild(helper);
+    extrasFooter.appendChild(addExtrasButton);
   }
 
-  extrasSection.append(extrasHeader, extrasFieldsContainer);
+  extrasSection.append(extrasHeader, extrasFieldsContainer, extrasFooter);
   body.appendChild(extrasSection);
 
   const fontSection = document.createElement('section');
@@ -1261,18 +1246,7 @@ function renderEntry(entry) {
   fontTitle.className = 'entry-section__title';
   fontTitle.textContent = 'Font';
 
-  const addFontLineButton = document.createElement('button');
-  addFontLineButton.className = 'add-line add-line--inline';
-  addFontLineButton.textContent = '+ Add font line';
-  addFontLineButton.addEventListener('click', () =>
-    openFieldSelector(entry, {
-      title: 'Add font line',
-      emptyMessage: 'All font options are already configured for this entry.',
-      availableFilter: (field) => field.path?.[0] === 'font',
-    })
-  );
-
-  fontHeader.append(fontTitle, addFontLineButton);
+  fontHeader.append(fontTitle);
 
   const fontFieldsContainer = document.createElement('div');
   fontFieldsContainer.className = 'entry-section__fields';
@@ -1285,8 +1259,49 @@ function renderEntry(entry) {
     fontFieldRows.forEach((row) => fontFieldsContainer.appendChild(row));
   }
 
-  fontSection.append(fontHeader, fontFieldsContainer);
+  const fontFooter = document.createElement('div');
+  fontFooter.className = 'entry-section__footer';
+
+  const addFontLineButton = document.createElement('button');
+  addFontLineButton.className = 'add-line add-line--inline';
+  addFontLineButton.textContent = '+ Add font line';
+  addFontLineButton.addEventListener('click', () =>
+    openFieldSelector(entry, {
+      title: 'Add font line',
+      emptyMessage: 'All font options are already configured for this entry.',
+      availableFilter: (field) => field.path?.[0] === 'font',
+    })
+  );
+
+  fontFooter.appendChild(addFontLineButton);
+
+  fontSection.append(fontHeader, fontFieldsContainer, fontFooter);
   body.appendChild(fontSection);
+
+  const addLineControls = document.createElement('div');
+  addLineControls.className = 'add-line-controls add-line-controls--footer';
+
+  const addLineButton = document.createElement('button');
+  addLineButton.className = 'add-line';
+  addLineButton.textContent = '+ Add line';
+  addLineButton.addEventListener('click', () =>
+    openFieldSelector(entry, {
+      availableFilter: (field) =>
+        field.path?.[0] !== 'font' && field.id !== 'extras' && !ID_FIELDS.has(field.id),
+    })
+  );
+
+  const addLineSearchButton = document.createElement('button');
+  addLineSearchButton.type = 'button';
+  addLineSearchButton.className = 'icon-button add-line-search__button';
+  addLineSearchButton.setAttribute('aria-label', 'Search configuration options');
+  addLineSearchButton.innerHTML =
+    '<span class="material-symbols-rounded" aria-hidden="true">search</span>';
+
+  addLineSearchButton.addEventListener('click', () => openOptionSearch(entry));
+
+  addLineControls.append(addLineButton, addLineSearchButton);
+  body.appendChild(addLineControls);
 
   container.append(header, body);
   return container;
@@ -1723,11 +1738,17 @@ function renderFieldRow(entry, field, value) {
   const controls = document.createElement('div');
   controls.className = 'field-controls';
 
-  const removeButton = document.createElement('button');
-  removeButton.textContent = 'Remove';
-  removeButton.addEventListener('click', () => {
-    removeField(entry, field);
-  });
+  const showRemoveButton =
+    field.id !== 'library' && field.id !== 'card_type' && field.path?.[0] !== 'font';
+  const removeButton = showRemoveButton ? document.createElement('button') : null;
+  if (removeButton) {
+    removeButton.textContent = '✕';
+    removeButton.className = 'remove-button';
+    removeButton.setAttribute('aria-label', `Remove ${field.label}`);
+    removeButton.addEventListener('click', () => {
+      removeField(entry, field);
+    });
+  }
 
   switch (field.type) {
     case 'text':
@@ -1782,7 +1803,9 @@ function renderFieldRow(entry, field, value) {
       break;
   }
 
-  controls.appendChild(removeButton);
+  if (removeButton) {
+    controls.appendChild(removeButton);
+  }
   row.append(label, controls);
   return row;
 }
@@ -2380,8 +2403,8 @@ function translationEditor(entry, field, value) {
 
       const remove = document.createElement('button');
       remove.type = 'button';
-      remove.className = 'item-remove';
-      remove.textContent = '×';
+      remove.className = 'item-remove remove-button';
+      remove.textContent = '✕';
       remove.setAttribute('aria-label', 'Remove translation');
       remove.addEventListener('click', () => {
         translations.splice(index, 1);
@@ -2448,8 +2471,11 @@ function fontPicker(entry, field, value, options = {}) {
   });
 
   const upload = document.createElement('button');
-  upload.textContent = 'Upload';
   upload.type = 'button';
+  upload.classList.add('icon-button');
+  upload.setAttribute('aria-label', 'Upload font file');
+  upload.innerHTML =
+    '<span class="material-symbols-rounded" aria-hidden="true">cloud_upload</span>';
   upload.addEventListener('click', () => uploadInput.click());
 
   uploadInput.addEventListener('change', async (event) => {
@@ -2459,8 +2485,9 @@ function fontPicker(entry, field, value, options = {}) {
     const targetDirectory = PathParent(input.value) || state.fontDirectory;
 
     upload.disabled = true;
-    const originalLabel = upload.textContent;
-    upload.textContent = 'Uploading...';
+    const originalLabel = upload.innerHTML;
+    upload.innerHTML =
+      '<span class="material-symbols-rounded" aria-hidden="true">hourglass_top</span>';
 
     try {
       const { path } = await uploadFont(file, targetDirectory);
@@ -2473,14 +2500,17 @@ function fontPicker(entry, field, value, options = {}) {
       showToast(message, 'error');
     } finally {
       upload.disabled = false;
-      upload.textContent = originalLabel;
+      upload.innerHTML = originalLabel;
       uploadInput.value = '';
     }
   });
 
   const browse = document.createElement('button');
   browse.type = 'button';
-  browse.textContent = 'Browse';
+  browse.classList.add('icon-button');
+  browse.setAttribute('aria-label', 'Browse font files');
+  browse.innerHTML =
+    '<span class="material-symbols-rounded" aria-hidden="true">folder_open</span>';
   browse.addEventListener('click', () => {
     openFontPickerModal({
       initialPath: PathParent(input.value) || state.fontDirectory,
@@ -2492,7 +2522,10 @@ function fontPicker(entry, field, value, options = {}) {
 
   remove = document.createElement('button');
   remove.type = 'button';
-  remove.textContent = 'Remove';
+  remove.classList.add('icon-button', 'remove-button');
+  remove.setAttribute('aria-label', 'Remove font line');
+  remove.innerHTML =
+    '<span class="material-symbols-rounded" aria-hidden="true">close</span>';
   remove.addEventListener('click', () => {
     uploadInput.value = '';
     setValue(undefined);
@@ -2565,8 +2598,8 @@ function replacementEditor(entry, field, value) {
 
       const remove = document.createElement('button');
       remove.type = 'button';
-      remove.className = 'item-remove';
-      remove.textContent = '×';
+      remove.className = 'item-remove remove-button';
+      remove.textContent = '✕';
       remove.setAttribute('aria-label', 'Remove replacement');
       remove.addEventListener('click', () => {
         rows.splice(index, 1);
@@ -2721,8 +2754,8 @@ function mapEditor(entry, field, value, keyLabel, valueLabel, onUpdate, options 
 
       const remove = document.createElement('button');
       remove.type = 'button';
-      remove.className = 'item-remove';
-      remove.textContent = '×';
+      remove.className = 'item-remove remove-button';
+      remove.textContent = '✕';
       remove.setAttribute('aria-label', `Remove ${keyLabel.toLowerCase()}`);
       remove.addEventListener('click', () => {
         rows.splice(index, 1);
@@ -3106,8 +3139,8 @@ function extrasEditor(entry, field, value) {
 
       const remove = document.createElement('button');
       remove.type = 'button';
-      remove.className = 'item-remove item-remove--inline';
-      remove.textContent = 'Remove';
+      remove.className = 'item-remove item-remove--inline remove-button';
+      remove.textContent = '✕';
       remove.setAttribute('aria-label', `Remove ${row.key || 'extra option'}`);
       remove.addEventListener('click', () => {
         rows.splice(index, 1);
