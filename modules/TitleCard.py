@@ -166,6 +166,9 @@ class TitleCard:
             profile, **title_characteristics
         )
 
+        # Apply any custom episode text casing if supplied
+        episode_text_case = extra_characteristics.get('episode_text_case')
+
         # Apply any custom title text formatting if supplied
         if 'title_text_format' in extra_characteristics:
             try:
@@ -186,7 +189,9 @@ class TitleCard:
                 self.episode.episode_info,
                 getattr(self.episode.card_class, 'SEASON_TEXT_FORMATTER', None),
             ),
-            'episode_text': profile.get_episode_text(self.episode),
+            'episode_text': profile.get_episode_text(
+                self.episode, episode_text_case=episode_text_case
+            ),
             'hide_season_text': profile.hide_season_title,
             'blur': episode.blur,
             'grayscale': episode.grayscale,

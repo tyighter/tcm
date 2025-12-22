@@ -411,13 +411,17 @@ def build_card_type_extras() -> dict[str, list[dict[str, Any]]]:
         "library",
     }
 
-    universal_extras = {
-        "episode_text_font_size",
-        "episode_text_stroke_color",
-        "episode_text_stroke_width",
-        "episode_title_stroke_color",
-        "episode_title_stroke_width",
-        "episode_text_font",
+    universal_extras: dict[str, dict[str, list[str]]] = {
+        "episode_text_font_size": {},
+        "episode_text_stroke_color": {},
+        "episode_text_stroke_width": {},
+        "episode_title_stroke_color": {},
+        "episode_title_stroke_width": {},
+        "episode_text_font": {},
+        "episode_text_case": {
+            "choices": list(BaseCardType.CASE_FUNCTIONS.keys()),
+        },
+        "episode_text_vertical_shift": {},
     }
 
     extras: dict[str, list[dict[str, Any]]] = {}
@@ -430,8 +434,10 @@ def build_card_type_extras() -> dict[str, list[dict[str, Any]]]:
                 continue
             definitions[parameter.name] = _build_extra_definition(parameter.name, parameter)
 
-        for key in universal_extras:
-            definitions.setdefault(key, _build_extra_definition(key))
+        for key, options in universal_extras.items():
+            definition = definitions.setdefault(key, _build_extra_definition(key))
+            if choices := options.get("choices"):
+                definition.setdefault("choices", choices)
 
         extras[identifier] = sorted(definitions.values(), key=lambda item: item["label"].casefold())
 
