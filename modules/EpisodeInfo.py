@@ -103,6 +103,16 @@ class WordSet(dict):
         return f'{label}_cardinal' in self and f'{label}_ordinal' in self
 
 
+class _MissingAirdate:
+    """Formatter placeholder that resolves to an empty string."""
+
+    def __format__(self, format_spec: str) -> str:
+        return ''
+
+    def __str__(self) -> str:  # pragma: no cover - mirrors __format__
+        return ''
+
+
 class EpisodeInfo(DatabaseInfoContainer):
     """
     This class describes static information about an Episode, such as
@@ -336,7 +346,7 @@ class EpisodeInfo(DatabaseInfoContainer):
             'season_number': self.season_number,
             'episode_number': self.episode_number,
             'abs_number': self.abs_number,
-            'airdate': self.airdate,
+            'airdate': self.airdate or _MissingAirdate(),
             **self.word_set,
         }
 

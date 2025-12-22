@@ -803,6 +803,10 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
             except NotFound:
                 continue
 
+            # Update airdate if Plex has it available
+            if (airdate := getattr(plex_episode, 'originallyAvailableAt', None)):
+                info.set_airdate(airdate)
+
             # Set the ID's for this object
             for guid in plex_episode.guids:
                 if 'imdb://' in guid.id:

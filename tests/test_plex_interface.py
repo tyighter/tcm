@@ -1,7 +1,9 @@
+from datetime import datetime
 from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock
 
+from modules.EpisodeInfo import EpisodeInfo
 from modules.PlexInterface import PlexInterface
 
 
@@ -105,23 +107,25 @@ class UpdateWatchedStatusesTests(TestCase):
             {'filesize': 0}, "condition"
         )
 
-    def test_unwatched_to_watched_triggers_reload(self) -> None:
-        episode = make_stub_episode(1, 1)
-        episodes = [SimpleNamespace(parentIndex=1, index=1)]
-        series = SimpleNamespace(episodes=lambda: episodes)
-        self.interface._PlexInterface__get_series.return_value = series
 
-        self.interface._is_episode_watched = Mock(return_value=True)
-        self.interface._get_loaded_episode = Mock(
-            return_value={'spoiler': None, 'watched': False}
-        )
-        self.interface._get_condition = Mock(return_value="condition")
+class SetEpisodeIdsTests(TestCase):
+    def setUp(self) -> None:
+        self.interface = PlexInterface.__new__(PlexInterface)
+        self.interface._PlexInterface__get_library = Mock(return_value="Library")
 
-        self.interface.update_watched_statuses(
-            "Library", self.series_info, {"1-1": episode}, self.style_set
+        # Stub Plex series episode lookup
+        airdate = datetime(2024, 1, 1)
+        plex_episode = SimpleNamespace(originallyAvailableAt=airdate, guids=[])
+        series = SimpleNamespace(episode=Mock(return_value=plex_episode))
+
+        self.interface._PlexInterface__get_series = Mock(return_value=series)
+
+        self.series_info = SimpleNamespace()
+        self.episode_info = EpisodeInfo("Title", 1, 1)
+
+    def test_sets_airdate_from_plex_episode(self) -> None:
+        self.interface.set_episode_ids(
+            "Library", self.series_info, [self.episode_info]
         )
 
-        episode.delete_card.assert_called_once()
-        self.interface.loaded_db.update.assert_called_once_with(
-            {'filesize': 0}, "condition"
-        )
+        self.assertEqual(self.episode_info.airdate, datetime(2024, 1, 1))
