@@ -1168,18 +1168,16 @@ function renderEntry(entry) {
       usedFields.add(field.id);
       const row = renderFieldRow(entry, field, value);
       if (field.id === 'library') {
-        libraryFieldRow = row;
+        libraryFieldRow = { field, row };
       } else if (field.path?.[0] === 'font') {
         fontFieldRows.push(row);
       } else if (field.id === 'extras') {
         extrasFieldRow = row;
       } else {
-        generalFieldRows.push(row);
+        generalFieldRows.push({ field, row });
       }
     }
   });
-
-  generalFieldRows.forEach((row) => body.appendChild(row));
 
   const identifierSection = renderIdentifierSection(entry);
   if (identifierSection) {
@@ -1187,8 +1185,12 @@ function renderEntry(entry) {
   }
 
   if (libraryFieldRow) {
-    body.appendChild(libraryFieldRow);
+    body.appendChild(libraryFieldRow.row);
   }
+
+  generalFieldRows
+    .sort((a, b) => compareFieldOptions(a.field, b.field))
+    .forEach(({ row }) => body.appendChild(row));
 
   const extrasSection = document.createElement('section');
   extrasSection.className = 'entry-section entry-section--extras';
