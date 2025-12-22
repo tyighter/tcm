@@ -305,7 +305,11 @@ class BaseCardType(ImageMaker):
 
 
     """Slots for standard style attributes"""
-    __slots__ = ('valid', 'blur', 'grayscale')
+    __slots__ = (
+        'valid', 'blur', 'grayscale',
+        'EPISODE_TEXT_FONT', 'EPISODE_COUNT_FONT', 'SERIES_COUNT_FONT',
+        'INDEX_TEXT_FONT', 'EPISODE_NUMBER_FONT', 'EPISODE_PREFIX_FONT',
+    )
 
 
     @abstractmethod
@@ -337,6 +341,23 @@ class BaseCardType(ImageMaker):
         # Store style attributes
         self.blur = blur
         self.grayscale = grayscale
+
+        # Allow a universal episode text font override to be passed via extras
+        episode_text_font = unused.pop('episode_text_font', None)
+        if episode_text_font is not None:
+            try:
+                resolved_font = Path(self._resolve_font_path(episode_text_font))
+            except Exception as exc:  # pylint: disable=broad-except
+                log.exception('Invalid episode text font', exc)
+                self.valid = False
+            else:
+                for attr_name in (
+                        'EPISODE_TEXT_FONT', 'EPISODE_COUNT_FONT',
+                        'SERIES_COUNT_FONT', 'INDEX_TEXT_FONT',
+                        'EPISODE_NUMBER_FONT', 'EPISODE_PREFIX_FONT',
+                    ):
+                    if hasattr(type(self), attr_name):
+                        object.__setattr__(self, attr_name, resolved_font)
 
 
     def __repr__(self) -> str:
