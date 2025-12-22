@@ -35,6 +35,14 @@ class MediaInfoSet:
         self.episode_info: dict[str, EpisodeInfo] = {}
 
 
+    def reset_episode_info(self) -> None:
+        """Clear all cached EpisodeInfo mappings to reclaim memory."""
+
+        cleared_entries = len(self.episode_info)
+        self.episode_info.clear()
+        log.debug(f'Reset MediaInfoSet episode cache ({cleared_entries} entries)')
+
+
     @staticmethod
     def __test_id_match(db_value: Any, search_value: Any) -> bool:
         """
