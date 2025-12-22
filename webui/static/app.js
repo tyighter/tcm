@@ -996,9 +996,13 @@ function renderEntry(entry) {
 
   enableEntryPreviewHover(preview, entry);
 
+  const previewGroup = document.createElement('div');
+  previewGroup.className = 'entry-preview-group';
+  previewGroup.append(preview);
+
   const media = document.createElement('div');
   media.className = 'entry-media';
-  media.append(logoWrapper, preview);
+  media.append(logoWrapper, previewGroup);
 
   const titleInput = document.createElement('input');
   titleInput.type = 'text';
@@ -1138,7 +1142,13 @@ function renderEntry(entry) {
     openEntryActionsModal(entry, entryPayload)
   );
 
-  actions.append(buildButton, manageButton, previewControls);
+  const previewActions = document.createElement('div');
+  previewActions.className = 'entry-preview-actions';
+  previewActions.append(buildButton, manageButton);
+
+  previewGroup.append(previewActions);
+
+  actions.append(previewControls);
   header.append(summary, actions);
 
   const body = document.createElement('div');
