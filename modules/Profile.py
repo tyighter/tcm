@@ -266,7 +266,7 @@ class Profile:
                 log.error(f'Cannot format episode text "{format_string}" for '
                           f'{episode} ({e})')
                 formatted = f'EPISODES {episode.episode_range}'
-            return self.__episode_case(formatted)
+            return self.__apply_episode_font_replacements(formatted)
 
         # Standard Episode object
         try:
@@ -278,7 +278,23 @@ class Profile:
             log.error(f'Cannot format episode text "{format_string}" for '
                       f'{episode} ({e})')
             formatted = f'EPISODE {episode.episode_info.episode_number}'
-        return self.__episode_case(formatted)
+        return self.__apply_episode_font_replacements(formatted)
+
+    def __apply_episode_font_replacements(self, episode_text: str) -> str:
+        """
+        Apply the configured episode text casing and font replacements.
+
+        Args:
+            episode_text: The formatted episode text.
+
+        Returns:
+            The episode text with case adjustments and font replacements applied.
+        """
+
+        formatted = self.__episode_case(episode_text)
+        for old, new in self.font.replacements.items():
+            formatted = formatted.replace(old, new)
+        return formatted
 
 
     def __remove_episode_text_format(self, title_text: str) -> str:
