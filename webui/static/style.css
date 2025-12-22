@@ -1968,6 +1968,29 @@ button:disabled:hover {
   align-items: center;
 }
 
+.font-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: start;
+}
+
+.font-picker__input {
+  width: 100%;
+}
+
+.font-picker__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 110px;
+}
+
+.font-picker__actions button {
+  width: 100%;
+  justify-content: center;
+}
+
 .color-input input[type='color'] {
   width: 44px;
   height: 44px;
