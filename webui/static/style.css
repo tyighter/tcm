@@ -570,10 +570,10 @@ button:disabled:hover {
 }
 
 .preview-controls {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: flex-end;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
 }
 
 .preview-episode-control {
