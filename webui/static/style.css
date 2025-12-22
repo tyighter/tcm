@@ -339,6 +339,20 @@ button:disabled:hover {
   flex-shrink: 0;
 }
 
+.entry-preview-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.entry-preview-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: flex-start;
+}
+
 .entry-logo-wrapper {
   display: flex;
   flex-direction: row;
