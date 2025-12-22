@@ -1282,8 +1282,11 @@ function renderEntry(entry) {
   addLineControls.className = 'add-line-controls add-line-controls--footer';
 
   const addLineButton = document.createElement('button');
-  addLineButton.className = 'add-line';
-  addLineButton.textContent = '+ Add line';
+  addLineButton.type = 'button';
+  addLineButton.className = 'icon-button add-line-button';
+  addLineButton.setAttribute('aria-label', 'Add new line');
+  addLineButton.innerHTML =
+    '<span class="material-symbols-rounded" aria-hidden="true">add</span>';
   addLineButton.addEventListener('click', () =>
     openFieldSelector(entry, {
       availableFilter: (field) =>
@@ -1293,7 +1296,7 @@ function renderEntry(entry) {
 
   const addLineSearchButton = document.createElement('button');
   addLineSearchButton.type = 'button';
-  addLineSearchButton.className = 'icon-button add-line-search__button';
+  addLineSearchButton.className = 'icon-button add-line-button add-line-search__button';
   addLineSearchButton.setAttribute('aria-label', 'Search configuration options');
   addLineSearchButton.innerHTML =
     '<span class="material-symbols-rounded" aria-hidden="true">search</span>';
@@ -1739,7 +1742,10 @@ function renderFieldRow(entry, field, value) {
   controls.className = 'field-controls';
 
   const showRemoveButton =
-    field.id !== 'library' && field.id !== 'card_type' && field.path?.[0] !== 'font';
+    field.type !== 'font' &&
+    field.id !== 'library' &&
+    field.id !== 'card_type' &&
+    field.path?.[0] !== 'font';
   const removeButton = showRemoveButton ? document.createElement('button') : null;
   if (removeButton) {
     removeButton.textContent = '✕';
@@ -2431,7 +2437,7 @@ function translationEditor(entry, field, value) {
 }
 
 function fontPicker(entry, field, value, options = {}) {
-  const { onChange } = options;
+  const { onChange, showRemove = true } = options;
   const wrapper = document.createElement('div');
   wrapper.className = 'font-picker';
 
@@ -2520,18 +2526,22 @@ function fontPicker(entry, field, value, options = {}) {
     });
   });
 
-  remove = document.createElement('button');
-  remove.type = 'button';
-  remove.classList.add('icon-button', 'remove-button');
-  remove.setAttribute('aria-label', 'Remove font line');
-  remove.innerHTML =
-    '<span class="material-symbols-rounded" aria-hidden="true">close</span>';
-  remove.addEventListener('click', () => {
-    uploadInput.value = '';
-    setValue(undefined);
-  });
+  if (showRemove) {
+    remove = document.createElement('button');
+    remove.type = 'button';
+    remove.classList.add('icon-button', 'remove-button');
+    remove.setAttribute('aria-label', 'Remove font line');
+    remove.textContent = '✕';
+    remove.addEventListener('click', () => {
+      uploadInput.value = '';
+      setValue(undefined);
+    });
+  }
 
-  actions.append(upload, browse, remove);
+  actions.append(upload, browse);
+  if (remove) {
+    actions.append(remove);
+  }
   wrapper.append(input, uploadInput, actions);
   syncRemoveState();
   return wrapper;
@@ -2688,6 +2698,7 @@ function mapEditor(entry, field, value, keyLabel, valueLabel, onUpdate, options 
             row.value = nextValue;
             update();
           },
+          showRemove: false,
         });
       } else if (renderColorValue) {
         const wrapper = document.createElement('div');
@@ -3022,6 +3033,7 @@ function extrasEditor(entry, field, value) {
           onChange: (nextValue) => {
             apply(nextValue);
           },
+          showRemove: false,
         })
       );
       return wrapper;
