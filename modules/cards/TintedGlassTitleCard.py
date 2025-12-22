@@ -66,6 +66,7 @@ class TintedGlassTitleCard(BaseCardType):
         'font_vertical_shift', 'episode_text_color', 'episode_text_position',
         'box_adjustments', 'glass_color', 'rounding_radius',
         'vertical_adjustment', 'episode_text_font_size',
+        'episode_text_vertical_shift',
     )
 
     def __init__(self,
@@ -88,6 +89,7 @@ class TintedGlassTitleCard(BaseCardType):
             box_adjustments: Optional[str] = None,
             glass_color: str = DARKEN_COLOR,
             episode_text_font_size: float = 1.0,
+            episode_text_vertical_shift: int = 0,
             preferences: Optional['Preferences'] = None, # type: ignore
             rounding_radius: int = DEFAULT_ROUNDING_RADIUS,
             vertical_adjustment: int = 0,
@@ -119,6 +121,7 @@ class TintedGlassTitleCard(BaseCardType):
         self.episode_text_font_size = self._parse_episode_text_font_size(
             episode_text_font_size
         )
+        self.episode_text_vertical_shift = episode_text_vertical_shift
 
         # Validate episode text position
         position = episode_text_position.lower().strip()
@@ -280,7 +283,7 @@ class TintedGlassTitleCard(BaseCardType):
         elif self.episode_text_position == 'right':
             gravity = 'southeast'
             x, y = self.WIDTH - title_coordinates.x1 - 20, 150
-        y += self.vertical_adjustment
+        y += self.vertical_adjustment + self.episode_text_vertical_shift
         position = f'{x:+.1f}{y:+.1f}'
 
         command = [
@@ -315,8 +318,9 @@ class TintedGlassTitleCard(BaseCardType):
         # Additional y offset necessary for equal padding
         y_start, y_end = y_start - 7, y_end + 10
 
-        y_start -= self.vertical_adjustment
-        y_end -= self.vertical_adjustment
+        adjustment = self.vertical_adjustment + self.episode_text_vertical_shift
+        y_start -= adjustment
+        y_end -= adjustment
 
         coordinates = BoxCoordinates(x_start, y_start, x_end, y_end)
 
@@ -349,6 +353,8 @@ class TintedGlassTitleCard(BaseCardType):
                 del extras['episode_text_color']
             if 'glass_color' in extras:
                 extras['glass_color'] = TintedGlassTitleCard.DARKEN_COLOR
+            if 'episode_text_vertical_shift' in extras:
+                extras['episode_text_vertical_shift'] = 0
 
 
     @staticmethod
@@ -372,6 +378,8 @@ class TintedGlassTitleCard(BaseCardType):
                 and extras['episode_text_color'] != TintedGlassTitleCard.EPISODE_TEXT_COLOR)
             or ('glass_color' in extras
                 and extras['glass_color'] != TintedGlassTitleCard.DARKEN_COLOR)
+            or ('episode_text_vertical_shift' in extras
+                and extras['episode_text_vertical_shift'] != 0)
         )
 
         return (custom_extras
