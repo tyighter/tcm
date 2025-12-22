@@ -58,7 +58,7 @@ class AnimeTitleCard(BaseCardType):
         'kanji', 'use_kanji', 'require_kanji', 'kanji_vertical_shift',
         'episode_text_color', 'kanji_color', 'episode_stroke_color',
         'kanji_stroke_color', 'kanji_stroke_width', 'kanji_font_size',
-        'episode_text_font_size',
+        'episode_text_font_size', 'episode_text_vertical_shift',
     )
 
     def __init__(self, *,
@@ -84,6 +84,7 @@ class AnimeTitleCard(BaseCardType):
             episode_text_color: str = SERIES_COUNT_TEXT_COLOR,
             separator: str = '·',
             episode_text_font_size: float = 1.0,
+            episode_text_vertical_shift: int = 0,
             omit_gradient: bool = False,
             require_kanji: bool = False,
             kanji_color: str = TITLE_COLOR,
@@ -148,6 +149,7 @@ class AnimeTitleCard(BaseCardType):
                 )
             )
             self.episode_text_font_size = 1.0
+        self.episode_text_vertical_shift = episode_text_vertical_shift
 
 
     @property
@@ -279,19 +281,22 @@ class AnimeTitleCard(BaseCardType):
         if self.hide_season_text or self.hide_episode_text:
             text = self.episode_text if self.hide_season_text else self.season_text
             stroke_width = 6 * self.episode_text_font_size
+            y_offset = 90 + self.episode_text_vertical_shift
             return [
                 *self.__series_count_text_global_effects,
                 f'-fill "{self.episode_stroke_color}"',
                 f'-stroke "{self.episode_stroke_color}"',
                 f'-strokewidth {stroke_width}',
-                f'-annotate +75+90 "{text}"',
+                f'-annotate +75+{y_offset} "{text}"',
                 f'-fill "{self.episode_text_color}"',
                 f'-stroke "{self.episode_text_color}"',
                 f'-strokewidth 0',
-                f'-annotate +75+90 "{text}"',
+                f'-annotate +75+{y_offset} "{text}"',
             ]
 
         # Add season and episode text
+        geometry_y = 90 + self.episode_text_vertical_shift
+        stroke_geometry_y = 88 + self.episode_text_vertical_shift
         return [
             f'-background transparent',
             *self.__series_count_text_global_effects,
@@ -307,7 +312,7 @@ class AnimeTitleCard(BaseCardType):
             f'+smush 30 \)',        # Smush less for stroke
             f'-gravity southwest',
             # Overlay stroke "image"
-            f'-geometry +73+88',    # Different offset for stroke
+            f'-geometry +73+{stroke_geometry_y}',    # Different offset for stroke
             f'-composite',
             # Primary season+episode text
             *self.__series_count_text_global_effects,
@@ -324,7 +329,7 @@ class AnimeTitleCard(BaseCardType):
             f'+smush 35 \)',
             # Add text to source image
             f'-gravity southwest',
-            f'-geometry +75+90',
+            f'-geometry +75+{geometry_y}',
             f'-composite',
         ]
 
@@ -355,6 +360,8 @@ class AnimeTitleCard(BaseCardType):
                     AnimeTitleCard.SERIES_COUNT_TEXT_COLOR
             if 'episode_text_font_size' in extras:
                 extras['episode_text_font_size'] = 1.0
+            if 'episode_text_vertical_shift' in extras:
+                extras['episode_text_vertical_shift'] = 0
             if 'kanji_font_size' in extras:
                 extras['kanji_font_size'] = 1.0
             if 'kanji_stroke_width' in extras:
@@ -388,6 +395,8 @@ class AnimeTitleCard(BaseCardType):
                 and extras['episode_text_color'] != AnimeTitleCard.SERIES_COUNT_TEXT_COLOR)
             or ('episode_text_font_size' in extras
                 and extras['episode_text_font_size'] != 1.0)
+            or ('episode_text_vertical_shift' in extras
+                and extras['episode_text_vertical_shift'] != 0)
             or ('kanji_color' in extras
                 and extras['kanji_color'] != AnimeTitleCard.TITLE_COLOR)
             or ('kanji_font_size' in extras and extras['kanji_font_size'] !=1.0)

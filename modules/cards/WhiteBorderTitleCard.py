@@ -57,6 +57,7 @@ class WhiteBorderTitleCard(BaseCardType):
         'font_stroke_width', 'font_vertical_shift', 'border_color',
         'stroke_color', 'episode_text_color', 'episode_text_font_size',
         'font_interword_spacing', 'separator', 'omit_gradient',
+        'episode_text_vertical_shift',
     )
 
     def __init__(self, *,
@@ -80,6 +81,7 @@ class WhiteBorderTitleCard(BaseCardType):
             border_color: str = 'white',
             episode_text_color: str = TITLE_COLOR,
             episode_text_font_size: float = 1.0,
+            episode_text_vertical_shift: int = 0,
             omit_gradient: bool = False,
             separator: str = '•',
             stroke_color: str = STROKE_COLOR,
@@ -125,6 +127,7 @@ class WhiteBorderTitleCard(BaseCardType):
             )
             self.episode_text_font_size = 1.0
             self.valid = False
+        self.episode_text_vertical_shift = episode_text_vertical_shift
         self.omit_gradient = omit_gradient
         self.separator = separator
         self.stroke_color = stroke_color
@@ -175,6 +178,7 @@ class WhiteBorderTitleCard(BaseCardType):
             )
 
         size = 62.5 * self.episode_text_font_size
+        y_offset = 162 + self.episode_text_vertical_shift
 
         return [
             # Global text effects
@@ -188,12 +192,12 @@ class WhiteBorderTitleCard(BaseCardType):
             f'-fill black',
             f'-stroke black',
             f'-strokewidth 6',
-            f'-annotate +0+162 "{index_text}"',
+            f'-annotate +0+{y_offset} "{index_text}"',
             # Primary text
             f'-fill "{self.episode_text_color}"',
             f'-stroke "{self.episode_text_color}"',
             f'-strokewidth 0.75',
-            f'-annotate +0+162 "{index_text}"',
+            f'-annotate +0+{y_offset} "{index_text}"',
         ]
 
 
@@ -242,6 +246,8 @@ class WhiteBorderTitleCard(BaseCardType):
                     WhiteBorderTitleCard.EPISODE_TEXT_COLOR
             if 'episode_text_font_size' in extras:
                 extras['episode_text_font_size'] = 1.0
+            if 'episode_text_vertical_shift' in extras:
+                extras['episode_text_vertical_shift'] = 0
             if 'stroke_color' in extras:
                 extras['stroke_color'] = WhiteBorderTitleCard.STROKE_COLOR
 
@@ -268,6 +274,8 @@ class WhiteBorderTitleCard(BaseCardType):
                     WhiteBorderTitleCard.EPISODE_TEXT_COLOR)
             or ('episode_text_font_size' in extras
                 and extras['episode_text_font_size'] != 1.0)
+            or ('episode_text_vertical_shift' in extras
+                and extras['episode_text_vertical_shift'] != 0)
             or ('stroke_color' in extras
                 and extras['stroke_color'] != WhiteBorderTitleCard.STROKE_COLOR)
         )
