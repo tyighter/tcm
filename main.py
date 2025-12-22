@@ -7,6 +7,7 @@ from re import match
 from time import sleep
 
 from modules.Version import Version
+from modules import global_objects
 
 try:
     from requests import get
@@ -197,6 +198,8 @@ def run():
 
     # Reset previously loaded assets
     RemoteFile.reset_loaded_database()
+    if global_objects.info_set is not None:
+        global_objects.info_set.reset_episode_info()
 
     # Create Manager, run, and write missing report
     try:
