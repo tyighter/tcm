@@ -338,6 +338,7 @@ button:disabled:hover {
   align-items: flex-start;
   flex-wrap: wrap;
   flex-shrink: 0;
+  width: 100%;
 }
 
 .entry-preview-group {
@@ -347,6 +348,7 @@ button:disabled:hover {
   flex-wrap: wrap;
   justify-content: space-between;
   flex: 1 1 0;
+  width: 100%;
 }
 
 .entry-preview-actions {
@@ -355,6 +357,7 @@ button:disabled:hover {
   gap: 0.35rem;
   align-items: flex-end;
   margin-left: auto;
+  flex-shrink: 0;
 }
 
 .entry-logo-wrapper {
@@ -806,8 +809,8 @@ button:disabled:hover {
 .field-row .field-controls {
   display: flex;
   gap: 0.75rem;
-  align-items: flex-start;
-  flex-wrap: wrap;
+  align-items: center;
+  flex-wrap: nowrap;
 }
 
 .field-collapsible {
@@ -1097,9 +1100,9 @@ button:disabled:hover {
 
 .multi-row-item {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr) auto;
   gap: 0.75rem;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .multi-row-item button {
@@ -1318,19 +1321,7 @@ button:disabled:hover {
   margin-top: 0;
 }
 
-.add-line-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-}
-
-.add-line-controls--footer {
-  width: 100%;
-  justify-content: flex-end;
-  margin-top: 0.75rem;
-}
-
+.add-line-button,
 .add-line-search__button {
   width: 44px;
   height: 44px;
@@ -1345,9 +1336,23 @@ button:disabled:hover {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--shadow-sm);
 }
 
+.add-line-button:hover,
 .add-line-search__button:hover {
   background: linear-gradient(180deg, #1b2638, #131c2a);
   border-color: rgba(229, 160, 13, 0.3);
+}
+
+.add-line-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.add-line-controls--footer {
+  width: 100%;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
 }
 
 .empty-state {
@@ -2055,9 +2060,9 @@ fieldset legend {
 
 .table-list-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1fr) auto;
   gap: 0.75rem;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .table-list-row__key {
@@ -2108,6 +2113,10 @@ fieldset legend {
 .extras-list {
   display: grid;
   gap: 0.75rem;
+}
+
+.extras-list > .add-line {
+  justify-self: end;
 }
 
 .extra-card__header {
