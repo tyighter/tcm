@@ -142,6 +142,7 @@ class ComicBookTitleCard(BaseCardType):
         'text_box_edge_color', 'title_text_rotation_angle',
         'index_text_rotation_angle', 'banner_fill_color', 'title_banner_shift',
         'index_banner_shift', 'hide_title_banner', 'hide_index_banner',
+        'episode_text_font_size',
     )
 
     def __init__(self, *,
@@ -172,6 +173,7 @@ class ComicBookTitleCard(BaseCardType):
             index_banner_shift: int = 0,
             hide_title_banner: bool = False,
             hide_index_banner: bool = False,
+            episode_text_font_size: float = 1.0,
             preferences: Optional['Preferences'] = None, # type: ignore
             **unused,
         ) -> None:
@@ -241,6 +243,9 @@ class ComicBookTitleCard(BaseCardType):
             return None
         self.title_text_rotation_angle = get_angle(title_text_rotation_angle)
         self.index_text_rotation_angle = get_angle(index_text_rotation_angle)
+        self.episode_text_font_size = self._parse_episode_text_font_size(
+            episode_text_font_size
+        )
 
 
     @property
@@ -367,7 +372,7 @@ class ComicBookTitleCard(BaseCardType):
             index_text = f'{self.season_text} {self.episode_text}'
 
         # Font characteristics
-        font_size = 50 * self.font_size
+        font_size = 50 * self.font_size * self.episode_text_font_size
 
         # Determine placement gravity and offset of the text
         y_coordinate = 75

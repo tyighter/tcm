@@ -65,7 +65,7 @@ class TintedGlassTitleCard(BaseCardType):
         'font_interline_spacing', 'font_interword_spacing', 'font_kerning',
         'font_vertical_shift', 'episode_text_color', 'episode_text_position',
         'box_adjustments', 'glass_color', 'rounding_radius',
-        'vertical_adjustment',
+        'vertical_adjustment', 'episode_text_font_size',
     )
 
     def __init__(self,
@@ -87,6 +87,7 @@ class TintedGlassTitleCard(BaseCardType):
             episode_text_position: Position = 'center',
             box_adjustments: Optional[str] = None,
             glass_color: str = DARKEN_COLOR,
+            episode_text_font_size: float = 1.0,
             preferences: Optional['Preferences'] = None, # type: ignore
             rounding_radius: int = DEFAULT_ROUNDING_RADIUS,
             vertical_adjustment: int = 0,
@@ -115,6 +116,9 @@ class TintedGlassTitleCard(BaseCardType):
 
         # Store and validate extras
         self.episode_text_color = episode_text_color
+        self.episode_text_font_size = self._parse_episode_text_font_size(
+            episode_text_font_size
+        )
 
         # Validate episode text position
         position = episode_text_position.lower().strip()
@@ -283,7 +287,7 @@ class TintedGlassTitleCard(BaseCardType):
             f'-gravity {gravity}',
             f'-font "{self.EPISODE_TEXT_FONT.resolve()}"',
             f'-fill "{self.episode_text_color}"',
-            f'-pointsize 75',
+            f'-pointsize {75 * self.episode_text_font_size}',
             f'+kerning',
             f'-interword-spacing 0',
             f'-annotate {position} "{self.episode_text}"',

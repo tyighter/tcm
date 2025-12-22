@@ -54,7 +54,7 @@ class PosterTitleCard(BaseCardType):
         'source_file', 'output_file', 'logo', 'title_text', 'episode_text',
         'font_color', 'font_file', 'font_interline_spacing',
         'font_interword_spacing', 'font_size', 'episode_text_color',
-        'episode_text_font',
+        'episode_text_font', 'episode_text_font_size',
     )
 
 
@@ -68,6 +68,7 @@ class PosterTitleCard(BaseCardType):
             font_interline_spacing: int = 0,
             font_interword_spacing: int = 0,
             font_size: float = 1.0,
+            episode_text_font_size: float = 1.0,
             episode_text_font: str | Path = EPISODE_TEXT_FONT,
             blur: bool = False,
             grayscale: bool = False,
@@ -124,6 +125,9 @@ class PosterTitleCard(BaseCardType):
         self.font_interword_spacing = font_interword_spacing
         self.font_size = font_size
         self.episode_text_font = self._resolve_font_path(episode_text_font)
+        self.episode_text_font_size = self._parse_episode_text_font_size(
+            episode_text_font_size
+        )
 
         # Extras
         if episode_text_color is None:
@@ -257,7 +261,7 @@ class PosterTitleCard(BaseCardType):
             # Add episode text
             f'-gravity south',
             f'-font "{self.episode_text_font}"',
-            f'-pointsize {75 * self.font_size}',
+            f'-pointsize {75 * self.font_size * self.episode_text_font_size}',
             f'-fill "{self.episode_text_color}"',
             f'-annotate +649+50 "{self.episode_text}"',
             # Add title text

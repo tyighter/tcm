@@ -251,7 +251,7 @@ class RomanNumeralTitleCard(BaseCardType):
         'font_interword_spacing', 'font_size', 'background',
         'roman_numeral_color', 'roman_numeral', '_roman_text_scalar',
         '__roman_numeral_lines', 'rotation', 'offset', 'season_text_color',
-        'font_file',
+        'font_file', 'episode_text_font_size',
     )
 
     def __init__(self,
@@ -272,6 +272,7 @@ class RomanNumeralTitleCard(BaseCardType):
             background: str = BACKGROUND_COLOR,
             roman_numeral_color: str = ROMAN_NUMERAL_TEXT_COLOR,
             season_text_color: str = SEASON_TEXT_COLOR,
+            episode_text_font_size: float = 1.0,
             preferences: Optional['PreferenceParser'] = None,
             **unused,
         ) -> None:
@@ -294,6 +295,9 @@ class RomanNumeralTitleCard(BaseCardType):
         self.background = background
         self.roman_numeral_color = roman_numeral_color
         self.season_text_color = season_text_color
+        self.episode_text_font_size = self._parse_episode_text_font_size(
+            episode_text_font_size
+        )
 
         # Try and parse roman digit from the episode text, if cannot be done,
         # just use actual episode number
@@ -395,7 +399,7 @@ class RomanNumeralTitleCard(BaseCardType):
             return []
 
         # Scale font size and interline spacing of roman text
-        font_size = 1250 * self._roman_text_scalar
+        font_size = 1250 * self._roman_text_scalar * self.episode_text_font_size
         interline_spacing = -400 * self._roman_text_scalar
 
         return [
@@ -443,7 +447,7 @@ class RomanNumeralTitleCard(BaseCardType):
             f'-gravity center',
             f'-font "{self.TITLE_FONT}"',
             f'-fill "{color}"',
-            f'-pointsize 50',
+            f'-pointsize {50 * self.episode_text_font_size}',
             f'+interword-spacing',
             f'-annotate {rotation}{offset} "{self.season_text}"',
         ]

@@ -124,6 +124,7 @@ class MusicTitleCard(BaseCardType):
         'player_position', 'player_style', 'player_width', 'round_corners',
         'subtitle', 'timeline_color', '__album_dimensions',
         '__title_dimensions', '__season_x', '__episode_x', '__cleanup',
+        'episode_text_font_size',
     )
 
 
@@ -167,6 +168,7 @@ class MusicTitleCard(BaseCardType):
             control_colors: str = 'white white white white white',
             draw_heart: bool = False,
             episode_text_color: str = EPISODE_TEXT_COLOR,
+            episode_text_font_size: float = 1.0,
             heart_color: str = 'transparent',
             heart_stroke_color: str = 'white',
             pause_or_play: PlayerAction = DEFAULT_PLAYER_ACTION,
@@ -232,6 +234,9 @@ class MusicTitleCard(BaseCardType):
             self.valid = False
         self.draw_heart = draw_heart
         self.episode_text_color = episode_text_color
+        self.episode_text_font_size = self._parse_episode_text_font_size(
+            episode_text_font_size
+        )
         self.heart_color = heart_color
         self.heart_stroke_color = heart_stroke_color
         if (pause_or_play := pause_or_play.lower()) == 'watched':
@@ -402,7 +407,7 @@ class MusicTitleCard(BaseCardType):
             f'-gravity east',
             f'-font "{self.INDEX_TEXT_FONT.resolve()}"',
             f'-fill "{self.episode_text_color}"',
-            f'-pointsize 37',
+            f'-pointsize {37 * self.episode_text_font_size}',
             f'-kerning 1',
             f'-annotate +0+0', # Replaced later
             f'"{self.season_text}"',
@@ -426,7 +431,7 @@ class MusicTitleCard(BaseCardType):
             f'-gravity west',
             f'-font "{self.INDEX_TEXT_FONT.resolve()}"',
             f'-fill "{self.episode_text_color}"',
-            f'-pointsize 37',
+            f'-pointsize {37 * self.episode_text_font_size}',
             f'-kerning 1',
             f'-annotate +0+0', # Replaced later
             f'"{self.episode_text}"',

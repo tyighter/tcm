@@ -351,6 +351,24 @@ class BaseCardType(ImageMaker):
 
 
     @staticmethod
+    def _parse_episode_text_font_size(
+            episode_text_font_size: Any,
+            default: float = 1.0,
+        ) -> float:
+        """Safely coerce an episode text font size value to a float."""
+
+        try:
+            return float(episode_text_font_size)
+        except (TypeError, ValueError) as exc:
+            log.error(
+                'Invalid episode_text_font_size "%s" - must be numeric: %s',
+                episode_text_font_size,
+                exc,
+            )
+            return default
+
+
+    @staticmethod
     def modify_extras( # pylint: disable=unused-argument
             extras: dict,
             custom_font: bool,
