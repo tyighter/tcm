@@ -58,6 +58,7 @@ class AnimeTitleCard(BaseCardType):
         'kanji', 'use_kanji', 'require_kanji', 'kanji_vertical_shift',
         'episode_text_color', 'kanji_color', 'episode_stroke_color',
         'kanji_stroke_color', 'kanji_stroke_width', 'kanji_font_size',
+        'episode_text_font_size',
     )
 
     def __init__(self, *,
@@ -82,6 +83,7 @@ class AnimeTitleCard(BaseCardType):
             episode_stroke_color: str = EPISODE_STROKE_COLOR,
             episode_text_color: str = SERIES_COUNT_TEXT_COLOR,
             separator: str = '·',
+            episode_text_font_size: float = 1.0,
             omit_gradient: bool = False,
             require_kanji: bool = False,
             kanji_color: str = TITLE_COLOR,
@@ -134,6 +136,16 @@ class AnimeTitleCard(BaseCardType):
         self.kanji_stroke_width = kanji_stroke_width
         self.separator = separator
         self.stroke_color = stroke_color
+        try:
+            self.episode_text_font_size = float(episode_text_font_size)
+        except (TypeError, ValueError) as exc:
+            log.error(
+                'Invalid episode_text_font_size "{episode_text_font_size}" - '
+                'must be numeric: {error}'.format(
+                    episode_text_font_size=episode_text_font_size, error=exc,
+                )
+            )
+            self.episode_text_font_size = 1.0
 
 
     @property
@@ -193,10 +205,12 @@ class AnimeTitleCard(BaseCardType):
         text (season/episode count and dot).
         """
 
+        episode_text_point_size = 67 * self.episode_text_font_size
+
         return [
             f'-font "{self.SERIES_COUNT_FONT.resolve()}"',
             f'-kerning 2',
-            f'-pointsize 67',
+            f'-pointsize {episode_text_point_size}',
             f'-interword-spacing 25',
             f'-gravity southwest',
         ]
@@ -262,11 +276,12 @@ class AnimeTitleCard(BaseCardType):
         # Add only season or episode text
         if self.hide_season_text or self.hide_episode_text:
             text = self.episode_text if self.hide_season_text else self.season_text
+            stroke_width = 6 * self.episode_text_font_size
             return [
                 *self.__series_count_text_global_effects,
                 f'-fill "{self.episode_stroke_color}"',
                 f'-stroke "{self.episode_stroke_color}"',
-                f'-strokewidth 6',
+                f'-strokewidth {stroke_width}',
                 f'-annotate +75+90 "{text}"',
                 f'-fill "{self.episode_text_color}"',
                 f'-stroke "{self.episode_text_color}"',
@@ -280,7 +295,7 @@ class AnimeTitleCard(BaseCardType):
             *self.__series_count_text_global_effects,
             f'-fill "{self.episode_stroke_color}"',
             f'-stroke "{self.episode_stroke_color}"',
-            f'-strokewidth 6',
+            f'-strokewidth {6 * self.episode_text_font_size}',
             # Stroke behind season and episode text
             f'\( -gravity center',
             # Stroke uses same font for season/episode text
@@ -298,7 +313,7 @@ class AnimeTitleCard(BaseCardType):
             f'-stroke "{self.episode_text_color}"',
             f'\( -gravity center',
             # Season text and separator uses larger stroke
-            f'-strokewidth 2',
+            f'-strokewidth {2 * self.episode_text_font_size}',
             f'label:"{self.season_text} {self.separator}"',
             # Zero-width stroke for episode text
             f'-strokewidth 0',
@@ -336,6 +351,8 @@ class AnimeTitleCard(BaseCardType):
             if 'episode_text_color' in extras:
                 extras['episode_text_color'] =\
                     AnimeTitleCard.SERIES_COUNT_TEXT_COLOR
+            if 'episode_text_font_size' in extras:
+                extras['episode_text_font_size'] = 1.0
             if 'kanji_font_size' in extras:
                 extras['kanji_font_size'] = 1.0
             if 'kanji_stroke_width' in extras:
@@ -367,6 +384,8 @@ class AnimeTitleCard(BaseCardType):
                 and extras['episode_stroke_color'] != AnimeTitleCard.EPISODE_STROKE_COLOR)
             or ('episode_text_color' in extras
                 and extras['episode_text_color'] != AnimeTitleCard.SERIES_COUNT_TEXT_COLOR)
+            or ('episode_text_font_size' in extras
+                and extras['episode_text_font_size'] != 1.0)
             or ('kanji_color' in extras
                 and extras['kanji_color'] != AnimeTitleCard.TITLE_COLOR)
             or ('kanji_font_size' in extras and extras['kanji_font_size'] !=1.0)
