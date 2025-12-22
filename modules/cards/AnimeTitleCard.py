@@ -45,7 +45,7 @@ class AnimeTitleCard(BaseCardType):
     KANJI_FONT = REF_DIRECTORY / 'hiragino-mincho-w3.ttc'
 
     """Font characteristics for the series count text"""
-    SERIES_COUNT_FONT = REF_DIRECTORY / 'Avenir.ttc'
+    DEFAULT_SERIES_COUNT_FONT = REF_DIRECTORY / 'Avenir.ttc'
     SERIES_COUNT_TEXT_COLOR = '#CFCFCF'
     EPISODE_STROKE_COLOR = 'black'
 
@@ -127,6 +127,8 @@ class AnimeTitleCard(BaseCardType):
         self.font_vertical_shift = font_vertical_shift
 
         # Optional extras
+        if not hasattr(self, 'SERIES_COUNT_FONT'):
+            self.SERIES_COUNT_FONT = self.DEFAULT_SERIES_COUNT_FONT
         self.episode_stroke_color = episode_stroke_color
         self.episode_text_color = episode_text_color
         self.omit_gradient = omit_gradient
