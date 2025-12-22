@@ -2410,26 +2410,46 @@ function translationEditor(entry, field, value) {
 function fontPicker(entry, field, value, options = {}) {
   const { onChange } = options;
   const wrapper = document.createElement('div');
-  wrapper.className = 'inline-actions';
+  wrapper.className = 'font-picker';
 
   const input = document.createElement('input');
   input.type = 'text';
   input.value = value ?? '';
-  input.addEventListener('input', (event) => {
-    const nextValue = event.target.value || undefined;
-    updateField(entry, field, nextValue);
-    if (onChange) {
-      onChange(nextValue);
-    }
-  });
+  input.className = 'font-picker__input';
 
   const uploadInput = document.createElement('input');
   uploadInput.type = 'file';
   uploadInput.accept = '.ttf,.otf,.woff,.woff2';
   uploadInput.style.display = 'none';
 
+  const actions = document.createElement('div');
+  actions.className = 'font-picker__actions';
+
+  let remove;
+
+  const syncRemoveState = () => {
+    if (remove) {
+      remove.disabled = !input.value;
+    }
+  };
+
+  const setValue = (nextValue) => {
+    input.value = nextValue ?? '';
+    updateField(entry, field, nextValue);
+    if (onChange) {
+      onChange(nextValue);
+    }
+    syncRemoveState();
+  };
+
+  input.addEventListener('input', (event) => {
+    const nextValue = event.target.value || undefined;
+    setValue(nextValue);
+  });
+
   const upload = document.createElement('button');
   upload.textContent = 'Upload';
+  upload.type = 'button';
   upload.addEventListener('click', () => uploadInput.click());
 
   uploadInput.addEventListener('change', async (event) => {
@@ -2445,11 +2465,7 @@ function fontPicker(entry, field, value, options = {}) {
     try {
       const { path } = await uploadFont(file, targetDirectory);
       if (path) {
-        input.value = path;
-        updateField(entry, field, path);
-        if (onChange) {
-          onChange(path);
-        }
+        setValue(path);
         showToast(`Uploaded ${file.name}`, 'success');
       }
     } catch (error) {
@@ -2469,16 +2485,22 @@ function fontPicker(entry, field, value, options = {}) {
     openFontPickerModal({
       initialPath: PathParent(input.value) || state.fontDirectory,
       onSelect: (path) => {
-        input.value = path;
-        updateField(entry, field, path);
-        if (onChange) {
-          onChange(path);
-        }
+        setValue(path);
       },
     });
   });
 
-  wrapper.append(input, uploadInput, upload, browse);
+  remove = document.createElement('button');
+  remove.type = 'button';
+  remove.textContent = 'Remove';
+  remove.addEventListener('click', () => {
+    uploadInput.value = '';
+    setValue(undefined);
+  });
+
+  actions.append(upload, browse, remove);
+  wrapper.append(input, uploadInput, actions);
+  syncRemoveState();
   return wrapper;
 }
 
