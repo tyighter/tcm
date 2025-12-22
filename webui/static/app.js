@@ -3148,8 +3148,8 @@ function wrapSeasonTitlesControl(entry, field, value, content) {
   const summaryLabel = document.createElement('span');
   summaryLabel.className = 'field-collapsible__label';
   summaryLabel.textContent = entry.seasonTitlesCollapsed
-    ? 'Show season titles'
-    : 'Hide season titles';
+    ? '+'
+    : '-';
 
   const summaryMeta = document.createElement('span');
   summaryMeta.className = 'field-collapsible__meta';
@@ -3166,8 +3166,8 @@ function wrapSeasonTitlesControl(entry, field, value, content) {
   container.addEventListener('toggle', () => {
     entry.seasonTitlesCollapsed = !container.open;
     summaryLabel.textContent = entry.seasonTitlesCollapsed
-      ? 'Show season titles'
-      : 'Hide season titles';
+      ? '+'
+      : '-';
   });
 
   return container;
