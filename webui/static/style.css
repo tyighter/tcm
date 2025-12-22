@@ -705,6 +705,69 @@ button:disabled:hover {
   margin: 0;
 }
 
+.entry-section--identifiers .entry-section__header {
+  align-items: flex-start;
+}
+
+.identifier-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.identifier-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.identifier-pill__label {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.identifier-pill__value {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.identifier-empty {
+  margin: 0;
+}
+
+.identifier-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.identifier-row .identifier-controls {
+  align-items: center;
+}
+
+.identifier-row input {
+  max-width: 320px;
+}
+
+.identifier-clear {
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-strong);
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.identifier-clear:hover {
+  color: var(--accent-strong);
+  border-color: rgba(229, 160, 13, 0.35);
+}
+
 .entry--collapsed .entry-body {
   display: none;
 }

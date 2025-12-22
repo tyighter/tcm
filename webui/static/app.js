@@ -848,6 +848,7 @@ function renderEntry(entry) {
   const container = document.createElement('article');
   container.className = 'entry';
   container.dataset.entryId = entry.id;
+  entry.config = entry.config || {};
   initializeEntryPreviewState(entry);
 
   const removeEntryButton = document.createElement('button');
@@ -1152,6 +1153,9 @@ function renderEntry(entry) {
     if (field.id === 'extras') {
       extrasFieldDefinition = field;
     }
+    if (ID_FIELDS.has(field.id)) {
+      return;
+    }
     if (value !== undefined) {
       usedFields.add(field.id);
       if (field.path?.[0] === 'font') {
@@ -1172,7 +1176,8 @@ function renderEntry(entry) {
   addLineButton.textContent = '+ Add line';
   addLineButton.addEventListener('click', () =>
     openFieldSelector(entry, {
-      availableFilter: (field) => field.path?.[0] !== 'font' && field.id !== 'extras',
+      availableFilter: (field) =>
+        field.path?.[0] !== 'font' && field.id !== 'extras' && !ID_FIELDS.has(field.id),
     })
   );
 
@@ -1187,6 +1192,11 @@ function renderEntry(entry) {
 
   addLineControls.append(addLineButton, addLineSearchButton);
   body.appendChild(addLineControls);
+
+  const identifierSection = renderIdentifierSection(entry);
+  if (identifierSection) {
+    body.appendChild(identifierSection);
+  }
 
   const extrasSection = document.createElement('section');
   extrasSection.className = 'entry-section entry-section--extras';
@@ -3230,6 +3240,45 @@ function deleteValue(object, path) {
   }
 }
 
+function applyIdentifierValue(entry, field, rawValue) {
+  if (!entry || !field) {
+    return;
+  }
+  const value = rawValue === undefined || rawValue === null ? '' : String(rawValue).trim();
+  if (value === '') {
+    deleteValue(entry.config, field.path);
+    handleEntryConfigChange(entry, field);
+    return;
+  }
+
+  if (field.type === 'number') {
+    const numeric = Number(value);
+    setValue(entry.config, field.path, Number.isFinite(numeric) ? numeric : value);
+  } else {
+    setValue(entry.config, field.path, value);
+  }
+  handleEntryConfigChange(entry, field);
+}
+
+function createIdentifierInput(entry, field, value, onChange) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = value ?? '';
+  if (field.type === 'number') {
+    input.inputMode = 'numeric';
+  }
+  input.placeholder = field.label || field.id;
+  input.addEventListener('input', () => {
+    applyIdentifierValue(entry, field, input.value);
+  });
+  input.addEventListener('change', () => {
+    if (typeof onChange === 'function') {
+      onChange();
+    }
+  });
+  return input;
+}
+
 // -----------------------------------------------------------------------------
 // Additional UI components
 // -----------------------------------------------------------------------------
@@ -3253,6 +3302,14 @@ const ID_FIELDS = new Set([
   'jellyfin_id',
   'sonarr_id',
 ]);
+
+function getIdentifierFields() {
+  return state.fields.filter((field) => ID_FIELDS.has(field.id));
+}
+
+function isIdentifierValueSet(value) {
+  return value !== undefined && value !== null && String(value).trim() !== '';
+}
 
 const PREVIEW_NEUTRAL_FIELDS = new Set(['library', ...ID_FIELDS]);
 const PREVIEW_FORCE_FIELDS = new Set([
@@ -3523,7 +3580,7 @@ function openOptionSearch(entry, initialTerm = '') {
 
   const buildOptions = () => {
     const availableFields = state.fields.filter(
-      (field) => getValue(entry.config, field.path) === undefined
+      (field) => getValue(entry.config, field.path) === undefined && !ID_FIELDS.has(field.id)
     );
 
     const cardType = getValue(entry.config, ['card_type']) || getDefaultCardType();
@@ -3665,6 +3722,120 @@ function openOptionSearch(entry, initialTerm = '') {
     search.focus();
     search.select();
   });
+}
+
+function openIdentifierModal(entry) {
+  const identifierFields = getIdentifierFields();
+  const modal = buildModal('Metadata identifiers');
+  addFloatingCloseButton(modal, 'Close metadata identifiers dialog');
+
+  if (!identifierFields.length) {
+    const message = document.createElement('p');
+    message.className = 'helper-text';
+    message.textContent = 'No metadata identifier fields are available.';
+    modal.content.appendChild(message);
+    modal.footer.append(closeButton(() => closeModal(modal.element)));
+    return;
+  }
+
+  const description = document.createElement('p');
+  description.className = 'helper-text';
+  description.textContent = 'Provide IDs to link this series to external services.';
+
+  const list = document.createElement('div');
+  list.className = 'identifier-list';
+
+  identifierFields.sort(compareFieldOptions).forEach((field) => {
+    const row = document.createElement('div');
+    row.className = 'field-row identifier-row';
+
+    const label = document.createElement('label');
+    label.textContent = field.label;
+
+    const controls = document.createElement('div');
+    controls.className = 'field-controls identifier-controls';
+
+    const value = getValue(entry.config, field.path);
+    const input = createIdentifierInput(entry, field, value);
+
+    const clearButton = document.createElement('button');
+    clearButton.type = 'button';
+    clearButton.className = 'identifier-clear';
+    clearButton.textContent = 'Clear';
+    clearButton.addEventListener('click', () => {
+      input.value = '';
+      applyIdentifierValue(entry, field, '');
+    });
+
+    controls.append(input, clearButton);
+    row.append(label, controls);
+    list.append(row);
+  });
+
+  modal.content.append(description, list);
+  modal.footer.append(
+    closeButton(() => {
+      closeModal(modal.element);
+      renderEntries();
+    })
+  );
+}
+
+function renderIdentifierSection(entry) {
+  const identifierFields = getIdentifierFields();
+  if (!identifierFields.length) {
+    return null;
+  }
+
+  const section = document.createElement('section');
+  section.className = 'entry-section entry-section--identifiers';
+
+  const header = document.createElement('div');
+  header.className = 'entry-section__header';
+
+  const title = document.createElement('h3');
+  title.className = 'entry-section__title';
+  title.textContent = 'Metadata IDs';
+
+  const editButton = document.createElement('button');
+  editButton.className = 'add-line add-line--inline';
+  editButton.textContent = 'Edit IDs';
+  editButton.addEventListener('click', () => openIdentifierModal(entry));
+
+  header.append(title, editButton);
+
+  const summary = document.createElement('div');
+  summary.className = 'identifier-summary';
+
+  const setFields = identifierFields
+    .map((field) => ({ field, value: getValue(entry.config, field.path) }))
+    .filter(({ value }) => isIdentifierValueSet(value));
+
+  if (setFields.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'helper-text identifier-empty';
+    empty.textContent = 'No IDs set yet. Add them to improve matching.';
+    summary.appendChild(empty);
+  } else {
+    setFields.forEach(({ field, value }) => {
+      const pill = document.createElement('div');
+      pill.className = 'identifier-pill';
+
+      const label = document.createElement('span');
+      label.className = 'identifier-pill__label';
+      label.textContent = field.label;
+
+      const val = document.createElement('span');
+      val.className = 'identifier-pill__value';
+      val.textContent = value;
+
+      pill.append(label, val);
+      summary.appendChild(pill);
+    });
+  }
+
+  section.append(header, summary);
+  return section;
 }
 
 const fontPreviewCache = new Map();
