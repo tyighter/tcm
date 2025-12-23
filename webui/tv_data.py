@@ -58,33 +58,38 @@ class TvYamlManager:
             )
             return self._data
 
-        try:
-            with self.file_path.open("r", encoding="utf-8") as handle:
-                data = self._yaml.load(handle) or CommentedMap()
-        except (ComposerError, ParserError, ScannerError) as exc:
+        raw_content = self.file_path.read_text(encoding="utf-8")
+
+        if not raw_content.strip():
+            data = CommentedMap()
+        else:
             try:
                 with self.file_path.open("r", encoding="utf-8") as handle:
-                    documents = list(self._yaml.load_all(handle))
-            except Exception as inner_exc:  # pylint: disable=broad-except
-                message = (
-                    "Unable to parse tv.yml; check YAML formatting for syntax errors"
-                    f" ({exc})"
-                )
-                raise ValueError(message) from inner_exc
+                    data = self._yaml.load(handle) or CommentedMap()
+            except (ComposerError, ParserError, ScannerError, IndexError) as exc:
+                try:
+                    with self.file_path.open("r", encoding="utf-8") as handle:
+                        documents = list(self._yaml.load_all(handle))
+                except Exception as inner_exc:  # pylint: disable=broad-except
+                    message = (
+                        "Unable to parse tv.yml; check YAML formatting for syntax errors"
+                        f" ({exc})"
+                    )
+                    raise ValueError(message) from inner_exc
 
-            data = CommentedMap()
-            for document in documents:
-                if document is None:
-                    continue
+                data = CommentedMap()
+                for document in documents:
+                    if document is None:
+                        continue
 
-                if isinstance(document, CommentedMap):
-                    update = document
-                elif isinstance(document, dict):
-                    update = CommentedMap(document)
-                else:
-                    continue
+                    if isinstance(document, CommentedMap):
+                        update = document
+                    elif isinstance(document, dict):
+                        update = CommentedMap(document)
+                    else:
+                        continue
 
-                data.update(update)
+                    data.update(update)
 
         if not isinstance(data, CommentedMap):
             data = CommentedMap(data or {})
