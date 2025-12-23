@@ -249,8 +249,8 @@ class OlivierTitleCard(BaseCardType):
         text_offset = {'EPISODE': 425, 'CHAPTER': 425, 'PART': 275}
         if self.episode_prefix is None:
             offset = 0
-        elif self.episode_prefix in text_offset:
-            offset = text_offset[self.episode_prefix] \
+        elif (prefix_upper := self.episode_prefix.upper()) in text_offset:
+            offset = text_offset[prefix_upper] \
                 * self.episode_text_font_size
         else:
             offset_per_char = text_offset['EPISODE'] / len('EPISODE')
