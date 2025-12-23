@@ -54,6 +54,7 @@ const CACHE_DB_NAME = 'tcm-preview-cache';
 const CACHE_DB_VERSION = 2;
 const PREVIEW_DB_STORE = 'previews';
 const LOGO_DB_STORE = 'logos';
+const MAX_PREVIEW_CACHE_ENTRIES_PER_SERIES = 1;
 const DEFAULT_BACKUP_DIRECTORY = '/config/backups';
 const FONT_EXTENSIONS = ['.ttf', '.otf', '.woff', '.woff2', '.ttc'];
 
@@ -1009,11 +1010,15 @@ function renderEntry(entry) {
   titleInput.addEventListener('focus', () => {
     titleInput.dataset.originalName = entry.name;
   });
-  titleInput.addEventListener('blur', () => {
+  titleInput.addEventListener('blur', async () => {
     const originalName = titleInput.dataset.originalName;
     if (originalName && originalName !== entry.name) {
       moveLogoBackgroundPreference(originalName, entry.name);
       syncLogoBackground();
+      await Promise.all([
+        evictSeriesPreviewCache(originalName),
+        evictSeriesPreviewCache(entry.name),
+      ]);
     }
     sortEntries();
     state.pendingEntryId = entry.id;
@@ -5875,6 +5880,52 @@ function legacyPreviewCacheKey(entry) {
   return entry?.name || null;
 }
 
+function isSeriesPreviewKey(seriesName, key) {
+  return (
+    Boolean(seriesName) &&
+    Boolean(key) &&
+    (key === seriesName || key.startsWith(`${seriesName}:`))
+  );
+}
+
+function collectSeriesPreviewKeys(seriesName, preferredKeys = []) {
+  if (!seriesName) {
+    return [];
+  }
+
+  const keys = new Set(preferredKeys.filter(Boolean));
+  Object.keys(state.previewCache || {}).forEach((key) => {
+    if (isSeriesPreviewKey(seriesName, key)) {
+      keys.add(key);
+    }
+  });
+
+  return Array.from(keys);
+}
+
+async function evictSeriesPreviewCache(seriesName, preferredKeys = []) {
+  const seriesKeys = collectSeriesPreviewKeys(seriesName, preferredKeys);
+  if (!seriesKeys.length) {
+    return;
+  }
+
+  const orderedKeys = seriesKeys;
+  const keysToKeep = new Set(orderedKeys.slice(0, MAX_PREVIEW_CACHE_ENTRIES_PER_SERIES));
+  const keysToDelete = orderedKeys.filter((key) => !keysToKeep.has(key));
+
+  if (!keysToDelete.length) {
+    return;
+  }
+
+  keysToDelete.forEach((key) => {
+    delete state.previewCache[key];
+  });
+
+  await Promise.allSettled(keysToDelete.map((key) => deletePreviewCacheEntry(key)));
+
+  persistLegacyPreviewCache();
+}
+
 function hashString(value) {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) {
@@ -5906,6 +5957,9 @@ async function updatePreviewCache(entry) {
   if (!key || !entry.previewSrc) {
     return;
   }
+  const legacyKey = legacyPreviewCacheKey(entry);
+  const preferredKeys = [key, legacyKey].filter(Boolean);
+  await evictSeriesPreviewCache(entry.name, preferredKeys);
   const value = {
     snapshot: JSON.stringify(snapshotEntry(entry)),
     src: entry.previewSrc,
