@@ -54,6 +54,7 @@ class OlivierTitleCard(BaseCardType):
         'stroke_color', 'episode_text_color', 'episode_text_font_size',
         'episode_text_vertical_shift', 'episode_text_font',
         'episode_prefix_font', 'font_replacements', 'text_vertical_shift',
+        'episode_text_offset',
     )
 
     def __init__(self,
@@ -156,6 +157,8 @@ class OlivierTitleCard(BaseCardType):
             self.episode_prefix_font = resolved_font
             self.episode_text_font = resolved_font
 
+        self.episode_text_offset = self._get_episode_text_offset()
+
 
     @property
     def gradient_commands(self) -> ImageMagickCommands:
@@ -245,19 +248,7 @@ class OlivierTitleCard(BaseCardType):
         size = 60 * self.episode_text_font_size
         stroke_width = 7 * self.episode_text_font_size
 
-        # Get variable horizontal offset based of episode prefix
-        text_offset = {'EPISODE': 425, 'CHAPTER': 425, 'PART': 275}
-        if self.episode_prefix is None:
-            offset = 0
-        elif (prefix_upper := self.episode_prefix.upper()) in text_offset:
-            offset = text_offset[prefix_upper] \
-                * self.episode_text_font_size
-        else:
-            offset_per_char = text_offset['EPISODE'] / len('EPISODE')
-            offset = offset_per_char * len(self.episode_prefix) * 1.10\
-                * self.episode_text_font_size
-
-        horizontal_offset = 325 + float(offset)
+        horizontal_offset = 325 + float(self.episode_text_offset)
         vertical_shift = -150 + float(self.episode_text_vertical_shift) + self.text_vertical_shift
 
         return [
@@ -274,6 +265,69 @@ class OlivierTitleCard(BaseCardType):
             f'-strokewidth 1',
             f'-annotate {horizontal_offset:+g}{vertical_shift:+g} "{self.episode_text}"',
         ]
+
+
+    def _get_episode_text_offset(self) -> float:
+        """Calculate the offset for the episode text based on the prefix width."""
+
+        if self.episode_prefix is None or self.hide_episode_text:
+            return 0.0
+
+        size = 60 * self.episode_text_font_size
+        kerning = 19 * self.episode_text_font_size
+
+        prefix_width = self._measure_text_width(
+            text=self.episode_prefix,
+            font=self.episode_prefix_font,
+            size=size,
+            kerning=kerning,
+            stroke_width=5 * self.episode_text_font_size,
+        )
+        space_width = self._measure_text_width(
+            text=' ',
+            font=self.episode_text_font,
+            size=size,
+            kerning=kerning,
+            stroke_width=7 * self.episode_text_font_size,
+        )
+
+        if prefix_width > 0:
+            return prefix_width + (space_width if space_width > 0 else 0.0)
+
+        text_offset = {'EPISODE': 425, 'CHAPTER': 425, 'PART': 275}
+        prefix_upper = self.episode_prefix.upper()
+        if prefix_upper in text_offset:
+            return text_offset[prefix_upper] * self.episode_text_font_size
+
+        offset_per_char = text_offset['EPISODE'] / len('EPISODE')
+        return offset_per_char * len(self.episode_prefix) * 1.10 \
+            * self.episode_text_font_size
+
+
+    def _measure_text_width(self,
+            *,
+            text: str,
+            font: str | Path,
+            size: float,
+            kerning: float,
+            stroke_width: float,
+        ) -> float:
+        """
+        Measure the width of the given text using the provided font
+        characteristics.
+        """
+
+        width, _ = self.image_magick.get_text_dimensions([
+            '-gravity west',
+            f'-font "{font}"',
+            f'-pointsize {size}',
+            f'-kerning {kerning}',
+            f'-stroke black',
+            f'-strokewidth {stroke_width}',
+            f'label:"{text}"',
+        ])
+
+        return width
 
 
     @staticmethod
