@@ -58,6 +58,12 @@ class WordSet(dict):
                 })
             except NotImplementedError:
                 pass
+            except TypeError:
+                fallback = str(number)
+                self.update({
+                    f'{label}_cardinal_{lang}': fallback,
+                    f'{label}_cardinal_{lang}_title': titlecase(fallback),
+                })
             try:
                 ordinal = num2words(number, to='ordinal', lang=lang)
                 self.update({
@@ -66,10 +72,24 @@ class WordSet(dict):
                 })
             except NotImplementedError:
                 pass
+            except TypeError:
+                fallback = str(number)
+                self.update({
+                    f'{label}_ordinal_{lang}': fallback,
+                    f'{label}_ordinal_{lang}_title': titlecase(fallback),
+                })
         # No language indicated, convert using base language
         else:
-            cardinal = num2words(number, to='cardinal')
-            ordinal = num2words(number, to='ordinal')
+            try:
+                cardinal = num2words(number, to='cardinal')
+            except TypeError:
+                cardinal = str(number)
+
+            try:
+                ordinal = num2words(number, to='ordinal')
+            except TypeError:
+                ordinal = str(number)
+
             self.update({
                 f'{label}_cardinal': cardinal,
                 f'{label}_cardinal_title': f'{titlecase(cardinal)}',
