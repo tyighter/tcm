@@ -1088,14 +1088,14 @@ class Show(YamlReader):
                         episode.episode_info,
                         skip_localized_images=self.tmdb_skip_localized_images,
                     )
-                    # Exit loop or continue depending on permanent blacklist status
                     if not image:
                         pb = self.tmdb_interface.is_permanently_blacklisted(
                             self.series_info, episode.episode_info
                         )
                         if pb:
                             continue
-                        break
+                        # TMDb miss without a permanent blacklist; try the next source
+                        continue
 
                 # Attempt to download image, log status and exit loop
                 if image:
