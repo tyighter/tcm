@@ -366,7 +366,7 @@ class ImageMagickInterface:
             return dimensions
         except ValueError as e:
             log.debug(f'Cannot identify text dimensions - {e}')
-            log.trace(f'{widths=} {heights=}')
+            log.debug(f'{widths=} {heights=}')
             self.__append_text_log(
                 '\n'.join([
                     '---',
