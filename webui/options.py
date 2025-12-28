@@ -9,6 +9,8 @@ from modules.StyleSet import StyleSet
 from modules.TitleCard import TitleCard
 from .card_type_images import load_card_type_thumbnails, slugify_card_type
 
+STYLE_CHOICES = ["unique", "blur", "grayscale", "blur grayscale"]
+
 SERIES_FIELD_TEMPLATE = [
     {
         "id": "library",
@@ -280,7 +282,9 @@ def build_series_fields(libraries: dict[str, Any]) -> list[dict[str, Any]]:
         key=lambda item: item[1].casefold(),
     )
     thumbnails = load_card_type_thumbnails()
-    style_choices = sorted(set(StyleSet.SPOIL_TYPE_STYLE_MAP.keys()))
+    style_choices = [
+        choice for choice in STYLE_CHOICES if choice in StyleSet.SPOIL_TYPE_STYLE_MAP
+    ]
     episode_sources = list(PreferenceParser.VALID_EPISODE_DATA_SOURCES)
     font_cases = sorted(BaseCardType.CASE_FUNCTIONS.keys())
 
@@ -299,7 +303,7 @@ def build_series_fields(libraries: dict[str, Any]) -> list[dict[str, Any]]:
                 filled["choices"].append(choice)
         elif field["id"] == "watched_style" or field["id"] == "unwatched_style":
             filled["choices"] = [
-                {"value": value, "label": value} for value in style_choices
+                {"value": value, "label": value.title()} for value in style_choices
             ]
         elif field["id"] == "episode_data_source":
             filled["choices"] = [
