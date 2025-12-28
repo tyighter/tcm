@@ -26,6 +26,7 @@ from modules.StyleSet import StyleSet
 from modules.TitleCard import TitleCard
 from modules.Title import Title
 from modules.TMDbInterface import TMDbInterface
+from modules.TVDbInterface import TVDbInterface
 from modules.WebInterface import WebInterface
 from modules.YamlReader import YamlReader
 
@@ -55,11 +56,13 @@ class Show(YamlReader):
         'episode_text_case', 'episode_text_format', 'library_name', 'library', 'media_directory',
         'archive', 'archive_name', 'archive_all_variations',
         'episode_data_source', 'refresh_titles', 'sonarr_sync', 'sync_specials',
-        'tmdb_sync', 'tmdb_skip_localized_images', 'style_set', 'hide_seasons',
+        'tmdb_sync', 'tmdb_skip_localized_images', 'tvdb_sync',
+        'tvdb_skip_localized_images', 'style_set', 'hide_seasons',
         'title_languages', 'extras', '__episode_map', 'font','source_directory',
         'logo', 'backdrop', 'file_interface', 'profile', 'season_poster_set',
         'episodes', 'emby_interface', 'jellyfin_interface', 'plex_interface',
-        'sonarr_interface', 'tmdb_interface', '__is_archive', 'media_server',
+        'sonarr_interface', 'tmdb_interface', 'tvdb_interface', '__is_archive',
+        'media_server',
         'image_source_priority', '_auto_hide_seasons', 'image_magick',
     )
 
@@ -189,6 +192,8 @@ class Show(YamlReader):
         self.sync_specials = preferences.sync_specials
         self.tmdb_sync = preferences.use_tmdb
         self.tmdb_skip_localized_images = preferences.tmdb_skip_localized_images
+        self.tvdb_sync = preferences.use_tvdb
+        self.tvdb_skip_localized_images = preferences.tvdb_skip_localized_images
         self.hide_seasons = False
         self.title_languages: list[dict] = []
         self.extras = {}
@@ -275,6 +280,7 @@ class Show(YamlReader):
         self.plex_interface = None
         self.sonarr_interface = None
         self.tmdb_interface = None
+        self.tvdb_interface = None
         self._auto_hide_seasons = False
         self.__is_archive = False
 
@@ -431,6 +437,13 @@ class Show(YamlReader):
                                type_=bool)) is not None:
             self.tmdb_skip_localized_images = value
 
+        if (value := self.get('tvdb_sync', type_=bool)) is not None:
+            self.tvdb_sync = value
+
+        if (value := self.get('tvdb_skip_localized_images',
+                               type_=bool)) is not None:
+            self.tvdb_skip_localized_images = value
+
         if (value := self.get('seasons', 'hide')) is not None:
             if isinstance(value, bool):
                 self.hide_seasons = value
@@ -489,6 +502,7 @@ class Show(YamlReader):
             jellyfin_interface: Optional[JellyfinInterface] = None,
             plex_interface: Optional[PlexInterface] = None,
             sonarr_interfaces: list[SonarrInterface] = [],
+            tvdb_interface: Optional[TVDbInterface] = None,
             tmdb_interface: Optional[TMDbInterface] = None,
         ) -> None:
         """
@@ -505,6 +519,8 @@ class Show(YamlReader):
             sonarr_interface: Any number of optional SonarrInterfaces to
                 store if required. Only the interface containing this
                 series will be stored.
+            tvdb_interface: Optional TVDbInterface to store if required
+                by this show.
             tmdb_interface: Optional TMDbInterface to store if required
                 by this show.
         """
@@ -550,6 +566,9 @@ class Show(YamlReader):
         # If TMDb is required, and an interface was provided, assign
         if self.tmdb_sync and tmdb_interface is not None:
             self.tmdb_interface = tmdb_interface
+
+        if self.tvdb_sync and tvdb_interface is not None:
+            self.tvdb_interface = tvdb_interface
 
 
     def set_series_ids(self) -> None:
@@ -1007,15 +1026,34 @@ class Show(YamlReader):
         if not download_backdrop and not self.card_class.USES_UNIQUE_SOURCES:
             return None
 
-        # Query TMDb for the backdrop if one does not exist and is needed
-        if (download_backdrop and self.tmdb_interface
-            and not self.backdrop.exists()):
-            url = self.tmdb_interface.get_series_backdrop(
-                self.series_info,
-                skip_localized_images=self.tmdb_skip_localized_images
-            )
-            if url and self.tmdb_interface.download_image(url, self.backdrop):
-                log.debug(f'Downloaded backdrop for {self} from tmdb')
+        # Query TMDb/TVDb for the backdrop if one does not exist and is needed
+        if download_backdrop and not self.backdrop.exists():
+            backdrop_sources = []
+            if self.tmdb_interface:
+                backdrop_sources.append((
+                    'tmdb',
+                    self.tmdb_interface.get_series_backdrop(
+                        self.series_info,
+                        skip_localized_images=self.tmdb_skip_localized_images,
+                    ),
+                    self.tmdb_interface,
+                ))
+            if self.tvdb_interface:
+                backdrop_sources.append((
+                    'tvdb',
+                    self.tvdb_interface.get_series_backdrop(
+                        self.series_info,
+                        skip_localized_images=self.tvdb_skip_localized_images,
+                    ),
+                    self.tvdb_interface,
+                ))
+
+            for source_name, url, interface in backdrop_sources:
+                if url and interface.download_image(url, self.backdrop):
+                    log.debug(
+                        'Downloaded backdrop for %s from %s', self, source_name
+                    )
+                    break
 
         # Whether to always check each interface
         always_check_emby = (
@@ -1031,6 +1069,10 @@ class Show(YamlReader):
         always_check_tmdb = (
             bool(self.tmdb_interface)
             and ('tmdb' in self.image_source_priority))
+        always_check_tvdb = (
+            bool(self.tvdb_interface)
+            and ('tvdb' in self.image_source_priority)
+            and self.series_info.has_id('tvdb_id'))
         always_check_plex = (
             bool(self.plex_interface)
             and ('plex' in self.image_source_priority)
@@ -1057,6 +1099,12 @@ class Show(YamlReader):
             check_tmdb = (
                 always_check_tmdb and not
                 self.tmdb_interface.is_permanently_blacklisted(
+                    self.series_info, episode.episode_info
+                )
+            )
+            check_tvdb = (
+                always_check_tvdb and not
+                self.tvdb_interface.is_permanently_blacklisted(
                     self.series_info, episode.episode_info
                 )
             )
@@ -1095,6 +1143,19 @@ class Show(YamlReader):
                         if pb:
                             continue
                         # TMDb miss without a permanent blacklist; try the next source
+                        continue
+                elif source_interface == 'tvdb' and check_tvdb:
+                    image = self.tvdb_interface.get_source_image(
+                        self.series_info,
+                        episode.episode_info,
+                        skip_localized_images=self.tvdb_skip_localized_images,
+                    )
+                    if not image:
+                        pb = self.tvdb_interface.is_permanently_blacklisted(
+                            self.series_info, episode.episode_info
+                        )
+                        if pb:
+                            continue
                         continue
 
                 # Attempt to download image, log status and exit loop

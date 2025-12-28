@@ -12,6 +12,7 @@ from modules.PlexInterface import PlexInterface
 from modules.Show import Show
 from modules.ShowArchive import ShowArchive
 from modules.SonarrInterface import SonarrInterface
+from modules.TVDbInterface import TVDbInterface
 from modules.TMDbInterface import TMDbInterface
 
 
@@ -96,6 +97,13 @@ class Manager:
         if self.preferences.use_tmdb:
             self.tmdb_interface = TMDbInterface(
                 **self.preferences.tmdb_interface_kwargs,
+            )
+
+        # Optionally assign TVDbInterface
+        self.tvdb_interface = None
+        if self.preferences.use_tvdb:
+            self.tvdb_interface = TVDbInterface(
+                **self.preferences.tvdb_interface_kwargs,
             )
 
         # Setup blank show and archive lists
@@ -185,6 +193,7 @@ class Manager:
                 self.jellyfin_interface,
                 self.plex_interface,
                 self.sonarr_interfaces,
+                self.tvdb_interface,
                 self.tmdb_interface
             )
 
