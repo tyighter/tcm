@@ -454,6 +454,7 @@ def _load_show_for_preview(
         manager.jellyfin_interface,
         manager.plex_interface,
         manager.sonarr_interfaces,
+        manager.tvdb_interface,
         manager.tmdb_interface,
     )
 
@@ -913,6 +914,7 @@ def download_logo_for_series(
             manager.jellyfin_interface,
             manager.plex_interface,
             manager.sonarr_interfaces,
+            manager.tvdb_interface,
             manager.tmdb_interface,
         )
         show.download_logo()

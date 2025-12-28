@@ -24,6 +24,7 @@ class TemporaryPreferenceParser:
         self.database_directory = Path(database_directory)
         self.imagemagick_container = None
         self.use_magick_prefix = False
+        self.tvdb_retry_count = 5
 
 # pylint: disable=global-statement
 pp = TemporaryPreferenceParser(Path(__file__).parent / '.objects')

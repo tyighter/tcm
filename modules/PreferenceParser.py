@@ -25,6 +25,7 @@ from modules.StylizedSummary import StylizedSummary
 from modules.Template import Template
 from modules.TitleCard import TitleCard
 from modules.TMDbInterface import TMDbInterface
+from modules.TVDbInterface import TVDbInterface
 from modules.Version import Version
 from modules.YamlReader import YamlReader
 
@@ -39,7 +40,7 @@ class PreferenceParser(YamlReader):
     """
 
     """Valid image source identifiers"""
-    VALID_IMAGE_SOURCES = ('emby', 'jellyfin', 'plex', 'tmdb')
+    VALID_IMAGE_SOURCES = ('emby', 'jellyfin', 'plex', 'tmdb', 'tvdb')
 
     """Valid episode data source identifiers"""
     VALID_EPISODE_DATA_SOURCES = ('emby', 'jellyfin', 'sonarr', 'plex', 'tmdb')
@@ -102,7 +103,7 @@ class PreferenceParser(YamlReader):
         self.card_filename_format = TitleCard.DEFAULT_FILENAME_FORMAT
         self.card_extension = TitleCard.DEFAULT_CARD_EXTENSION
         self.card_dimensions = TitleCard.DEFAULT_CARD_DIMENSIONS
-        self.image_source_priority = ('tmdb', 'plex', 'emby', 'jellyfin')
+        self.image_source_priority = ('tmdb', 'tvdb', 'plex', 'emby', 'jellyfin')
         self.episode_data_source = self.DEFAULT_EPISODE_DATA_SOURCE
         self.validate_fonts = True
         self.season_folder_format = self.DEFAULT_SEASON_FOLDER_FORMAT
@@ -165,6 +166,12 @@ class PreferenceParser(YamlReader):
         self.tmdb_minimum_resolution = {'width': 0, 'height': 0}
         self.tmdb_skip_localized_images = False
         self.tmdb_logo_language_priority = ['en']
+
+        self.use_tvdb = False
+        self.tvdb_api_key = None
+        self.tvdb_language = 'eng'
+        self.tvdb_retry_count = TVDbInterface.BLACKLIST_THRESHOLD
+        self.tvdb_skip_localized_images = False
 
         self.tautulli_use_plex_fallback = False
         self.tautulli_activity_poll_interval_seconds = 60
@@ -771,6 +778,36 @@ class PreferenceParser(YamlReader):
         return None
 
 
+    def __parse_yaml_tvdb(self) -> None:
+        """
+        Parse the 'tvdb' section of the raw YAML dictionary into
+        attributes.
+        """
+
+        if not self._is_specified('tvdb'):
+            return None
+
+        if (value := self.get('tvdb', 'api_key', type_=str)) is not None:
+            self.tvdb_api_key = value
+            self.use_tvdb = True
+
+        if (value := self.get('tvdb', 'language', type_=str)) is not None:
+            self.tvdb_language = value.lower()
+
+        if (value := self.get('tvdb', 'retry_count', type_=int)) is not None:
+            if value < 0:
+                log.critical(f'Cannot have a negative TVDb retry count')
+                self.valid = False
+            else:
+                self.tvdb_retry_count = value
+
+        if (value := self.get('tvdb', 'skip_localized_images',
+                               type_=bool)) is not None:
+            self.tvdb_skip_localized_images = value
+
+        return None
+
+
     def __parse_yaml_imagemagick(self) -> None:
         """
         Parse the 'imagemagick' section of the raw YAML dictionary into
@@ -812,6 +849,7 @@ class PreferenceParser(YamlReader):
         self.__parse_yaml_tautulli()
         self.__parse_yaml_sonarr()
         self.__parse_yaml_tmdb()
+        self.__parse_yaml_tvdb()
         self.__parse_yaml_imagemagick()
 
         # Warn for renamed settings
@@ -1216,6 +1254,16 @@ class PreferenceParser(YamlReader):
 
         return {
             'api_key': self.tmdb_api_key,
+        }
+
+    @property
+    def tvdb_interface_kwargs(self) -> dict[str, str]:
+        """Arguments for initializing a TVDbInterface"""
+
+        return {
+            'api_key': self.tvdb_api_key,
+            'language': self.tvdb_language,
+            'skip_localized_images': self.tvdb_skip_localized_images,
         }
 
 
