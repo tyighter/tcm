@@ -520,6 +520,7 @@ function initializeEntryPreviewState(entry) {
   entry.previewEpisodeStatus = entry.previewEpisodeStatus || 'idle';
   entry.previewEpisodeError = entry.previewEpisodeError || null;
   entry.previewStale = false;
+  entry.previewRefreshing = false;
 }
 
 async function loadConfiguration() {
@@ -1358,35 +1359,39 @@ function updateEntryPreview(entry) {
   const image = wrapper.querySelector('.entry-preview__image');
   const placeholder = wrapper.querySelector('.entry-preview__placeholder');
 
+  const hasPreview = Boolean(entry.previewSrc);
+  const isRefreshing = Boolean(entry.previewRefreshing);
+  const hasError = Boolean(entry.previewError);
+  const isGenerating = entry.previewLoadingStrategy === 'generate';
+  let statusText = '';
+
   wrapper.classList.remove('entry-preview--error', 'entry-preview--loaded');
   wrapper.dataset.previewSrc = entry.previewSrc || '';
-
-  if (entry.previewSrc && image) {
-    image.src = entry.previewSrc;
-    image.alt = `${entry.name} preview`;
-    wrapper.classList.add('entry-preview--loaded');
-    wrapper.dataset.previewSrc = entry.previewSrc;
-    if (placeholder) {
-      placeholder.textContent = '';
-    }
-    return;
-  }
+  wrapper.classList.toggle('entry-preview--refreshing', isRefreshing);
 
   if (image) {
-    image.removeAttribute('src');
+    if (hasPreview) {
+      if (image.src !== entry.previewSrc) {
+        image.src = entry.previewSrc;
+      }
+      image.alt = `${entry.name} preview`;
+      wrapper.classList.add('entry-preview--loaded');
+    } else {
+      image.removeAttribute('src');
+    }
   }
 
-  if (!entry.previewError && placeholder) {
-    const statusText =
-      entry.previewLoadingStrategy === 'generate'
-        ? 'Generating preview...'
-        : 'Loading preview...';
-    placeholder.textContent = statusText;
-  }
-
-  if (entry.previewError && placeholder) {
-    placeholder.textContent = entry.previewError;
+  if (hasError) {
+    statusText = entry.previewError;
     wrapper.classList.add('entry-preview--error');
+  } else if (!hasPreview) {
+    statusText = isGenerating ? 'Generating preview...' : 'Loading preview...';
+  } else if (isRefreshing) {
+    statusText = isGenerating ? 'Regenerating preview...' : 'Refreshing preview...';
+  }
+
+  if (placeholder) {
+    placeholder.textContent = statusText;
   }
 }
 
@@ -1506,11 +1511,11 @@ async function fetchStaticPreview(entry, options = {}) {
 
 async function invalidateEntryPreview(entry) {
   cancelScheduledPreviewRefresh(entry);
-  entry.previewSrc = null;
   entry.previewError = null;
   entry.previewLoading = false;
   entry.previewLoadingStrategy = undefined;
-  entry.previewStale = false;
+  entry.previewStale = true;
+  entry.previewRefreshing = Boolean(entry.previewSrc);
   await clearPreviewCacheEntry(entry);
   updateEntryPreview(entry);
   observeEntryPreview(entry);
@@ -1556,6 +1561,7 @@ async function loadEntryPreview(entry, options = {}) {
         entry.previewError = null;
         entry.previewLoading = false;
         entry.previewLoadingStrategy = undefined;
+        entry.previewRefreshing = false;
         await updatePreviewCache(entry);
         updateEntryPreview(entry);
         return;
@@ -1591,6 +1597,7 @@ async function loadEntryPreview(entry, options = {}) {
 
     if (entry.previewRequestId === requestId) {
       entry.previewSrc = `data:${data.mime};base64,${data.data}`;
+      entry.previewRefreshing = false;
       await updatePreviewCache(entry);
     }
   } catch (error) {
@@ -1606,6 +1613,7 @@ async function loadEntryPreview(entry, options = {}) {
     if (entry.previewRequestId === requestId) {
       entry.previewLoading = false;
       entry.previewLoadingStrategy = undefined;
+      entry.previewRefreshing = false;
       updateEntryPreview(entry);
     }
   }
