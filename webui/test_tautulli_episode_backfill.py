@@ -82,7 +82,7 @@ series:
         )
         self.assertIn("555", mappings)
 
-    def test_backfill_skips_when_mapping_already_present(self) -> None:
+    def test_backfill_merges_when_mapping_incomplete(self) -> None:
         manager = self._write_tv_file(
             """
 libraries: {}
@@ -96,12 +96,36 @@ series:
         )
 
         plex = MagicMock()
+        plex.expand_rating_key_to_episodes.return_value = [
+            {
+                "season": 1,
+                "episode": 1,
+                "episode_rating_key": 901,
+                "show_rating_key": 555,
+            },
+            {
+                "season": 1,
+                "episode": 2,
+                "episode_rating_key": 902,
+                "show_rating_key": 555,
+            },
+        ]
         context = _DummyContext(plex)
 
         result = _backfill_episode_rating_keys(context, manager)
 
-        self.assertEqual(result.get("updated"), 0)
-        plex.expand_rating_key_to_episodes.assert_not_called()
+        self.assertEqual(result.get("updated"), 1)
+        plex.expand_rating_key_to_episodes.assert_called_once_with(555)
+
+        data = manager.load()
+        mappings = data["series"]["Example (2024)"]["episode_rating_keys"]
+        self.assertEqual(
+            mappings["555"],
+            {
+                "S1E1": "901",
+                "S1E2": "902",
+            },
+        )
 
 
 class StartMonitorBackfillTests(unittest.TestCase):
@@ -143,4 +167,3 @@ series:
 
         if thread:
             thread.join(timeout=1)
-

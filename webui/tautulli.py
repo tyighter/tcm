@@ -419,12 +419,7 @@ def _backfill_episode_rating_keys(
         if rating_key is None:
             continue
 
-        existing_mappings = config.get("episode_rating_keys") or {}
         normalized_show_key = _normalize_rating_key(rating_key)
-        if normalized_show_key in existing_mappings and existing_mappings.get(
-            normalized_show_key
-        ):
-            continue
 
         try:
             episodes = plex.expand_rating_key_to_episodes(rating_key)
@@ -454,15 +449,12 @@ def _backfill_episode_rating_keys(
         if not labels:
             continue
 
+        if normalized_show_key:
+            show_keys.add(normalized_show_key)
+
         changed = False
         for show_key in show_keys:
             if tv_manager.update_episode_rating_keys(series_name, show_key, labels):
-                changed = True
-
-        if changed and normalized_show_key and normalized_show_key not in show_keys:
-            if tv_manager.update_episode_rating_keys(
-                series_name, normalized_show_key, labels
-            ):
                 changed = True
 
         if changed:
