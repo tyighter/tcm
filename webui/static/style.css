@@ -523,6 +523,22 @@ button:disabled:hover {
   display: none;
 }
 
+.entry-preview--refreshing .entry-preview__image {
+  opacity: 0.45;
+}
+
+.entry-preview--refreshing .entry-preview__placeholder,
+.entry-preview--error.entry-preview--loaded .entry-preview__placeholder {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  inset: 0.35rem;
+  padding: 0.35rem;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(15, 24, 38, 0.75), rgba(12, 16, 24, 0.8));
+  text-align: center;
+}
+
 .entry-preview--error {
   border-color: rgba(239, 108, 108, 0.45);
   color: var(--danger);
