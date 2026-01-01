@@ -289,15 +289,10 @@ class OlivierTitleCard(BaseCardType):
             kerning=kerning,
             stroke_width=5 * self.episode_text_font_size,
         )
-        space_width = self._measure_text_width(
-            text=' ',
-            font=self.episode_text_font,
+        spacing_width = self._measure_spacing_width(
             size=size,
             kerning=kerning,
-            stroke_width=7 * self.episode_text_font_size,
         )
-        spacing_count = len(self.episode_text_spacing)
-        spacing_width = space_width * spacing_count if space_width > 0 else 0.0
 
         if prefix_width > 0:
             return prefix_width + spacing_width
@@ -313,6 +308,34 @@ class OlivierTitleCard(BaseCardType):
         offset_per_char = text_offset['EPISODE'] / len('EPISODE')
         return offset_per_char * len(self.episode_prefix) * 1.10 \
             * self.episode_text_font_size + spacing_width
+
+
+    def _measure_spacing_width(self, *, size: float, kerning: float) -> float:
+        """Measure the width of the stored spacing between prefix and number."""
+
+        if not self.episode_text_spacing:
+            return 0.0
+
+        base_width = self._measure_text_width(
+            text='xx',
+            font=self.episode_text_font,
+            size=size,
+            kerning=kerning,
+            stroke_width=7 * self.episode_text_font_size,
+        )
+        spaced_width = self._measure_text_width(
+            text=f'x{self.episode_text_spacing}x',
+            font=self.episode_text_font,
+            size=size,
+            kerning=kerning,
+            stroke_width=7 * self.episode_text_font_size,
+        )
+
+        spacing_width = spaced_width - base_width
+        if spacing_width <= 0 and base_width > 0:
+            spacing_width = base_width / len('xx') * len(self.episode_text_spacing)
+
+        return max(spacing_width, 0.0)
 
 
     def _measure_text_width(self,
