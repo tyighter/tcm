@@ -26,6 +26,26 @@ series:
     assert str(tv_file) in str(excinfo.value.__cause__)
 
 
+def test_load_surfaces_line_and_column_for_invalid_yaml(tmp_path: Path) -> None:
+    invalid_yaml = """series:
+  Show Name:
+    rating_key: 123
+      library: TV Shows
+"""
+    tv_file = tmp_path / "tv.yml"
+    tv_file.write_text(invalid_yaml)
+
+    manager = TvYamlManager(tv_file)
+
+    with pytest.raises(ValueError) as excinfo:
+        manager.load()
+
+    message = str(excinfo.value)
+    assert "Unable to parse tv.yml" in message
+    assert "Line 4, column 14" in message
+    assert "library: TV Shows" in message
+
+
 def test_backup_daily_creates_dated_files_and_prunes(tmp_path: Path) -> None:
     tv_file = tmp_path / "tv.yml"
     tv_file.write_text("libraries: {}\nseries: {}\n")

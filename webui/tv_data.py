@@ -67,6 +67,7 @@ class TvYamlManager:
                 with self.file_path.open("r", encoding="utf-8") as handle:
                     data = self._yaml.load(handle) or CommentedMap()
             except (ComposerError, ParserError, ScannerError, IndexError) as exc:
+                details = _format_yaml_error(exc, raw_content)
                 try:
                     with self.file_path.open("r", encoding="utf-8") as handle:
                         documents = list(self._yaml.load_all(handle))
@@ -75,6 +76,8 @@ class TvYamlManager:
                         "Unable to parse tv.yml; check YAML formatting for syntax errors"
                         f" ({exc})"
                     )
+                    if details:
+                        message = f"{message}\n{details}"
                     raise ValueError(message) from inner_exc
 
                 data = CommentedMap()
@@ -441,6 +444,29 @@ def _to_commented(value: Any) -> Any:
             seq.append(_to_commented(item))
         return seq
     return value
+
+
+def _format_yaml_error(exc: Exception, raw_content: str) -> str | None:
+    """Return a concise description of where YAML parsing failed, if available."""
+
+    mark = getattr(exc, "problem_mark", None)
+    if mark is None:
+        return None
+
+    line = getattr(mark, "line", None)
+    column = getattr(mark, "column", None)
+
+    if line is None or column is None:
+        return None
+
+    line_number = line + 1
+    column_number = column + 1
+
+    lines = raw_content.splitlines()
+    line_text = lines[line] if 0 <= line < len(lines) else ""
+    pointer = " " * column + "^"
+
+    return f"Line {line_number}, column {column_number}: {line_text}\n{pointer}"
 
 
 def _apply_series_defaults(name: str, config: dict[str, Any]) -> dict[str, Any]:
