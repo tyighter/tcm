@@ -60,6 +60,7 @@ class PreviewPayload:
     data: str
     source_path: Path | None
     existing_source: bool = False
+    cached_at: float | None = None
 
 
 def _preview_logger() -> logging.Logger | None:
@@ -154,6 +155,7 @@ def _persist_preview_payload(cache_key: str, payload: PreviewPayload) -> None:
                     "data": payload.data,
                     "source_path": str(payload.source_path) if payload.source_path else None,
                     "existing_source": payload.existing_source,
+                    "cached_at": payload.cached_at,
                 }
             )
         )
@@ -181,12 +183,15 @@ def _load_persistent_preview(cache_key: str) -> PreviewPayload | None:
 
     source_path = payload.get("source_path")
     existing_source = bool(payload.get("existing_source"))
+    cached_at = payload.get("cached_at")
+    cached_at_value = float(cached_at) if isinstance(cached_at, (int, float)) else None
     resolved_source = Path(source_path) if isinstance(source_path, str) else None
     return PreviewPayload(
         mime=mime,
         data=data,
         source_path=resolved_source,
         existing_source=existing_source,
+        cached_at=cached_at_value,
     )
 
 
@@ -517,9 +522,7 @@ def _existing_card_path(show: Show, episode: Episode | None) -> Path | None:
     return (matching or candidates)[0]
 
 
-def _preview_from_existing_sources(
-    show: Show, preferred_episode_key: str | None
-) -> PreviewPayload | None:
+def _select_existing_card(show: Show, preferred_episode_key: str | None) -> Path | None:
     preferred_episode = (
         show.episodes.get(preferred_episode_key) if preferred_episode_key else None
     )
@@ -532,18 +535,99 @@ def _preview_from_existing_sources(
     available_cards = [item for item in available_cards if item[1] is not None]
 
     if preferred_card is not None:
-        selected_card = preferred_card
-    elif available_cards:
+        return preferred_card
+    if available_cards:
         _, selected_card = random.choice(available_cards)
-    else:
+        return selected_card
+    return None
+
+
+def _preview_from_existing_sources(
+    show: Show, preferred_episode_key: str | None
+) -> PreviewPayload | None:
+    selected_card = _select_existing_card(show, preferred_episode_key)
+    if selected_card is None:
         return None
 
     mime, _ = mimetypes.guess_type(selected_card.name)
     mime = mime or "image/jpeg"
     data = base64.b64encode(selected_card.read_bytes()).decode("ascii")
     return PreviewPayload(
-        mime=mime, data=data, source_path=selected_card, existing_source=True
+        mime=mime,
+        data=data,
+        source_path=selected_card,
+        existing_source=True,
+        cached_at=_stat_mtime(selected_card),
     )
+
+
+def _stat_mtime(path: Path | None) -> float | None:
+    if path is None:
+        return None
+
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return None
+
+
+def _newer_existing_card_available(
+    show: Show, preferred_episode_key: str | None, cached_at: float | None
+) -> bool:
+    existing_card = _select_existing_card(show, preferred_episode_key)
+    if existing_card is None:
+        return False
+
+    existing_mtime = _stat_mtime(existing_card)
+    if existing_mtime is None:
+        return False
+
+    if cached_at is None:
+        return True
+
+    return existing_mtime > cached_at
+
+
+def _generated_preview_superseded(
+    load_show: Callable[[], Show],
+    payload: PreviewPayload,
+    *,
+    prefer_existing: bool,
+    preview_episode_key: str | None,
+    show_name: str,
+    cache_key: str,
+    origin: str,
+) -> bool:
+    """Return True if a generated preview should be invalidated."""
+
+    if not prefer_existing or payload.existing_source:
+        return False
+
+    show = load_show()
+    if not _newer_existing_card_available(show, preview_episode_key, payload.cached_at):
+        return False
+
+    _log_preview_event(
+        show_name,
+        payload.source_path,
+        status="invalidated",
+        origin=origin,
+        episode_key=preview_episode_key,
+        cached=True,
+        persistent=origin == "persistent-cache",
+        existing_source=payload.existing_source,
+    )
+
+    if origin == "persistent-cache":
+        try:
+            _persistent_cache_path(cache_key).unlink()
+        except OSError:
+            logger.debug("Unable to remove invalid persistent preview cache for %s", cache_key)
+    else:
+        with _preview_cache_lock:
+            _preview_cache.pop(cache_key, None)
+
+    return True
 
 
 def get_or_generate_preview(
@@ -558,6 +642,14 @@ def get_or_generate_preview(
 ) -> tuple[str, str]:
     """Return a cached preview or generate and cache a new one."""
 
+    preloaded_show: Show | None = None
+
+    def _load_show() -> Show:
+        nonlocal preloaded_show
+        if preloaded_show is None:
+            preloaded_show = _load_show_for_preview(context, tv_manager, show_name, series_config)
+        return preloaded_show
+
     cache_key = _preview_cache_key(
         show_name,
         series_config,
@@ -567,19 +659,15 @@ def get_or_generate_preview(
         with _preview_cache_lock:
             cached = _preview_cache.get(cache_key)
         if cached is not None:
-            if prefer_existing and not cached.existing_source:
-                _log_preview_event(
-                    show_name,
-                    cached.source_path,
-                    status="invalidated",
-                    origin="memory-cache",
-                    episode_key=preview_episode_key,
-                    cached=True,
-                    existing_source=cached.existing_source,
-                )
-                with _preview_cache_lock:
-                    _preview_cache.pop(cache_key, None)
-            else:
+            if not _generated_preview_superseded(
+                _load_show,
+                cached,
+                prefer_existing=prefer_existing,
+                preview_episode_key=preview_episode_key,
+                show_name=show_name,
+                cache_key=cache_key,
+                origin="memory-cache",
+            ):
                 _log_preview_event(
                     show_name,
                     cached.source_path,
@@ -593,24 +681,15 @@ def get_or_generate_preview(
 
         persistent_cached = _load_persistent_preview(cache_key)
         if persistent_cached is not None:
-            if prefer_existing and not persistent_cached.existing_source:
-                _log_preview_event(
-                    show_name,
-                    persistent_cached.source_path,
-                    status="invalidated",
-                    origin="persistent-cache",
-                    episode_key=preview_episode_key,
-                    cached=True,
-                    persistent=True,
-                    existing_source=persistent_cached.existing_source,
-                )
-                try:
-                    _persistent_cache_path(cache_key).unlink()
-                except OSError:
-                    logger.debug(
-                        "Unable to remove invalid persistent preview cache for %s", cache_key
-                    )
-            else:
+            if not _generated_preview_superseded(
+                _load_show,
+                persistent_cached,
+                prefer_existing=prefer_existing,
+                preview_episode_key=preview_episode_key,
+                show_name=show_name,
+                cache_key=cache_key,
+                origin="persistent-cache",
+            ):
                 with _preview_cache_lock:
                     _preview_cache[cache_key] = persistent_cached
                 _log_preview_event(
@@ -626,7 +705,9 @@ def get_or_generate_preview(
                 return persistent_cached.mime, persistent_cached.data
 
     try:
-        show = _load_show_for_preview(context, tv_manager, show_name, series_config)
+        show = preloaded_show or _load_show_for_preview(
+            context, tv_manager, show_name, series_config
+        )
 
         preview_from_source = (
             _preview_from_existing_sources(show, preview_episode_key)
@@ -748,7 +829,10 @@ def generate_preview(
     rmtree(temp_dir, ignore_errors=True)
 
     return PreviewPayload(
-        mime="image/jpeg", data=base64.b64encode(data).decode("ascii"), source_path=destination
+        mime="image/jpeg",
+        data=base64.b64encode(data).decode("ascii"),
+        source_path=destination,
+        cached_at=time.time(),
     )
 
 
