@@ -301,6 +301,7 @@ class TvYamlManager:
         """Write YAML data to disk atomically to avoid partial files."""
 
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        desired_mode = self._target_mode()
 
         temp_path: Path | None = None
         try:
@@ -308,6 +309,13 @@ class TvYamlManager:
                 "w", encoding="utf-8", dir=self.file_path.parent, delete=False
             ) as handle:
                 temp_path = Path(handle.name)
+                try:
+                    os.fchmod(handle.fileno(), desired_mode)
+                except (AttributeError, PermissionError, OSError):  # pragma: no cover - platform dependent
+                    try:
+                        temp_path.chmod(desired_mode)
+                    except OSError:
+                        pass
                 self._yaml.dump(data, handle)
                 handle.flush()
                 os.fsync(handle.fileno())
@@ -317,6 +325,19 @@ class TvYamlManager:
         finally:
             if temp_path is not None:
                 temp_path.unlink(missing_ok=True)
+
+    def _target_mode(self) -> int:
+        try:
+            mode = self.file_path.stat().st_mode
+        except FileNotFoundError:
+            return 0o666
+        except OSError:  # pragma: no cover - guardrail for unexpected errors
+            return 0o666
+
+        if mode & 0o111:
+            return 0o777
+
+        return 0o666
 
     def _backup_directory(self) -> Path:
         return Path("/config/backups")

@@ -107,3 +107,23 @@ def test_restore_from_backup_replaces_tv_file(tmp_path: Path) -> None:
 
     assert restored_path == backup_file.resolve(strict=False)
     assert tv_file.read_text() == backup_file.read_text()
+
+
+def test_atomic_write_defaults_to_world_writable(tmp_path: Path) -> None:
+    tv_file = tmp_path / "tv.yml"
+    manager = TvYamlManager(tv_file)
+
+    manager.write({"libraries": {}, "series": []})
+
+    assert (tv_file.stat().st_mode & 0o777) == 0o666
+
+
+def test_atomic_write_respects_executable_permissions(tmp_path: Path) -> None:
+    tv_file = tmp_path / "tv.yml"
+    tv_file.write_text("libraries: {}\nseries: {}\n")
+    tv_file.chmod(0o777)
+    manager = TvYamlManager(tv_file)
+
+    manager.write({"libraries": {}, "series": []})
+
+    assert (tv_file.stat().st_mode & 0o777) == 0o777
