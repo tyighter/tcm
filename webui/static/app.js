@@ -1114,7 +1114,7 @@ function renderEntry(entry) {
   previewEpisodeSelect.addEventListener('change', async () => {
     entry.previewEpisode = previewEpisodeSelect.value || 'random';
     const preferCachedPreview = entry.previewEpisode === 'random';
-    await invalidateEntryPreview(entry);
+    await invalidateEntryPreview(entry, { queue: false });
     loadEntryPreview(entry, { preferExisting: preferCachedPreview });
   });
 
@@ -1321,6 +1321,10 @@ function renderEntry(entry) {
 let previewObserver = null;
 const previewLoadOptions = new WeakMap();
 const previewRefreshTimers = new Map();
+const BACKGROUND_PREVIEW_CONCURRENCY = 2;
+const backgroundPreviewQueue = [];
+const backgroundPreviewEntries = new Set();
+let backgroundPreviewInFlight = 0;
 
 function cancelScheduledPreviewRefresh(entry) {
   if (!entry?.id) {
@@ -1343,7 +1347,7 @@ function schedulePreviewRefresh(entry, { preferExisting = true, delay = 650 } = 
     await invalidateEntryPreview(entry);
     entry.previewLoadingStrategy = preferExisting ? 'load' : 'generate';
     updateEntryPreview(entry);
-    requestEntryPreviews([entry], { preferExisting });
+    queueBackgroundPreview(entry, { preferExisting });
   }, Math.max(0, delay));
   previewRefreshTimers.set(entry.id, timer);
 }
@@ -1424,6 +1428,43 @@ function ensurePreviewObserver() {
   );
 
   return previewObserver;
+}
+
+function processBackgroundPreviewQueue() {
+  if (!backgroundPreviewQueue.length || backgroundPreviewInFlight >= BACKGROUND_PREVIEW_CONCURRENCY) {
+    return;
+  }
+
+  while (
+    backgroundPreviewQueue.length &&
+    backgroundPreviewInFlight < BACKGROUND_PREVIEW_CONCURRENCY
+  ) {
+    const { entry, options } = backgroundPreviewQueue.shift() || {};
+    if (!entry) {
+      continue;
+    }
+
+    backgroundPreviewInFlight += 1;
+    void (async () => {
+      try {
+        await loadEntryPreview(entry, options);
+      } finally {
+        backgroundPreviewEntries.delete(entry.id);
+        backgroundPreviewInFlight -= 1;
+        processBackgroundPreviewQueue();
+      }
+    })();
+  }
+}
+
+function queueBackgroundPreview(entry, options = {}) {
+  if (!entry?.id || backgroundPreviewEntries.has(entry.id) || entry.previewLoading) {
+    return;
+  }
+
+  backgroundPreviewEntries.add(entry.id);
+  backgroundPreviewQueue.push({ entry, options });
+  processBackgroundPreviewQueue();
 }
 
 function observeEntryPreview(entry, options = {}) {
@@ -1509,7 +1550,7 @@ async function fetchStaticPreview(entry, options = {}) {
   }
 }
 
-async function invalidateEntryPreview(entry) {
+async function invalidateEntryPreview(entry, { queue = true } = {}) {
   cancelScheduledPreviewRefresh(entry);
   entry.previewError = null;
   entry.previewLoading = false;
@@ -1518,7 +1559,9 @@ async function invalidateEntryPreview(entry) {
   entry.previewRefreshing = Boolean(entry.previewSrc);
   await clearPreviewCacheEntry(entry);
   updateEntryPreview(entry);
-  observeEntryPreview(entry);
+  if (queue) {
+    queueBackgroundPreview(entry, { preferExisting: true });
+  }
 }
 
 async function loadEntryPreview(entry, options = {}) {
@@ -1621,6 +1664,15 @@ async function loadEntryPreview(entry, options = {}) {
 
 function requestEntryPreviews(entries = state.entries, options = {}) {
   entries.forEach((entry) => {
+    if (!entry || entry.previewLoading) {
+      return;
+    }
+
+    if (entry.previewStale) {
+      queueBackgroundPreview(entry, options);
+      return;
+    }
+
     observeEntryPreview(entry, options);
   });
 }
