@@ -5569,6 +5569,50 @@ function cloneData(value) {
   return JSON.parse(JSON.stringify(value ?? {}));
 }
 
+function stableStringify(value) {
+  const seen = new WeakSet();
+
+  const normalize = (input) => {
+    if (input === null || typeof input !== 'object') {
+      return input;
+    }
+    if (seen.has(input)) {
+      return null;
+    }
+    seen.add(input);
+
+    if (Array.isArray(input)) {
+      return input.map(normalize);
+    }
+
+    return Object.keys(input)
+      .sort()
+      .reduce((result, key) => {
+        result[key] = normalize(input[key]);
+        return result;
+      }, {});
+  };
+
+  return JSON.stringify(normalize(value));
+}
+
+function normalizeSnapshot(snapshot) {
+  if (snapshot === null || snapshot === undefined) {
+    return null;
+  }
+  try {
+    const parsed = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
+    return stableStringify(parsed);
+  } catch (error) {
+    try {
+      return stableStringify(snapshot);
+    } catch (stringifyError) {
+      console.warn('Failed to normalize snapshot', stringifyError);
+      return typeof snapshot === 'string' ? snapshot : null;
+    }
+  }
+}
+
 function snapshotEntry(entry) {
   return {
     name: entry.name,
@@ -5577,8 +5621,12 @@ function snapshotEntry(entry) {
   };
 }
 
+function serializeEntrySnapshot(entry) {
+  return stableStringify(snapshotEntry(entry));
+}
+
 function deepEqualEntrySnapshots(a, b) {
-  return JSON.stringify(a) === JSON.stringify(b);
+  return stableStringify(a) === stableStringify(b);
 }
 
 function hasEntryChangedSinceLastSave(entry) {
@@ -5748,28 +5796,48 @@ async function deletePreviewCacheEntry(key) {
   }
 }
 
+function normalizePreviewCacheValue(key, value) {
+  if (!value || !value.src) {
+    return null;
+  }
+  const normalizedSnapshot = normalizeSnapshot(value.snapshot);
+  return {
+    key,
+    snapshot: normalizedSnapshot,
+    src: value.src,
+  };
+}
+
 async function loadPreviewCache() {
   state.previewCache = {};
 
+  const migrationTasks = [];
   const dbEntries = await readAllPreviewCacheEntries();
   dbEntries.forEach((entry) => {
     if (entry?.key && entry.src) {
-      state.previewCache[entry.key] = { snapshot: entry.snapshot, src: entry.src };
+      const normalized = normalizePreviewCacheValue(entry.key, entry);
+      if (!normalized) {
+        return;
+      }
+      state.previewCache[entry.key] = { snapshot: normalized.snapshot, src: normalized.src };
+      if (normalized.snapshot !== entry.snapshot) {
+        migrationTasks.push(writePreviewCacheEntry(entry.key, normalized));
+      }
     }
   });
 
   const legacyCache = loadLegacyPreviewCache();
-  const migrationTasks = [];
   Object.entries(legacyCache).forEach(([key, value]) => {
-    if (!value) {
+    const normalized = normalizePreviewCacheValue(key, value);
+    if (!normalized) {
       return;
     }
 
     if (!state.previewCache[key]) {
-      state.previewCache[key] = value;
+      state.previewCache[key] = { snapshot: normalized.snapshot, src: normalized.src };
     }
 
-    migrationTasks.push(writePreviewCacheEntry(key, value));
+    migrationTasks.push(writePreviewCacheEntry(key, normalized));
   });
 
   if (migrationTasks.length) {
@@ -5962,7 +6030,7 @@ function previewCacheKey(entry) {
   if (!entry?.name) {
     return null;
   }
-  const snapshot = JSON.stringify(snapshotEntry(entry));
+  const snapshot = serializeEntrySnapshot(entry);
   return `${entry.name}:${hashString(snapshot)}`;
 }
 
@@ -6032,13 +6100,16 @@ async function restoreCachedPreview(entry) {
     return;
   }
 
-  const snapshot = JSON.stringify(snapshotEntry(entry));
-  const cached = (await readPreviewCacheEntry(key)) || null;
-  const legacy = (await readPreviewCacheEntry(legacyKey)) || null;
+  const snapshot = serializeEntrySnapshot(entry);
+  const cached = normalizePreviewCacheValue(key, await readPreviewCacheEntry(key));
+  const legacy = normalizePreviewCacheValue(legacyKey, await readPreviewCacheEntry(legacyKey));
   const match = cached || legacy;
   if (match?.src) {
     entry.previewSrc = match.src;
     entry.previewStale = match.snapshot !== snapshot;
+    if (match.key && !state.previewCache[match.key]) {
+      state.previewCache[match.key] = { snapshot: match.snapshot, src: match.src };
+    }
   }
 }
 
@@ -6051,7 +6122,7 @@ async function updatePreviewCache(entry) {
   const preferredKeys = [key, legacyKey].filter(Boolean);
   await evictSeriesPreviewCache(entry.name, preferredKeys);
   const value = {
-    snapshot: JSON.stringify(snapshotEntry(entry)),
+    snapshot: serializeEntrySnapshot(entry),
     src: entry.previewSrc,
   };
   state.previewCache[key] = value;
