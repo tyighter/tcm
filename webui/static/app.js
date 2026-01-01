@@ -1325,6 +1325,7 @@ const previewLoadOptions = new WeakMap();
 const previewRefreshTimers = new Map();
 const stalePreviewRefreshQueue = [];
 const stalePreviewRefreshIds = new Set();
+const stalePreviewRefreshOptions = new Map();
 let stalePreviewRefreshTimer = null;
 let stalePreviewRefreshActive = false;
 
@@ -1372,13 +1373,16 @@ async function processStalePreviewQueue() {
   }
 
   stalePreviewRefreshIds.delete(entry.id);
+  const { preferExisting = true } = stalePreviewRefreshOptions.get(entry.id) || {};
+  stalePreviewRefreshOptions.delete(entry.id);
   stalePreviewRefreshActive = true;
 
   try {
     if (entry.previewStale) {
+      entry.previewLoadingStrategy = preferExisting ? 'load' : 'generate';
       entry.previewRefreshing = entry.previewRefreshing || Boolean(entry.previewSrc);
       updateEntryPreview(entry);
-      await loadEntryPreview(entry, { preferExisting: true });
+      await loadEntryPreview(entry, { preferExisting });
     }
   } finally {
     stalePreviewRefreshActive = false;
@@ -1391,13 +1395,18 @@ async function processStalePreviewQueue() {
   }
 }
 
-function enqueueStalePreviewRefresh(entry) {
-  if (!entry?.id || !entry.previewStale || stalePreviewRefreshIds.has(entry.id)) {
+function enqueueStalePreviewRefresh(entry, options = {}) {
+  if (!entry?.id || entry.previewLoading || !entry.previewStale) {
     return;
   }
 
-  stalePreviewRefreshQueue.push(entry);
-  stalePreviewRefreshIds.add(entry.id);
+  const { preferExisting = true } = options;
+
+  stalePreviewRefreshOptions.set(entry.id, { preferExisting });
+  if (!stalePreviewRefreshIds.has(entry.id)) {
+    stalePreviewRefreshQueue.push(entry);
+    stalePreviewRefreshIds.add(entry.id);
+  }
   scheduleStalePreviewQueue();
 }
 
@@ -1490,11 +1499,16 @@ function ensurePreviewObserver() {
 }
 
 function observeEntryPreview(entry, options = {}) {
-  if (
-    !entry ||
-    entry.previewLoading ||
-    (entry.previewSrc && !entry.previewStale)
-  ) {
+  if (!entry || entry.previewLoading) {
+    return;
+  }
+
+  if (entry.previewStale) {
+    enqueueStalePreviewRefresh(entry, options);
+    return;
+  }
+
+  if (entry.previewSrc && !entry.previewStale) {
     return;
   }
 
@@ -1684,6 +1698,11 @@ async function loadEntryPreview(entry, options = {}) {
 
 function requestEntryPreviews(entries = state.entries, options = {}) {
   entries.forEach((entry) => {
+    if (entry?.previewStale && !entry.previewLoading) {
+      enqueueStalePreviewRefresh(entry, options);
+      return;
+    }
+
     observeEntryPreview(entry, options);
   });
 }
