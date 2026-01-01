@@ -14,7 +14,11 @@ import re
 
 from .config import AppContext
 from .tv_data import TvYamlManager, _to_builtin
-from .services import ActionInProgressError, run_builder_for_series
+from .services import (
+    ActionInProgressError,
+    backfill_episode_rating_keys,
+    run_builder_for_series,
+)
 from .user_settings import load_settings
 
 TAUTULLI_LOG_FILE = Path("/config/tautulli.log")
@@ -403,64 +407,18 @@ def _episode_label(episode: dict[str, Any]) -> str | None:
 
 
 def _backfill_episode_rating_keys(
-    context: AppContext, tv_manager: TvYamlManager
+    context: AppContext,
+    tv_manager: TvYamlManager,
+    *,
+    series_names: Iterable[str] | None = None,
 ) -> dict[str, int]:
-    updated = 0
-    processed = 0
+    """Compatibility wrapper around the shared backfill helper."""
 
-    plex = context.get_plex_interface()
-    tv_data = tv_manager.load()
-    series_entries = tv_data.get("series", {})
-
-    for series_name, raw_config in series_entries.items():
-        processed += 1
-        config = _to_builtin(raw_config)
-        rating_key = config.get("rating_key")
-        if rating_key is None:
-            continue
-
-        normalized_show_key = _normalize_rating_key(rating_key)
-
-        try:
-            episodes = plex.expand_rating_key_to_episodes(rating_key)
-        except Exception as exc:  # pylint: disable=broad-except
-            tautulli_logger.warning(
-                "Unable to expand Plex rating key %s for %s: %s",
-                rating_key,
-                series_name,
-                exc,
-            )
-            continue
-
-        labels: dict[str, Any] = {}
-        show_keys: set[str] = set()
-        for episode in episodes:
-            label = _episode_label(episode)
-            episode_key = _normalize_rating_key(episode.get("episode_rating_key"))
-            if label and episode_key:
-                labels[label] = episode_key
-
-            show_key = _normalize_rating_key(
-                episode.get("show_rating_key") or rating_key
-            )
-            if show_key:
-                show_keys.add(show_key)
-
-        if not labels:
-            continue
-
-        if normalized_show_key:
-            show_keys.add(normalized_show_key)
-
-        changed = False
-        for show_key in show_keys:
-            if tv_manager.update_episode_rating_keys(series_name, show_key, labels):
-                changed = True
-
-        if changed:
-            updated += 1
-
-    return {"updated": updated, "total": processed}
+    return backfill_episode_rating_keys(
+        context,
+        tv_manager,
+        series_names=series_names,
+    )
 
 
 def fetch_recently_added(
@@ -782,6 +740,17 @@ def _trigger_builds_for_recent_changes(
     )
 
     for series_name in sorted(series_to_build):
+        try:
+            backfill_episode_rating_keys(
+                context, tv_manager, series_names=[series_name]
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            tautulli_logger.warning(
+                "Unable to backfill episode rating keys for %s: %s",
+                series_name,
+                exc,
+            )
+
         try:
             tautulli_logger.info(
                 "Triggering background build for %s due to recent Plex activity",

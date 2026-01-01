@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
 from threading import Lock
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from ruamel.yaml.comments import CommentedMap
 
@@ -376,6 +376,110 @@ def backfill_rating_keys(context: AppContext, tv_manager: TvYamlManager) -> dict
     if updated:
         tv_manager.write(payload)
         tv_manager.invalidate()
+
+    return {"updated": updated, "total": processed}
+
+
+def _normalize_rating_key(value: Any) -> str | None:
+    try:
+        return str(int(value))
+    except (TypeError, ValueError):
+        try:
+            text = str(value).strip()
+        except Exception:
+            return None
+        return text or None
+
+
+def _episode_label(episode: dict[str, Any]) -> str | None:
+    try:
+        season = int(episode.get("season"))
+        number = int(episode.get("episode"))
+    except (TypeError, ValueError):
+        return None
+
+    return f"S{season}E{number}"
+
+
+def backfill_episode_rating_keys(
+    context: AppContext,
+    tv_manager: TvYamlManager,
+    *,
+    series_names: Iterable[str] | None = None,
+) -> dict[str, int]:
+    """Populate missing episode-level Plex rating keys for configured series.
+
+    Args:
+        context: Application context containing the Plex interface and preferences.
+        tv_manager: YAML manager used to persist updates.
+        series_names: Optional iterable of series names to restrict processing.
+
+    Returns:
+        Mapping with counts of updated and processed series.
+    """
+
+    if not context.preference_parser.use_plex:
+        raise RuntimeError("Plex is not configured in preferences.yml")
+
+    plex = context.get_plex_interface()
+    tv_data = tv_manager.load()
+
+    series_entries = tv_data.get("series", CommentedMap())
+    updated = 0
+    processed = 0
+
+    target_names = set(series_names) if series_names else None
+
+    for series_name, raw_config in series_entries.items():
+        if target_names and series_name not in target_names:
+            continue
+
+        processed += 1
+        config = _to_builtin(raw_config)
+        rating_key = config.get("rating_key")
+        if rating_key is None:
+            continue
+
+        normalized_show_key = _normalize_rating_key(rating_key)
+
+        try:
+            episodes = plex.expand_rating_key_to_episodes(rating_key)
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning(
+                "Unable to expand Plex rating key %s for %s: %s",
+                rating_key,
+                series_name,
+                exc,
+            )
+            continue
+
+        labels: dict[str, Any] = {}
+        show_keys: set[str] = set()
+        for episode in episodes:
+            label = _episode_label(episode)
+            episode_key = _normalize_rating_key(episode.get("episode_rating_key"))
+            if label and episode_key:
+                labels[label] = episode_key
+
+            show_key = _normalize_rating_key(
+                episode.get("show_rating_key") or rating_key
+            )
+            if show_key:
+                show_keys.add(show_key)
+
+        if not labels:
+            continue
+
+        if normalized_show_key:
+            show_keys.add(normalized_show_key)
+
+        changed = False
+        for show_key in show_keys:
+            if tv_manager.update_episode_rating_keys(series_name, show_key, labels):
+                changed = True
+
+        if changed:
+            updated += 1
 
     return {"updated": updated, "total": processed}
 
