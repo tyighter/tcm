@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -54,7 +55,7 @@ class OlivierTitleCard(BaseCardType):
         'stroke_color', 'episode_text_color', 'episode_text_font_size',
         'episode_text_vertical_shift', 'episode_text_font',
         'episode_prefix_font', 'font_replacements', 'text_vertical_shift',
-        'episode_text_offset',
+        'episode_text_spacing', 'episode_text_offset',
     )
 
     def __init__(self,
@@ -104,17 +105,22 @@ class OlivierTitleCard(BaseCardType):
 
         # Determine episode prefix, modify text to remove prefix
         self.episode_prefix = None
+        self.episode_text_spacing = ''
         self.hide_episode_text = hide_episode_text or len(episode_text) == 0
-        if not self.hide_episode_text and ' ' in episode_text:
-            prefix, number = episode_text.split(' ', 1)
-            replaced_prefix = prefix
-            for old, new in self.font_replacements.items():
-                replaced_prefix = replaced_prefix.replace(old, new)
-            self.episode_prefix = replaced_prefix
-            episode_text = number
-        else:
-            episode_text = episode_text
-        episode_text = episode_text
+        if not self.hide_episode_text:
+            whitespace_match = re.match(
+                r'^(?P<prefix>\S+)(?P<spacing>\s+)(?P<number>.+)$',
+                episode_text,
+            )
+            if whitespace_match:
+                prefix = whitespace_match.group('prefix')
+                number = whitespace_match.group('number')
+                self.episode_text_spacing = whitespace_match.group('spacing')
+                replaced_prefix = prefix
+                for old, new in self.font_replacements.items():
+                    replaced_prefix = replaced_prefix.replace(old, new)
+                self.episode_prefix = replaced_prefix
+                episode_text = number
         for old, new in self.font_replacements.items():
             episode_text = episode_text.replace(old, new)
         self.episode_text = self.image_magick.escape_chars(episode_text)
@@ -290,18 +296,23 @@ class OlivierTitleCard(BaseCardType):
             kerning=kerning,
             stroke_width=7 * self.episode_text_font_size,
         )
+        spacing_count = len(self.episode_text_spacing)
+        spacing_width = space_width * spacing_count if space_width > 0 else 0.0
 
         if prefix_width > 0:
-            return prefix_width + (space_width if space_width > 0 else 0.0)
+            return prefix_width + spacing_width
 
         text_offset = {'EPISODE': 425, 'CHAPTER': 425, 'PART': 275}
         prefix_upper = self.episode_prefix.upper()
         if prefix_upper in text_offset:
-            return text_offset[prefix_upper] * self.episode_text_font_size
+            return (
+                text_offset[prefix_upper] * self.episode_text_font_size
+                + spacing_width
+            )
 
         offset_per_char = text_offset['EPISODE'] / len('EPISODE')
         return offset_per_char * len(self.episode_prefix) * 1.10 \
-            * self.episode_text_font_size
+            * self.episode_text_font_size + spacing_width
 
 
     def _measure_text_width(self,
