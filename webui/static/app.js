@@ -55,6 +55,7 @@ const CACHE_DB_VERSION = 2;
 const PREVIEW_DB_STORE = 'previews';
 const LOGO_DB_STORE = 'logos';
 const MAX_PREVIEW_CACHE_ENTRIES_PER_SERIES = 1;
+const BACKGROUND_PREVIEW_REFRESH_DELAY_MS = 800;
 const DEFAULT_BACKUP_DIRECTORY = '/config/backups';
 const FONT_EXTENSIONS = ['.ttf', '.otf', '.woff', '.woff2', '.ttc'];
 
@@ -548,6 +549,7 @@ async function loadConfiguration() {
       Promise.all([restoreCachedLogo(entry), restoreCachedPreview(entry)])
     )
   );
+  refreshStalePreviewCache(state.entries);
 }
 
 async function saveSettings(payload) {
@@ -1321,6 +1323,10 @@ function renderEntry(entry) {
 let previewObserver = null;
 const previewLoadOptions = new WeakMap();
 const previewRefreshTimers = new Map();
+const stalePreviewRefreshQueue = [];
+const stalePreviewRefreshIds = new Set();
+let stalePreviewRefreshTimer = null;
+let stalePreviewRefreshActive = false;
 
 function cancelScheduledPreviewRefresh(entry) {
   if (!entry?.id) {
@@ -1346,6 +1352,63 @@ function schedulePreviewRefresh(entry, { preferExisting = true, delay = 650 } = 
     requestEntryPreviews([entry], { preferExisting });
   }, Math.max(0, delay));
   previewRefreshTimers.set(entry.id, timer);
+}
+
+function scheduleStalePreviewQueue() {
+  if (stalePreviewRefreshActive || stalePreviewRefreshTimer) {
+    return;
+  }
+  stalePreviewRefreshTimer = setTimeout(
+    processStalePreviewQueue,
+    BACKGROUND_PREVIEW_REFRESH_DELAY_MS
+  );
+}
+
+async function processStalePreviewQueue() {
+  stalePreviewRefreshTimer = null;
+  const entry = stalePreviewRefreshQueue.shift();
+  if (!entry) {
+    return;
+  }
+
+  stalePreviewRefreshIds.delete(entry.id);
+  stalePreviewRefreshActive = true;
+
+  try {
+    if (entry.previewStale) {
+      entry.previewRefreshing = entry.previewRefreshing || Boolean(entry.previewSrc);
+      updateEntryPreview(entry);
+      await loadEntryPreview(entry, { preferExisting: true });
+    }
+  } finally {
+    stalePreviewRefreshActive = false;
+    if (stalePreviewRefreshQueue.length) {
+      stalePreviewRefreshTimer = setTimeout(
+        processStalePreviewQueue,
+        BACKGROUND_PREVIEW_REFRESH_DELAY_MS
+      );
+    }
+  }
+}
+
+function enqueueStalePreviewRefresh(entry) {
+  if (!entry?.id || !entry.previewStale || stalePreviewRefreshIds.has(entry.id)) {
+    return;
+  }
+
+  stalePreviewRefreshQueue.push(entry);
+  stalePreviewRefreshIds.add(entry.id);
+  scheduleStalePreviewQueue();
+}
+
+function refreshStalePreviewCache(entries = state.entries) {
+  if (!Array.isArray(entries)) {
+    return;
+  }
+
+  entries
+    .filter((entry) => entry && entry.previewStale)
+    .forEach((entry) => enqueueStalePreviewRefresh(entry));
 }
 
 function updateEntryPreview(entry) {
