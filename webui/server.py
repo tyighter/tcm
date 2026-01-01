@@ -34,6 +34,7 @@ from .services import (
     get_or_generate_preview,
     invalidate_preview_cache,
     list_preview_episodes,
+    backfill_episode_rating_keys,
     run_asset_downloads,
     run_asset_downloads_for_series,
     backfill_tmdb_ids,
@@ -1131,6 +1132,17 @@ def _run_startup_tasks_async(context: AppContext, tv_manager: TvYamlManager) -> 
                 total = result.get("total", 0)
                 if updated:
                     logger.info("Updated Plex rating keys for %s of %s series", updated, total)
+            try:
+                result = backfill_episode_rating_keys(context, tv_manager)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.warning("Unable to backfill episode rating keys on startup: %s", exc)
+            else:
+                updated = result.get("updated", 0)
+                total = result.get("total", 0)
+                if updated:
+                    logger.info(
+                        "Updated episode rating keys for %s of %s series", updated, total
+                    )
 
         if static_thumbnail_cache_complete():
             logger.info("Card type thumbnail cache already prepared; skipping refresh")
