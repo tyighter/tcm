@@ -501,6 +501,10 @@ def main() -> None:  # pragma: no cover - thin wrapper for CLI entrypoint
     raise SystemExit(_run_cli(sys.argv[1:]))
 
 
+if __name__ == "__main__":  # pragma: no cover - module executed as a script
+    main()
+
+
 def _apply_series_defaults(name: str, config: dict[str, Any]) -> dict[str, Any]:
     """Apply runtime defaults so they surface in the web UI."""
 
