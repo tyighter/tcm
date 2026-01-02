@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
 
+import webui.tautulli as tautulli
 from webui.tautulli import (
     _plex_watched_changes,
     _reset_plex_watch_state_cache,
@@ -86,7 +87,7 @@ class PlexWatchStateTests(TestCase):
             run_builder.assert_called_once_with(context, tv_manager, "Example")
 
         plex.set_watched(False)
-        unwatched = _plex_watched_changes(context, lookup)
+        unwatched = _plex_watched_changes(context, lookup, recent_watches=synthetic)
 
         self.assertEqual(len(unwatched), 1)
         self.assertEqual(unwatched[0]["series"], "Example")
@@ -106,6 +107,36 @@ class PlexWatchStateTests(TestCase):
 
     def test_watch_toggle_triggers_build_with_fallback_disabled(self) -> None:
         self._run_watch_toggle_flow(use_fallback=False)
+
+    def test_unwatch_inferred_from_history_after_quick_toggle(self) -> None:
+        tv_manager = DummyTvManager()
+        plex = DummyPlex("show-1")
+        context = DummyContext(plex, use_fallback=True)
+        lookup = _series_lookup(tv_manager)
+
+        _reset_plex_watch_state_cache()
+
+        # Seed the cache with an initial poll
+        _plex_watched_changes(context, lookup)
+
+        watch_timestamp = tautulli._plex_watch_state_last_polled or 0  # type: ignore[attr-defined]
+
+        recent_watch_entry = {
+            "series": "Example",
+            "episode": "Pilot",
+            "season": "Season 1",
+            "timestamp": watch_timestamp + 1000,
+            "showRatingKey": "show-1",
+            "episodeRatingKey": "show-1-1",
+        }
+
+        # Plex reports the episode as unwatched, but we observed a watch event after the last poll.
+        unwatched = _plex_watched_changes(
+            context, lookup, recent_watches=[recent_watch_entry]
+        )
+
+        self.assertEqual(len(unwatched), 1)
+        self.assertTrue(unwatched[0].get("unwatch"))
 
 
 class ActivityDeduplicationTests(TestCase):

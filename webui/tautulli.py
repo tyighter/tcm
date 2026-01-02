@@ -72,6 +72,7 @@ _recent_activity_cache: dict[str, dict[str, Any]] = {}
 _monitor_stop_event = Event()
 _monitor_thread: Thread | None = None
 _plex_watch_state_cache: dict[str, dict[str, bool]] = {}
+_plex_watch_state_last_polled: int | None = None
 
 _DEFAULT_CACHE_KEY = "__all__"
 _MIN_ACTIVITY_POLL_INTERVAL_SECONDS = 15
@@ -519,6 +520,8 @@ def _reset_recent_activity_cache() -> None:
 
 def _reset_plex_watch_state_cache() -> None:
     _plex_watch_state_cache.clear()
+    global _plex_watch_state_last_polled
+    _plex_watch_state_last_polled = None
 
 
 def fetch_recent_activity(
@@ -533,7 +536,9 @@ def fetch_recent_activity(
 
     lookup = _series_lookup(tv_manager)
     watched = fetch_recent_watches(settings, lookup)
-    watched = _merge_new_entries(watched, _plex_watched_changes(context, lookup))
+    watched = _merge_new_entries(
+        watched, _plex_watched_changes(context, lookup, recent_watches=watched)
+    )
     added = fetch_recently_added(context, settings, lookup)
     return {
         "watched": watched,
@@ -597,6 +602,26 @@ def _activity_identifier(entry: dict[str, Any] | None) -> tuple[str, str, str, s
     )
 
 
+def _index_recent_watch_events(entries: Iterable[dict[str, Any]]) -> dict[str, int]:
+    index: dict[str, int] = {}
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+
+        episode_key = _normalize_rating_key(entry.get("episodeRatingKey"))
+        timestamp = _normalize_timestamp(entry.get("timestamp"))
+
+        if not episode_key or timestamp is None:
+            continue
+
+        existing = index.get(episode_key)
+        if existing is None or timestamp > existing:
+            index[episode_key] = timestamp
+
+    return index
+
+
 def _merge_new_entries(
     existing: Iterable[dict[str, Any]], additions: Iterable[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -641,11 +666,16 @@ def _series_needing_build(
 
 
 def _plex_watched_changes(
-    context: AppContext, lookup: list[dict[str, Any]]
+    context: AppContext,
+    lookup: list[dict[str, Any]],
+    recent_watches: Iterable[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
+    global _plex_watch_state_last_polled
     plex = context.get_plex_interface()
     now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
     synthetic: list[dict[str, Any]] = []
+    last_polled = _plex_watch_state_last_polled
+    recent_watch_index = _index_recent_watch_events(recent_watches or [])
 
     for entry in lookup:
         show_rating_key = _normalize_rating_key(entry.get("rating_key"))
@@ -700,7 +730,41 @@ def _plex_watched_changes(
                     )
                 )
 
+        if last_polled is not None:
+            for episode_rating_key, watched in current_state.items():
+                if watched:
+                    continue
+
+                watch_timestamp = recent_watch_index.get(episode_rating_key)
+                if watch_timestamp is None or watch_timestamp <= last_polled:
+                    continue
+
+                if previous_state is not None and previous_state.get(
+                    episode_rating_key, False
+                ):
+                    # A change was already captured above.
+                    continue
+
+                details = episode_details.get(episode_rating_key) or {}
+                episode_title = details.get("title") or entry.get("episode") or ""
+                episode_rating_key_value = details.get("episode_rating_key")
+                _append_plex_watch_log(episode_title, episode_rating_key_value, False)
+                synthetic.append(
+                    _activity_entry(
+                        series_name=entry.get("name", ""),
+                        episode_title=episode_title,
+                        season_label=_season_label(details.get("season")),
+                        timestamp=now_ms,
+                        show_rating_key=details.get("show_rating_key")
+                        or entry.get("rating_key"),
+                        episode_rating_key=episode_rating_key_value,
+                        unwatch=True,
+                    )
+                )
+
         _plex_watch_state_cache[show_rating_key] = current_state
+
+    _plex_watch_state_last_polled = now_ms
 
     return synthetic
 
