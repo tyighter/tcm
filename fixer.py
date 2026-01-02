@@ -195,6 +195,7 @@ if ((hasattr(args, 'import_cards') or hasattr(args, 'revert_series'))
         destination: Path
         episode_info: EpisodeInfo
         spoil_type: str
+        watched: bool = False
 
     # Create MediaServer Interface
     try:
