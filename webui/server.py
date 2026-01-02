@@ -43,6 +43,7 @@ from .services import (
     run_builder_for_series,
     run_metadata_sync,
     revert_series_cards,
+    ensure_episode_rating_keys_in_payload,
     search_plex,
 )
 from .tv_data import TvYamlManager, _to_builtin, start_daily_tv_yaml_backup
@@ -717,6 +718,16 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     self.tv_manager.backup_on_save()
                 except Exception as exc:  # pylint: disable=broad-except
                     logger.warning("Unable to create backup prior to save: %s", exc)
+
+                payload, updated, processed = ensure_episode_rating_keys_in_payload(
+                    self.context, payload
+                )
+                if updated:
+                    logger.info(
+                        "Backfilled episode rating keys for %s of %s series before save",
+                        updated,
+                        processed or len(payload.get("series", []) or []),
+                    )
                 self.tv_manager.write(payload)
             except Exception as exc:  # pylint: disable=broad-except
                 self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)

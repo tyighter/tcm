@@ -30,7 +30,7 @@ from modules.SeriesInfo import SeriesInfo
 from modules.TMDbInterface import TMDbInterface
 
 from .config import AppContext
-from .tv_data import TvYamlManager, _to_builtin
+from .tv_data import TvYamlManager, _to_builtin, _to_commented
 from .user_settings import load_settings
 
 
@@ -401,6 +401,115 @@ def _episode_label(episode: dict[str, Any]) -> str | None:
     return f"S{season}E{number}"
 
 
+def _populate_episode_rating_keys(
+    plex: Any, series_name: str, config: dict[str, Any], rating_key: Any
+) -> bool:
+    normalized_show_key = _normalize_rating_key(rating_key)
+    if normalized_show_key is None:
+        return False
+
+    try:
+        episodes = plex.expand_rating_key_to_episodes(rating_key)
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.warning(
+            "Unable to expand Plex rating key %s for %s: %s",
+            rating_key,
+            series_name,
+            exc,
+        )
+        return False
+
+    labels: dict[str, Any] = {}
+    show_keys: set[str] = {normalized_show_key}
+
+    for episode in episodes:
+        label = _episode_label(episode)
+        episode_key = _normalize_rating_key(episode.get("episode_rating_key"))
+        if label and episode_key:
+            labels[label] = episode_key
+
+        show_key = _normalize_rating_key(episode.get("show_rating_key") or rating_key)
+        if show_key:
+            show_keys.add(show_key)
+
+    if not labels:
+        return False
+
+    existing_mappings = config.get("episode_rating_keys") or {}
+    if not isinstance(existing_mappings, dict):
+        existing_mappings = {}
+    changed = False
+
+    for show_key in show_keys:
+        current = existing_mappings.get(show_key, {})
+        merged = dict(current)
+
+        for label, episode_key in labels.items():
+            if str(current.get(label)) == episode_key:
+                continue
+            merged[label] = episode_key
+
+        if merged != current:
+            existing_mappings[show_key] = merged
+            changed = True
+
+    if changed:
+        config["episode_rating_keys"] = existing_mappings
+
+    return changed
+
+
+def ensure_episode_rating_keys_in_payload(
+    context: AppContext,
+    payload: dict[str, Any],
+    *,
+    series_names: Iterable[str] | None = None,
+) -> tuple[dict[str, Any], int, int]:
+    """Ensure episode rating keys are present in the provided payload.
+
+    Returns an updated payload, count of updated series, and count of processed series.
+    """
+
+    if not context.preference_parser.use_plex:
+        return payload, 0, 0
+
+    plex = context.get_plex_interface()
+
+    updated = 0
+    processed = 0
+    target_names = set(series_names) if series_names else None
+
+    series_entries = payload.get("series") or []
+    updated_series: list[dict[str, Any]] = []
+
+    for entry in series_entries:
+        name = entry.get("name")
+        updated_entry = dict(entry)
+        config = deepcopy(entry.get("config") or {})
+        updated_entry["config"] = config
+
+        if not name or (target_names and name not in target_names):
+            updated_series.append(updated_entry)
+            continue
+
+        processed += 1
+
+        rating_key = config.get("rating_key")
+        if rating_key is None:
+            updated_series.append(updated_entry)
+            continue
+
+        if _populate_episode_rating_keys(plex, name, config, rating_key):
+            updated += 1
+
+        updated_series.append(updated_entry)
+
+    updated_payload = dict(payload)
+    updated_payload["series"] = updated_series
+
+    return updated_payload, updated, processed
+
+
 def backfill_episode_rating_keys(
     context: AppContext,
     tv_manager: TvYamlManager,
@@ -425,6 +534,7 @@ def backfill_episode_rating_keys(
     tv_data = tv_manager.load()
 
     series_entries = tv_data.get("series", CommentedMap())
+    changed_series: list[str] = []
     updated = 0
     processed = 0
 
@@ -440,46 +550,14 @@ def backfill_episode_rating_keys(
         if rating_key is None:
             continue
 
-        normalized_show_key = _normalize_rating_key(rating_key)
-
-        try:
-            episodes = plex.expand_rating_key_to_episodes(rating_key)
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.warning(
-                "Unable to expand Plex rating key %s for %s: %s",
-                rating_key,
-                series_name,
-                exc,
-            )
-            continue
-
-        labels: dict[str, Any] = {}
-        show_keys: set[str] = set()
-        for episode in episodes:
-            label = _episode_label(episode)
-            episode_key = _normalize_rating_key(episode.get("episode_rating_key"))
-            if label and episode_key:
-                labels[label] = episode_key
-
-            show_key = _normalize_rating_key(
-                episode.get("show_rating_key") or rating_key
-            )
-            if show_key:
-                show_keys.add(show_key)
-
-        if not labels:
-            continue
-
-        if normalized_show_key:
-            show_keys.add(normalized_show_key)
-
-        changed = False
-        for show_key in show_keys:
-            if tv_manager.update_episode_rating_keys(series_name, show_key, labels):
-                changed = True
-
-        if changed:
+        if _populate_episode_rating_keys(plex, series_name, config, rating_key):
+            series_entries[series_name] = _to_commented(config)
             updated += 1
+            changed_series.append(series_name)
+
+    if changed_series:
+        tv_manager._atomic_write(tv_data)  # pylint: disable=protected-access
+        tv_manager._data = tv_data  # pylint: disable=protected-access
 
     return {"updated": updated, "total": processed}
 

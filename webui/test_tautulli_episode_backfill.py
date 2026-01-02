@@ -11,13 +11,14 @@ from webui.tautulli import (
     _monitor_stop_event,
     start_recent_activity_monitor,
 )
+from webui.services import ensure_episode_rating_keys_in_payload
 from webui.tv_data import TvYamlManager
 
 
 class _DummyContext:
-    def __init__(self, plex):
+    def __init__(self, plex, *, use_plex: bool = True):
         self.preference_parser = SimpleNamespace(
-            use_plex=True, tautulli_activity_poll_interval_seconds=15
+            use_plex=use_plex, tautulli_activity_poll_interval_seconds=15
         )
         self._plex = plex
 
@@ -126,6 +127,83 @@ series:
                 "S1E2": "902",
             },
         )
+
+    def test_ensure_episode_rating_keys_injects_missing_keys(self) -> None:
+        payload = {
+            "series": [
+                {
+                    "name": "Example (2024)",
+                    "config": {
+                        "library": "TV",
+                        "rating_key": 555,
+                    },
+                }
+            ]
+        }
+
+        plex = MagicMock()
+        plex.expand_rating_key_to_episodes.return_value = [
+            {
+                "season": 1,
+                "episode": 1,
+                "episode_rating_key": 901,
+                "show_rating_key": 555,
+            },
+            {
+                "season": 1,
+                "episode": 2,
+                "episode_rating_key": 902,
+                "show_rating_key": 999,
+            },
+        ]
+
+        context = _DummyContext(plex)
+
+        updated_payload, updated, processed = ensure_episode_rating_keys_in_payload(
+            context, payload
+        )
+
+        self.assertEqual(processed, 1)
+        self.assertEqual(updated, 1)
+
+        config = updated_payload["series"][0]["config"]
+        mappings = config.get("episode_rating_keys")
+
+        self.assertEqual(
+            mappings["555"],
+            {
+                "S1E1": "901",
+                "S1E2": "902",
+            },
+        )
+        self.assertIn("999", mappings)
+
+    def test_ensure_episode_rating_keys_skips_when_plex_disabled(self) -> None:
+        payload = {
+            "series": [
+                {
+                    "name": "Example (2024)",
+                    "config": {
+                        "library": "TV",
+                        "rating_key": 555,
+                    },
+                }
+            ]
+        }
+
+        plex = MagicMock()
+        context = _DummyContext(plex, use_plex=False)
+
+        updated_payload, updated, processed = ensure_episode_rating_keys_in_payload(
+            context, payload
+        )
+
+        self.assertEqual(updated, 0)
+        self.assertEqual(processed, 0)
+        plex.expand_rating_key_to_episodes.assert_not_called()
+
+        config = updated_payload["series"][0]["config"]
+        self.assertNotIn("episode_rating_keys", config)
 
 
 class StartMonitorBackfillTests(unittest.TestCase):
