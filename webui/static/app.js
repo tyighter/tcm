@@ -545,11 +545,16 @@ async function loadConfiguration() {
   sortEntries();
   state.collapsedEntries = new Set(state.entries.map((entry) => entry.id));
   syncSavedEntrySnapshots();
+  const stalePreviews = [];
   await Promise.all(
-    state.entries.map((entry) =>
-      Promise.all([restoreCachedLogo(entry), restoreCachedPreview(entry)])
-    )
+    state.entries.map(async (entry) => {
+      await Promise.all([restoreCachedLogo(entry), restoreCachedPreview(entry)]);
+      if (entry.previewStale) {
+        stalePreviews.push(entry);
+      }
+    })
   );
+  await warmPreviewCache(stalePreviews);
   refreshStalePreviewCache(state.entries);
 }
 
@@ -1419,6 +1424,36 @@ function refreshStalePreviewCache(entries = state.entries) {
   entries
     .filter((entry) => entry && entry.previewStale)
     .forEach((entry) => enqueueStalePreviewRefresh(entry));
+}
+
+async function warmPreviewCache(entries = [], { concurrency = 3, preferExisting = true } = {}) {
+  const queue = (entries || []).filter(
+    (entry) => entry?.id && entry.previewStale && !entry.previewLoading
+  );
+  if (!queue.length) {
+    return;
+  }
+
+  const workerCount = Math.max(1, Math.min(concurrency, queue.length));
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (queue.length) {
+      const entry = queue.shift();
+      if (!entry) {
+        continue;
+      }
+
+      try {
+        entry.previewLoadingStrategy = preferExisting ? 'load' : 'generate';
+        entry.previewRefreshing = entry.previewRefreshing || Boolean(entry.previewSrc);
+        updateEntryPreview(entry);
+        await loadEntryPreview(entry, { preferExisting });
+      } catch (error) {
+        console.warn('Failed to warm preview cache', { name: entry?.name, error });
+      }
+    }
+  });
+
+  await Promise.all(workers);
 }
 
 function updateEntryPreview(entry) {
