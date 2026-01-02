@@ -71,8 +71,11 @@ class TvYamlManager:
             except (ComposerError, ParserError, ScannerError, IndexError) as exc:
                 details = _format_yaml_error(exc, raw_content)
                 try:
+                    fallback_yaml = YAML()
+                    fallback_yaml.indent(sequence=4, offset=2)
+                    fallback_yaml.preserve_quotes = True
                     with self.file_path.open("r", encoding="utf-8") as handle:
-                        documents = list(self._yaml.load_all(handle))
+                        documents = list(fallback_yaml.load_all(handle))
                 except Exception as inner_exc:  # pylint: disable=broad-except
                     message = (
                         "Unable to parse tv.yml; check YAML formatting for syntax errors"

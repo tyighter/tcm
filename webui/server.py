@@ -1122,6 +1122,12 @@ def _run_startup_tasks_async(context: AppContext, tv_manager: TvYamlManager) -> 
     """Launch background work that should not block server startup."""
 
     def _task() -> None:
+        try:
+            tv_manager.load()
+        except ValueError as exc:
+            logger.warning("Skipping startup background tasks; tv.yml is invalid: %s", exc)
+            return
+
         if context.preference_parser.use_tmdb:
             try:
                 result = backfill_tmdb_ids(context, tv_manager)

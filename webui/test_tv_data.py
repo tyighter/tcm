@@ -4,6 +4,7 @@ from pathlib import Path
 import shutil
 
 import pytest
+from ruamel.yaml.scanner import ScannerError
 
 from webui.tv_data import TvYamlManager
 
@@ -44,6 +45,28 @@ def test_load_surfaces_line_and_column_for_invalid_yaml(tmp_path: Path) -> None:
     assert "Unable to parse tv.yml" in message
     assert "Line 4, column 14" in message
     assert "library: TV Shows" in message
+
+
+def test_load_recovers_when_primary_load_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    tv_file = tmp_path / "tv.yml"
+    tv_file.write_text(
+        """libraries: {}
+series:
+  "Valid Show":
+    rating_key: 123
+"""
+    )
+
+    manager = TvYamlManager(tv_file)
+
+    def _fail_load(*_args, **_kwargs):
+        raise ScannerError("could not find expected ':'", None, None, None)
+
+    monkeypatch.setattr(manager._yaml, "load", _fail_load)
+
+    data = manager.load()
+
+    assert data["series"]["Valid Show"]["rating_key"] == 123
 
 
 def test_backup_daily_creates_dated_files_and_prunes(tmp_path: Path) -> None:
