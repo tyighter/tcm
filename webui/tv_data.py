@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import argparse
 import logging
 import os
 import re
 import shutil
+import sys
 import tempfile
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -467,6 +469,40 @@ def _format_yaml_error(exc: Exception, raw_content: str) -> str | None:
     pointer = " " * column + "^"
 
     return f"Line {line_number}, column {column_number}: {line_text}\n{pointer}"
+
+
+def _run_cli(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description="Utility helpers for tv.yml management.")
+    parser.add_argument(
+        "--validate",
+        type=Path,
+        dest="validate_path",
+        help="Path to a tv.yml file to validate.",
+    )
+
+    args = parser.parse_args(argv)
+
+    if args.validate_path is None:
+        parser.error("No action requested. Use --validate to check a tv.yml file.")
+
+    manager = TvYamlManager(args.validate_path)
+
+    try:
+        manager.load()
+    except ValueError as exc:  # pragma: no cover - exercised via subprocess tests
+        print(f"{args.validate_path} is invalid:\n{exc}", file=sys.stderr)
+        return 1
+
+    print(f"{args.validate_path} is valid.")
+    return 0
+
+
+def main() -> None:  # pragma: no cover - thin wrapper for CLI entrypoint
+    raise SystemExit(_run_cli(sys.argv[1:]))
+
+
+if __name__ == "__main__":  # pragma: no cover - module executed as a script
+    main()
 
 
 def _apply_series_defaults(name: str, config: dict[str, Any]) -> dict[str, Any]:
