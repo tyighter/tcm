@@ -56,6 +56,7 @@ const PREVIEW_DB_STORE = 'previews';
 const LOGO_DB_STORE = 'logos';
 const MAX_PREVIEW_CACHE_ENTRIES_PER_SERIES = 1;
 const BACKGROUND_PREVIEW_REFRESH_DELAY_MS = 800;
+const PREVIEW_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 12; // 12 hours
 const DEFAULT_BACKUP_DIRECTORY = '/config/backups';
 const FONT_EXTENSIONS = ['.ttf', '.otf', '.woff', '.woff2', '.ttc'];
 
@@ -5650,6 +5651,19 @@ function syncSavedEntrySnapshots() {
 let cacheDbPromise = null;
 let cacheDbUnavailable = false;
 
+function normalizeTimestamp(value) {
+  const timestamp = Number(value);
+  return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : null;
+}
+
+function isPreviewCacheExpired(cachedAt) {
+  const timestamp = normalizeTimestamp(cachedAt);
+  if (!timestamp) {
+    return true;
+  }
+  return Date.now() - timestamp > PREVIEW_CACHE_MAX_AGE_MS;
+}
+
 function loadLegacyPreviewCache() {
   try {
     const cached = localStorage.getItem(PREVIEW_CACHE_STORAGE_KEY);
@@ -5758,10 +5772,11 @@ async function readPreviewCacheEntry(key) {
     const entry = await runCacheDbRequest(PREVIEW_DB_STORE, 'readonly', (store) =>
       store.get(key)
     );
-    if (entry) {
-      state.previewCache[key] = entry;
+    const normalized = normalizePreviewCacheValue(key, entry);
+    if (normalized) {
+      state.previewCache[key] = normalized;
     }
-    return entry || null;
+    return normalized || null;
   } catch (error) {
     console.warn('Failed to read preview cache entry', error);
     return null;
@@ -5805,6 +5820,7 @@ function normalizePreviewCacheValue(key, value) {
     key,
     snapshot: normalizedSnapshot,
     src: value.src,
+    cachedAt: normalizeTimestamp(value.cachedAt ?? value.cached_at),
   };
 }
 
@@ -5819,7 +5835,11 @@ async function loadPreviewCache() {
       if (!normalized) {
         return;
       }
-      state.previewCache[entry.key] = { snapshot: normalized.snapshot, src: normalized.src };
+      state.previewCache[entry.key] = {
+        snapshot: normalized.snapshot,
+        src: normalized.src,
+        cachedAt: normalized.cachedAt,
+      };
       if (normalized.snapshot !== entry.snapshot) {
         migrationTasks.push(writePreviewCacheEntry(entry.key, normalized));
       }
@@ -5834,7 +5854,11 @@ async function loadPreviewCache() {
     }
 
     if (!state.previewCache[key]) {
-      state.previewCache[key] = { snapshot: normalized.snapshot, src: normalized.src };
+      state.previewCache[key] = {
+        snapshot: normalized.snapshot,
+        src: normalized.src,
+        cachedAt: normalized.cachedAt,
+      };
     }
 
     migrationTasks.push(writePreviewCacheEntry(key, normalized));
@@ -6106,9 +6130,14 @@ async function restoreCachedPreview(entry) {
   const match = cached || legacy;
   if (match?.src) {
     entry.previewSrc = match.src;
-    entry.previewStale = match.snapshot !== snapshot;
+    const expired = isPreviewCacheExpired(match.cachedAt);
+    entry.previewStale = expired || match.snapshot !== snapshot;
     if (match.key && !state.previewCache[match.key]) {
-      state.previewCache[match.key] = { snapshot: match.snapshot, src: match.src };
+      state.previewCache[match.key] = {
+        snapshot: match.snapshot,
+        src: match.src,
+        cachedAt: match.cachedAt,
+      };
     }
   }
 }
@@ -6124,6 +6153,7 @@ async function updatePreviewCache(entry) {
   const value = {
     snapshot: serializeEntrySnapshot(entry),
     src: entry.previewSrc,
+    cachedAt: Date.now(),
   };
   state.previewCache[key] = value;
   entry.previewStale = false;
