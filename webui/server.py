@@ -834,6 +834,14 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 message,
                 context,
             )
+            preview_log = preview_logger()
+            if preview_log:
+                preview_log.log(
+                    numeric_level,
+                    "Client log: %s | context=%s",
+                    message,
+                    context,
+                )
 
             self._json_response({"status": "ok"})
             return
