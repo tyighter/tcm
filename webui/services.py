@@ -157,6 +157,37 @@ def preview_logger() -> logging.Logger | None:
     return _preview_logger()
 
 
+def _log_preview_cache_decision(
+    show_name: str,
+    cache_key: str,
+    *,
+    preview_episode_key: str | None,
+    decision: str,
+    details: dict[str, str | int | float | None] | None = None,
+) -> None:
+    """Emit structured cache decisions to the preview log."""
+
+    preview_log = _preview_logger()
+    if preview_log is None:
+        return
+
+    episode_label = preview_episode_key or "random"
+    extras = " | ".join(
+        f"{key}={value}"
+        for key, value in (details or {}).items()
+        if value is not None and value != ""
+    )
+    suffix = f" | {extras}" if extras else ""
+    preview_log.info(
+        "Preview cache decision | show=%s | episode=%s | key=%s | decision=%s%s",
+        show_name,
+        episode_label,
+        cache_key,
+        decision,
+        suffix,
+    )
+
+
 def _preview_cache_age_ms(cached_at: float | None) -> float | None:
     if cached_at is None:
         return None
@@ -776,6 +807,13 @@ def preview_cache_is_fresh(
     )
     cached = _load_persistent_preview(cache_key)
     if cached is None:
+        _log_preview_cache_decision(
+            show_name,
+            cache_key,
+            preview_episode_key=preview_episode_key,
+            decision="miss",
+            details={"reason": "not-found"},
+        )
         return False
 
     cached_source_mtime = cached.source_mtime
@@ -788,13 +826,46 @@ def preview_cache_is_fresh(
         and current_source_mtime is not None
         and current_source_mtime > cached_source_mtime
     ):
+        _log_preview_cache_decision(
+            show_name,
+            cache_key,
+            preview_episode_key=preview_episode_key,
+            decision="stale",
+            details={
+                "reason": "source-mtime-changed",
+                "cached_source_mtime": cached_source_mtime,
+                "current_source_mtime": current_source_mtime,
+            },
+        )
         return False
 
     age_ms = _preview_cache_age_ms(cached.cached_at)
     if age_ms is None:
+        _log_preview_cache_decision(
+            show_name,
+            cache_key,
+            preview_episode_key=preview_episode_key,
+            decision="stale",
+            details={
+                "reason": "missing-age",
+            },
+        )
         return False
 
-    return max_age_ms > 0 and age_ms <= max_age_ms
+    is_fresh = max_age_ms > 0 and age_ms <= max_age_ms
+    _log_preview_cache_decision(
+        show_name,
+        cache_key,
+        preview_episode_key=preview_episode_key,
+        decision="fresh" if is_fresh else "stale",
+        details={
+            "reason": "expired" if not is_fresh else "valid",
+            "age_ms": age_ms,
+            "max_age_ms": max_age_ms,
+        },
+    )
+
+    return is_fresh
 
 
 def invalidate_preview_cache(series_name: str | None = None) -> None:
@@ -957,19 +1028,19 @@ def _stat_mtime(path: Path | None) -> float | None:
 
 def _newer_existing_card_available(
     show: Show, preferred_episode_key: str | None, cached_at: float | None
-) -> bool:
+) -> tuple[bool, float | None, Path | None]:
     existing_card = _select_existing_card(show, preferred_episode_key)
     if existing_card is None:
-        return False
+        return False, None, None
 
     existing_mtime = _stat_mtime(existing_card)
     if existing_mtime is None:
-        return False
+        return False, None, existing_card
 
     if cached_at is None:
-        return True
+        return True, existing_mtime, existing_card
 
-    return existing_mtime > cached_at
+    return existing_mtime > cached_at, existing_mtime, existing_card
 
 
 def _generated_preview_superseded(
@@ -988,7 +1059,10 @@ def _generated_preview_superseded(
         return False
 
     show = load_show()
-    if not _newer_existing_card_available(show, preview_episode_key, payload.cached_at):
+    has_newer_existing, existing_mtime, existing_card = _newer_existing_card_available(
+        show, preview_episode_key, payload.cached_at
+    )
+    if not has_newer_existing:
         return False
 
     _log_preview_event(
@@ -1000,6 +1074,19 @@ def _generated_preview_superseded(
         cached=True,
         persistent=origin == "persistent-cache",
         existing_source=payload.existing_source,
+    )
+    _log_preview_cache_decision(
+        show_name,
+        cache_key,
+        preview_episode_key=preview_episode_key,
+        decision="invalidated",
+        details={
+            "reason": "newer-existing-card",
+            "existing_mtime": existing_mtime,
+            "cached_at": payload.cached_at,
+            "existing_card": str(existing_card) if existing_card else None,
+            "origin": origin,
+        },
     )
 
     if origin == "persistent-cache":

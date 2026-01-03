@@ -466,6 +466,17 @@ function logToServer(level, message, context = {}) {
   }
 }
 
+function logPreviewCacheEvent(event, entry, context = {}) {
+  const cacheKey = previewCacheKey(entry);
+  logToServer('INFO', `Preview cache: ${event}`, {
+    entryId: entry?.id,
+    name: entry?.name,
+    cacheKey,
+    previewEpisode: resolvePreviewEpisode(entry),
+    ...context,
+  });
+}
+
 // -----------------------------------------------------------------------------
 // Initialization
 // -----------------------------------------------------------------------------
@@ -1715,6 +1726,9 @@ async function invalidateEntryPreview(entry) {
   entry.previewLoadingStrategy = undefined;
   entry.previewStale = true;
   entry.previewRefreshing = Boolean(entry.previewSrc);
+  logPreviewCacheEvent('invalidate-preview', entry, {
+    hasPreview: Boolean(entry.previewSrc),
+  });
   await clearPreviewCacheEntry(entry);
   updateEntryPreview(entry);
   observeEntryPreview(entry);
@@ -1735,6 +1749,11 @@ async function loadEntryPreview(entry, options = {}) {
       : null;
   const previewSeason = previewSeasonForEntry(entry, previewEpisode);
   const allowCachedPreview = preferExisting && !previewEpisode;
+  logPreviewCacheEvent('request-entry-preview', entry, {
+    preferExisting,
+    previewEpisode: previewEpisode || 'random',
+    allowCachedPreview,
+  });
 
   if (!entry.previewSrc && allowCachedPreview) {
     await restoreCachedPreview(entry);
@@ -1762,6 +1781,9 @@ async function loadEntryPreview(entry, options = {}) {
         entry.previewLoadingStrategy = undefined;
         entry.previewRefreshing = false;
         await updatePreviewCache(entry);
+        logPreviewCacheEvent('static-preview-hit', entry, {
+          previewEpisode: previewEpisode || 'random',
+        });
         updateEntryPreview(entry);
         return;
       }
@@ -1798,6 +1820,10 @@ async function loadEntryPreview(entry, options = {}) {
       entry.previewSrc = `data:${data.mime};base64,${data.data}`;
       entry.previewRefreshing = false;
       await updatePreviewCache(entry);
+      logPreviewCacheEvent('preview-generated', entry, {
+        previewEpisode: previewEpisode || 'random',
+        strategy: allowCachedPreview ? 'load-or-generate' : 'generate',
+      });
     }
   } catch (error) {
     if (entry.previewRequestId === requestId) {
@@ -1806,6 +1832,10 @@ async function loadEntryPreview(entry, options = {}) {
         event: 'preview-generation-failed',
         name: entry.name,
         error: entry.previewError,
+      });
+      logPreviewCacheEvent('preview-error', entry, {
+        previewEpisode: previewEpisode || 'random',
+        message: entry.previewError,
       });
     }
   } finally {
@@ -6272,10 +6302,18 @@ async function restoreCachedPreview(entry) {
   const cached = normalizePreviewCacheValue(key, await readPreviewCacheEntry(key));
   const legacy = normalizePreviewCacheValue(legacyKey, await readPreviewCacheEntry(legacyKey));
   const match = cached || legacy;
+  if (!match) {
+    logPreviewCacheEvent('cache-miss', entry, { cacheKey: key, legacyKey });
+  }
   if (match?.src) {
     entry.previewSrc = match.src;
     const expired = isPreviewCacheExpired(match.cachedAt);
     entry.previewStale = expired || match.snapshot !== snapshot;
+    logPreviewCacheEvent('cache-hit', entry, {
+      cacheKey: match.key || key || legacyKey,
+      expired,
+      snapshotMatches: match.snapshot === snapshot,
+    });
     if (match.key && !state.previewCache[match.key]) {
       state.previewCache[match.key] = {
         snapshot: match.snapshot,
