@@ -1,5 +1,8 @@
+import os
 import time
 from types import SimpleNamespace
+
+import pytest
 
 from webui import server, services
 
@@ -121,3 +124,59 @@ def test_preview_prewarmer_refreshes_when_stale(monkeypatch) -> None:
     assert ("Demo", None) in calls
     assert ("Demo", "episode-1") in calls
     assert result["refreshed"] == 2
+
+
+def test_preview_from_existing_sources_sets_cache_timestamp(monkeypatch, tmp_path) -> None:
+    card = tmp_path / "card.jpg"
+    card.write_bytes(b"demo")
+    source_mtime = time.time() - 100
+    os.utime(card, (source_mtime, source_mtime))
+
+    monkeypatch.setattr(services, "_select_existing_card", lambda *_args, **_kwargs: card)
+    cached_at = source_mtime + 50
+    monkeypatch.setattr(services.time, "time", lambda: cached_at)
+
+    payload = services._preview_from_existing_sources(SimpleNamespace(), None)
+
+    assert payload is not None
+    assert payload.cached_at == cached_at
+    assert payload.source_mtime == pytest.approx(source_mtime)
+
+
+def test_preview_cache_freshness_depends_on_source_mtime_and_age(monkeypatch, tmp_path) -> None:
+    card = tmp_path / "card.jpg"
+    card.write_bytes(b"demo")
+    source_mtime = time.time() - 50
+    os.utime(card, (source_mtime, source_mtime))
+
+    holder = {
+        "payload": services.PreviewPayload(
+            mime="image/jpeg",
+            data="data",
+            source_path=card,
+            cached_at=time.time(),
+            source_mtime=source_mtime,
+        )
+    }
+    monkeypatch.setattr(
+        services, "_load_persistent_preview", lambda _key: holder["payload"]
+    )
+
+    assert services.preview_cache_is_fresh("Show", {"library": "TV"}, max_age_ms=100_000)
+
+    updated_mtime = source_mtime + 100
+    os.utime(card, (updated_mtime, updated_mtime))
+
+    assert not services.preview_cache_is_fresh(
+        "Show", {"library": "TV"}, max_age_ms=100_000
+    )
+
+    holder["payload"] = services.PreviewPayload(
+        mime="image/jpeg",
+        data="data",
+        source_path=card,
+        cached_at=time.time() - 2,
+        source_mtime=updated_mtime,
+    )
+
+    assert not services.preview_cache_is_fresh("Show", {"library": "TV"}, max_age_ms=1000)

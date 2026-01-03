@@ -778,6 +778,18 @@ def preview_cache_is_fresh(
     if cached is None:
         return False
 
+    cached_source_mtime = cached.source_mtime
+    current_source_mtime = _stat_mtime(cached.source_path)
+    if cached_source_mtime is None:
+        cached_source_mtime = current_source_mtime
+
+    if (
+        cached_source_mtime is not None
+        and current_source_mtime is not None
+        and current_source_mtime > cached_source_mtime
+    ):
+        return False
+
     age_ms = _preview_cache_age_ms(cached.cached_at)
     if age_ms is None:
         return False
@@ -928,7 +940,7 @@ def _preview_from_existing_sources(
         data=data,
         source_path=selected_card,
         existing_source=True,
-        cached_at=_stat_mtime(selected_card),
+        cached_at=time.time(),
         source_mtime=_stat_mtime(selected_card),
     )
 
