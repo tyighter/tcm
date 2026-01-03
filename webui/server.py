@@ -5,11 +5,12 @@ import logging
 import mimetypes
 import random
 import re
+import os
 from cgi import FieldStorage
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from threading import Thread
+from threading import Event, Lock, Thread
 import time
 from typing import Callable
 from urllib.parse import parse_qs, urlparse
@@ -34,6 +35,10 @@ from .services import (
     get_or_generate_preview,
     invalidate_preview_cache,
     list_preview_episodes,
+    PREVIEW_CACHE_MAX_AGE_MS,
+    preview_cache_is_fresh,
+    preview_cache_key,
+    preview_logger,
     backfill_episode_rating_keys,
     run_asset_downloads,
     run_asset_downloads_for_series,
@@ -62,6 +67,14 @@ CONFIG_THUMBNAIL_ROOT = Path("/config/thumbnails")
 TV_SHOWS_ROOT = Path("/config/TV_Shows")
 TEMPLATE_ROOT = Path(__file__).resolve().parent / "templates"
 LOG_FILE = Path("/config/webui.log")
+ENV_PREWARM_PREVIEWS = "TCM_PREWARM_PREVIEWS"
+ENV_PREWARM_BATCH_SIZE = "TCM_PREWARM_PREVIEWS_BATCH_SIZE"
+ENV_PREWARM_BATCH_INTERVAL = "TCM_PREWARM_PREVIEWS_BATCH_INTERVAL_SECONDS"
+ENV_PREWARM_LOOP_SECONDS = "TCM_PREWARM_PREVIEWS_LOOP_SECONDS"
+
+_DEFAULT_PREWARM_BATCH_SIZE = 3
+_DEFAULT_PREWARM_BATCH_INTERVAL = 1.0
+_DEFAULT_PREWARM_LOOP_SECONDS = 0.0
 
 
 _TRAILING_YEAR_PATTERNS = (
@@ -137,6 +150,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
     context: AppContext
     tv_manager: TvYamlManager
     font_directory: Path
+    preview_prewarmer: "PreviewPrewarmer | None" = None
 
     # Silence default logging
     def log_message(self, format: str, *args) -> None:  # type: ignore[override]
@@ -706,6 +720,20 @@ class WebRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # type: ignore[override]
         parsed = urlparse(self.path)
 
+        if parsed.path == "/api/previews/prewarm":
+            prewarmer = getattr(self, "preview_prewarmer", None)
+            if prewarmer is None:
+                self._error("Preview prewarmer is not configured", status=HTTPStatus.NOT_FOUND)
+                return
+
+            if not prewarmer.enabled:
+                self._error("Preview prewarmer is disabled", status=HTTPStatus.BAD_REQUEST)
+                return
+
+            started = prewarmer.trigger()
+            self._json_response({"status": "started" if started else "running"})
+            return
+
         if parsed.path == "/api/config":
             try:
                 payload = self._parse_json()
@@ -1071,6 +1099,249 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         return candidate
 
+
+def _env_flag(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+
+    return value.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _env_float(name: str, default: float) -> float:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _preview_log(message: str, level: int = logging.INFO) -> None:
+    preview_log = preview_logger()
+    if preview_log:
+        preview_log.log(level, message)
+    logger.log(level, message)
+
+
+def _preview_episode_candidates(entry: dict) -> list[str | None]:
+    """Return possible preview episode keys for a series entry."""
+
+    seen: set[str | None] = set()
+    results: list[str | None] = []
+
+    def _normalize(value: object) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text or text.lower() == "random":
+            return None
+        return text
+
+    sources = [entry, entry.get("config") or {}]
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        for key in ("previewEpisode", "preview_episode", "previewEpisodes", "preview_episodes"):
+            raw = source.get(key)
+            if raw is None:
+                continue
+            if isinstance(raw, (list, tuple, set)):
+                candidates = raw
+            else:
+                candidates = [raw]
+            for candidate in candidates:
+                normalized = _normalize(candidate)
+                if normalized not in seen:
+                    seen.add(normalized)
+                    results.append(normalized)
+
+    if None not in seen:
+        results.insert(0, None)
+
+    return results
+
+
+class PreviewPrewarmer:
+    """Background worker to warm the preview cache."""
+
+    def __init__(
+        self,
+        context: AppContext,
+        tv_manager: TvYamlManager,
+        *,
+        enabled: bool = True,
+        batch_size: int = _DEFAULT_PREWARM_BATCH_SIZE,
+        batch_interval: float = _DEFAULT_PREWARM_BATCH_INTERVAL,
+        loop_interval: float = _DEFAULT_PREWARM_LOOP_SECONDS,
+        max_age_ms: int = PREVIEW_CACHE_MAX_AGE_MS,
+    ) -> None:
+        self.context = context
+        self.tv_manager = tv_manager
+        self.enabled = enabled
+        self.batch_size = max(1, int(batch_size))
+        self.batch_interval = max(0.0, float(batch_interval))
+        self.loop_interval = max(0.0, float(loop_interval))
+        self.max_age_ms = max_age_ms
+
+        self._run_lock = Lock()
+        self._loop_stop = Event()
+        self._loop_thread: Thread | None = None
+        self._active_thread: Thread | None = None
+
+    def _log(self, message: str, level: int = logging.INFO) -> None:
+        _preview_log(message, level)
+
+    def _run(self) -> dict[str, int]:
+        summary = {"series": 0, "skipped": 0, "refreshed": 0, "errors": 0}
+
+        try:
+            payload = self.tv_manager.as_payload()
+            entries = payload.get("series", []) if isinstance(payload, dict) else []
+        except Exception as exc:  # pylint: disable=broad-except
+            self._log(f"Unable to load tv.yml for preview prewarm: {exc}", logging.WARNING)
+            summary["errors"] += 1
+            return summary
+
+        total_entries = len(entries)
+        self._log(
+            f"Starting preview prewarm for {total_entries} series "
+            f"(batch_size={self.batch_size}, batch_interval={self.batch_interval:.2f}s, "
+            f"loop_interval={self.loop_interval:.2f}s)"
+        )
+
+        for index, entry in enumerate(entries):
+            series_name = entry.get("name")
+            series_config = entry.get("config") or {}
+
+            if not series_name or not isinstance(series_config, dict):
+                continue
+
+            summary["series"] += 1
+            for preview_episode in _preview_episode_candidates(entry):
+                cache_key = preview_cache_key(
+                    series_name,
+                    series_config,
+                    preview_episode_key=preview_episode,
+                )
+                try:
+                    fresh = preview_cache_is_fresh(
+                        series_name,
+                        series_config,
+                        preview_episode_key=preview_episode,
+                        max_age_ms=self.max_age_ms,
+                    )
+                except Exception:  # pylint: disable=broad-except
+                    fresh = False
+
+                episode_label = preview_episode or "random"
+
+                if fresh:
+                    summary["skipped"] += 1
+                    self._log(
+                        f"Preview cache fresh for {series_name} (episode={episode_label}); skipping [{cache_key}]"
+                    )
+                    continue
+
+                try:
+                    get_or_generate_preview(
+                        self.context,
+                        self.tv_manager,
+                        series_name,
+                        series_config,
+                        preview_episode_key=preview_episode,
+                        prefer_existing=True,
+                    )
+                    summary["refreshed"] += 1
+                    self._log(
+                        f"Warmed preview for {series_name} (episode={episode_label}) [{cache_key}]"
+                    )
+                except Exception as exc:  # pylint: disable=broad-except
+                    summary["errors"] += 1
+                    self._log(
+                        f"Unable to warm preview for {series_name} (episode={episode_label}): {exc}",
+                        logging.WARNING,
+                    )
+
+            if self.batch_interval and (index + 1) % self.batch_size == 0:
+                if self._loop_stop.wait(self.batch_interval):
+                    break
+
+        self._log(
+            f"Preview prewarm complete; refreshed={summary['refreshed']}, "
+            f"skipped={summary['skipped']}, errors={summary['errors']}"
+        )
+        return summary
+
+    def run_once(self) -> dict[str, int]:
+        if not self.enabled:
+            self._log("Preview prewarmer disabled; skipping run")
+            return {"series": 0, "skipped": 0, "refreshed": 0, "errors": 0}
+
+        if not self._run_lock.acquire(blocking=False):
+            self._log("Preview prewarm already in progress; ignoring request", logging.DEBUG)
+            return {"series": 0, "skipped": 0, "refreshed": 0, "errors": 0}
+
+        try:
+            return self._run()
+        finally:
+            self._run_lock.release()
+
+    def trigger(self) -> bool:
+        if not self.enabled:
+            self._log("Preview prewarmer disabled; trigger ignored", logging.DEBUG)
+            return False
+
+        if not self._run_lock.acquire(blocking=False):
+            self._log("Preview prewarm already running; trigger ignored", logging.DEBUG)
+            return False
+
+        def _target() -> None:
+            try:
+                self._run()
+            finally:
+                self._run_lock.release()
+
+        self._active_thread = Thread(target=_target, name="preview-prewarm", daemon=True)
+        self._active_thread.start()
+        return True
+
+    def _loop(self) -> None:
+        while not self._loop_stop.wait(self.loop_interval):
+            self.trigger()
+
+    def start(self) -> None:
+        if not self.enabled:
+            self._log("Preview prewarmer is disabled by configuration")
+            return
+
+        if self.loop_interval > 0:
+            if self._loop_thread is None or not self._loop_thread.is_alive():
+                self._loop_thread = Thread(
+                    target=self._loop,
+                    name="preview-prewarm-loop",
+                    daemon=True,
+                )
+                self._loop_thread.start()
+                self._log(
+                    f"Preview prewarm loop scheduled every {self.loop_interval:.2f} seconds"
+                )
+
+        self.trigger()
+
     def _resolve_font_file(self, raw_path: str) -> Path | None:
         """Resolve a font file path ensuring it stays within the font directory."""
 
@@ -1176,6 +1447,35 @@ def _run_startup_tasks_async(context: AppContext, tv_manager: TvYamlManager) -> 
     return thread
 
 
+def _start_preview_prewarmer(context: AppContext, tv_manager: TvYamlManager) -> PreviewPrewarmer:
+    enabled = _env_flag(ENV_PREWARM_PREVIEWS, True)
+    batch_size = _env_int(ENV_PREWARM_BATCH_SIZE, _DEFAULT_PREWARM_BATCH_SIZE)
+    batch_interval = _env_float(ENV_PREWARM_BATCH_INTERVAL, _DEFAULT_PREWARM_BATCH_INTERVAL)
+    loop_seconds = _env_float(ENV_PREWARM_LOOP_SECONDS, _DEFAULT_PREWARM_LOOP_SECONDS)
+
+    prewarmer = PreviewPrewarmer(
+        context,
+        tv_manager,
+        enabled=enabled,
+        batch_size=batch_size,
+        batch_interval=batch_interval,
+        loop_interval=loop_seconds,
+        max_age_ms=PREVIEW_CACHE_MAX_AGE_MS,
+    )
+    if enabled:
+        logger.info(
+            "Starting preview prewarmer (batch_size=%d, batch_interval=%.2fs, loop_interval=%.2fs)",
+            batch_size,
+            batch_interval,
+            loop_seconds,
+        )
+        prewarmer.start()
+    else:
+        logger.info("Preview prewarmer disabled via %s", ENV_PREWARM_PREVIEWS)
+
+    return prewarmer
+
+
 def run(port: int = 4343) -> None:
     _configure_logging()
 
@@ -1183,6 +1483,7 @@ def run(port: int = 4343) -> None:
     tv_manager = TvYamlManager(context.default_tv_file)
 
     _run_startup_tasks_async(context, tv_manager)
+    prewarmer = _start_preview_prewarmer(context, tv_manager)
 
     start_recent_activity_monitor(context, tv_manager)
     start_daily_tv_yaml_backup(tv_manager)
@@ -1190,6 +1491,7 @@ def run(port: int = 4343) -> None:
     WebRequestHandler.context = context
     WebRequestHandler.tv_manager = tv_manager
     WebRequestHandler.font_directory = _resolve_font_directory(context)
+    WebRequestHandler.preview_prewarmer = prewarmer
 
     with ThreadingHTTPServer(("0.0.0.0", port), WebRequestHandler) as server:
         try:
