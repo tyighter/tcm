@@ -34,6 +34,34 @@ def test_preview_cache_is_fresh(monkeypatch) -> None:
     assert not services.preview_cache_is_fresh("Show", {"library": "TV"}, max_age_ms=1000)
 
 
+def test_preview_cache_is_fresh_uses_configured_episode(monkeypatch) -> None:
+    captured: list[str] = []
+
+    def _load(key: str) -> services.PreviewPayload:
+        captured.append(key)
+        return services.PreviewPayload(
+            mime="image/jpeg",
+            data="data",
+            source_path=None,
+            cached_at=time.time(),
+        )
+
+    monkeypatch.setattr(services, "_load_persistent_preview", _load)
+
+    preview_episode = "episode-1"
+    assert services.preview_cache_is_fresh(
+        "Show",
+        {"library": "TV"},
+        preview_episode_key=preview_episode,
+        max_age_ms=1000,
+    )
+
+    expected_key = services.preview_cache_key(
+        "Show", {"library": "TV"}, preview_episode_key=preview_episode
+    )
+    assert captured == [expected_key]
+
+
 def test_preview_prewarmer_uses_cache(monkeypatch) -> None:
     monkeypatch.setattr(server, "_preview_log", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(server, "preview_cache_is_fresh", lambda *_args, **_kwargs: True)
