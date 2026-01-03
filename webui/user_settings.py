@@ -17,6 +17,7 @@ _DEFAULT_SETTINGS = {
         "user_id": "",
     },
     "series_sync_interval_seconds": 45,
+    "preview_cache_sweep_interval_seconds": 900,
     "preferences": {},
 }
 
@@ -38,6 +39,10 @@ def _merged_settings(data: dict[str, Any] | None) -> dict[str, Any]:
     interval = data.get("series_sync_interval_seconds")
     if isinstance(interval, (int, float)):
         merged["series_sync_interval_seconds"] = max(0, int(interval))
+
+    sweep_interval = data.get("preview_cache_sweep_interval_seconds")
+    if isinstance(sweep_interval, (int, float)):
+        merged["preview_cache_sweep_interval_seconds"] = max(0, int(sweep_interval))
 
     return merged
 
@@ -139,6 +144,17 @@ def save_settings(payload: Dict[str, Any], preference_file: Path | None = None) 
         )
     except (TypeError, ValueError):
         settings["series_sync_interval_seconds"] = _DEFAULT_SETTINGS["series_sync_interval_seconds"]
+
+    sweep_interval = payload.get(
+        "preview_cache_sweep_interval_seconds",
+        settings["preview_cache_sweep_interval_seconds"],
+    )
+    try:
+        settings["preview_cache_sweep_interval_seconds"] = max(0, int(str(sweep_interval).strip()))
+    except (TypeError, ValueError):
+        settings["preview_cache_sweep_interval_seconds"] = _DEFAULT_SETTINGS[
+            "preview_cache_sweep_interval_seconds"
+        ]
 
     tautulli = payload.get("tautulli")
     if isinstance(tautulli, dict):

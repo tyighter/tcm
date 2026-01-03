@@ -17,6 +17,7 @@ const state = {
   },
   settings: {
     series_sync_interval_seconds: 45,
+    preview_cache_sweep_interval_seconds: 900,
     preferences: {},
     tautulli: {
       url: '',
@@ -5098,6 +5099,7 @@ function openSettingsModal() {
 
   const tautulli = state.settings?.tautulli || {};
   const seriesSyncInterval = Number(state.settings?.series_sync_interval_seconds);
+  const previewCacheSweepInterval = Number(state.settings?.preview_cache_sweep_interval_seconds);
   const preferences = state.settings?.preferences || {};
 
   const quickActions = document.createElement('div');
@@ -5233,6 +5235,22 @@ function openSettingsModal() {
     : 45;
   syncField.append(syncLabel, syncInput);
   syncControls.append(syncField);
+
+  const sweepField = document.createElement('label');
+  sweepField.className = 'modal-controls__field';
+  const sweepLabel = document.createElement('span');
+  sweepLabel.className = 'modal-controls__label';
+  sweepLabel.textContent = 'Preview cache sweep interval (seconds)';
+  const sweepInput = document.createElement('input');
+  sweepInput.type = 'number';
+  sweepInput.min = '0';
+  sweepInput.step = '1';
+  sweepInput.inputMode = 'numeric';
+  sweepInput.value = Number.isFinite(previewCacheSweepInterval)
+    ? Math.max(0, previewCacheSweepInterval)
+    : 900;
+  sweepField.append(sweepLabel, sweepInput);
+  syncControls.append(sweepField);
   syncSection.append(syncHeader, syncControls);
 
   const preferencesSection = document.createElement('div');
@@ -5368,9 +5386,14 @@ function openSettingsModal() {
     const syncIntervalSeconds = Number.isFinite(parsedSyncInterval)
       ? Math.max(0, parsedSyncInterval)
       : 45;
+    const parsedSweepInterval = Number(sweepInput.value);
+    const sweepIntervalSeconds = Number.isFinite(parsedSweepInterval)
+      ? Math.max(0, parsedSweepInterval)
+      : 900;
     try {
       await saveSettings({
         series_sync_interval_seconds: syncIntervalSeconds,
+        preview_cache_sweep_interval_seconds: sweepIntervalSeconds,
         tautulli: {
           url: urlInput.value,
           api_key: keyInput.value,

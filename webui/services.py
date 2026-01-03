@@ -51,6 +51,9 @@ _SYNC_COOLDOWN_SECONDS = _DEFAULT_SYNC_COOLDOWN_SECONDS
 PREVIEW_LOG_FILE = Path("/config/preview.log")
 PREVIEW_CACHE_DIR = Path("/config/preview-cache")
 PREVIEW_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 12  # 12 hours
+PREVIEW_CACHE_REFRESH_BUFFER_MS = 1000 * 60 * 30  # Refresh when within 30 minutes of expiry
+MAX_PREVIEW_CACHE_ENTRIES_PER_SERIES = 1
+_CACHE_KEY_SEPARATOR = ":"
 
 
 @dataclass(frozen=True)
@@ -62,6 +65,18 @@ class PreviewPayload:
     source_path: Path | None
     existing_source: bool = False
     cached_at: float | None = None
+    source_mtime: float | None = None
+
+
+@dataclass(frozen=True)
+class PreviewCacheMetadata:
+    """Metadata describing a persisted preview cache entry."""
+
+    cache_key: str
+    series_name: str | None
+    preview_episode_key: str | None
+    cached_at: float | None
+    path: Path
 
 
 def _preview_logger() -> logging.Logger | None:
@@ -142,6 +157,151 @@ def preview_logger() -> logging.Logger | None:
     return _preview_logger()
 
 
+def _preview_cache_age_ms(cached_at: float | None) -> float | None:
+    if cached_at is None:
+        return None
+
+    try:
+        return max(0.0, (time.time() - float(cached_at)) * 1000)
+    except Exception:
+        return None
+
+
+def _series_and_episode_from_cache_key(cache_key: str | None) -> tuple[str | None, str | None]:
+    """Best-effort parsing of series and episode from a preview cache key."""
+
+    if not cache_key:
+        return None, None
+
+    parts = cache_key.rsplit(_CACHE_KEY_SEPARATOR, 2)
+    if len(parts) == 3:
+        return parts[0], parts[2]
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    return cache_key, None
+
+
+def _load_persistent_payload_from_file(path: Path) -> tuple[str | None, PreviewPayload | None]:
+    if not path.exists():
+        return None, None
+
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None, None
+
+    mime = payload.get("mime") or "image/jpeg"
+    data = payload.get("data")
+    if not isinstance(data, str):
+        return None, None
+
+    source_path = payload.get("source_path")
+    existing_source = bool(payload.get("existing_source"))
+    cached_at = payload.get("cached_at")
+    cached_at_value = float(cached_at) if isinstance(cached_at, (int, float)) else None
+    resolved_source = Path(source_path) if isinstance(source_path, str) else None
+    source_mtime = payload.get("source_mtime")
+    source_mtime_value = float(source_mtime) if isinstance(source_mtime, (int, float)) else None
+    cache_key = payload.get("cache_key")
+
+    return (
+        cache_key if isinstance(cache_key, str) else None,
+        PreviewPayload(
+            mime=mime,
+            data=data,
+            source_path=resolved_source,
+            existing_source=existing_source,
+            cached_at=cached_at_value,
+            source_mtime=source_mtime_value,
+        ),
+    )
+
+
+def _delete_persistent_cache(path: Path, cache_key: str | None = None) -> bool:
+    removed = False
+    try:
+        path.unlink(missing_ok=True)
+        removed = True
+    except OSError:
+        logger.debug("Unable to delete persistent preview cache %s", path)
+
+    if cache_key:
+        with _preview_cache_lock:
+            _preview_cache.pop(cache_key, None)
+
+    return removed
+
+
+def preview_cache_metadata() -> list[PreviewCacheMetadata]:
+    """Return metadata for all persisted preview cache entries."""
+
+    if not PREVIEW_CACHE_DIR.exists():
+        return []
+
+    entries: list[PreviewCacheMetadata] = []
+    for path in sorted(PREVIEW_CACHE_DIR.glob("*.json")):
+        cache_key, payload = _load_persistent_payload_from_file(path)
+        if payload is None:
+            continue
+
+        series_name, preview_episode_key = _series_and_episode_from_cache_key(cache_key)
+        entries.append(
+            PreviewCacheMetadata(
+                cache_key=cache_key or path.stem,
+                series_name=series_name,
+                preview_episode_key=preview_episode_key,
+                cached_at=payload.cached_at,
+                path=path,
+            )
+        )
+
+    return entries
+
+
+def enforce_preview_cache_limit(
+    series_name: str | None,
+    *,
+    preferred_keys: Iterable[str | None] | None = None,
+) -> int:
+    """Ensure only the latest preview cache entries are retained for a series."""
+
+    if series_name is None:
+        return 0
+
+    preferred_keys = [key for key in (preferred_keys or []) if key]
+    metadata = sorted(
+        [entry for entry in preview_cache_metadata() if entry.series_name == series_name],
+        key=lambda item: item.cached_at or 0.0,
+        reverse=True,
+    )
+
+    allowed_keys: list[str] = []
+    for key in preferred_keys:
+        if key not in allowed_keys:
+            allowed_keys.append(key)
+
+    removals: list[PreviewCacheMetadata] = []
+    for entry in metadata:
+        cache_key = entry.cache_key
+        if cache_key in allowed_keys:
+            continue
+
+        if len(allowed_keys) < MAX_PREVIEW_CACHE_ENTRIES_PER_SERIES:
+            if cache_key:
+                allowed_keys.append(cache_key)
+            else:
+                allowed_keys.append(f"{series_name}:{entry.path.stem}")
+            continue
+
+        removals.append(entry)
+
+    removed = 0
+    for entry in removals:
+        if _delete_persistent_cache(entry.path, entry.cache_key):
+            removed += 1
+
+    return removed
+
 def _safe_cache_key(cache_key: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "_", cache_key)
 
@@ -153,6 +313,10 @@ def _persistent_cache_path(cache_key: str) -> Path:
 def _persist_preview_payload(cache_key: str, payload: PreviewPayload) -> None:
     """Persist preview payloads so reloads do not require regeneration."""
 
+    source_mtime = payload.source_mtime
+    if source_mtime is None:
+        source_mtime = _stat_mtime(payload.source_path)
+
     try:
         PREVIEW_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         _persistent_cache_path(cache_key).write_text(
@@ -163,6 +327,8 @@ def _persist_preview_payload(cache_key: str, payload: PreviewPayload) -> None:
                     "source_path": str(payload.source_path) if payload.source_path else None,
                     "existing_source": payload.existing_source,
                     "cached_at": payload.cached_at,
+                    "source_mtime": source_mtime,
+                    "cache_key": cache_key,
                 }
             )
         )
@@ -174,32 +340,8 @@ def _load_persistent_preview(cache_key: str) -> PreviewPayload | None:
     """Load a preview payload from the persistent cache if present."""
 
     cache_path = _persistent_cache_path(cache_key)
-    if not cache_path.exists():
-        return None
-
-    try:
-        payload = json.loads(cache_path.read_text())
-    except (OSError, ValueError) as exc:
-        logger.debug("Unable to read persistent preview cache %s: %s", cache_path, exc)
-        return None
-
-    mime = payload.get("mime") or "image/jpeg"
-    data = payload.get("data")
-    if not isinstance(data, str):
-        return None
-
-    source_path = payload.get("source_path")
-    existing_source = bool(payload.get("existing_source"))
-    cached_at = payload.get("cached_at")
-    cached_at_value = float(cached_at) if isinstance(cached_at, (int, float)) else None
-    resolved_source = Path(source_path) if isinstance(source_path, str) else None
-    return PreviewPayload(
-        mime=mime,
-        data=data,
-        source_path=resolved_source,
-        existing_source=existing_source,
-        cached_at=cached_at_value,
-    )
+    _, payload = _load_persistent_payload_from_file(cache_path)
+    return payload
 
 
 def _maybe_sync_series_files(
@@ -633,12 +775,11 @@ def preview_cache_is_fresh(
         preview_episode_key=preview_episode_key,
     )
     cached = _load_persistent_preview(cache_key)
-    if cached is None or cached.cached_at is None:
+    if cached is None:
         return False
 
-    try:
-        age_ms = max(0.0, (time.time() - float(cached.cached_at)) * 1000)
-    except Exception:
+    age_ms = _preview_cache_age_ms(cached.cached_at)
+    if age_ms is None:
         return False
 
     return max_age_ms > 0 and age_ms <= max_age_ms
@@ -788,6 +929,7 @@ def _preview_from_existing_sources(
         source_path=selected_card,
         existing_source=True,
         cached_at=_stat_mtime(selected_card),
+        source_mtime=_stat_mtime(selected_card),
     )
 
 
@@ -971,6 +1113,8 @@ def get_or_generate_preview(
         _preview_cache[cache_key] = payload
 
     _persist_preview_payload(cache_key, payload)
+    series_name, _ = _series_and_episode_from_cache_key(cache_key)
+    enforce_preview_cache_limit(series_name, preferred_keys=[cache_key])
     _log_preview_event(
         show_name,
         payload.source_path,
@@ -1063,6 +1207,7 @@ def generate_preview(
         data=base64.b64encode(data).decode("ascii"),
         source_path=destination,
         cached_at=time.time(),
+        source_mtime=_stat_mtime(episode.source),
     )
 
 
