@@ -36,9 +36,13 @@ from .services import (
     invalidate_preview_cache,
     list_preview_episodes,
     PREVIEW_CACHE_MAX_AGE_MS,
+    PREVIEW_CACHE_REFRESH_BUFFER_MS,
     preview_cache_is_fresh,
     preview_cache_key,
+    preview_cache_metadata,
     preview_logger,
+    PreviewCacheMetadata,
+    enforce_preview_cache_limit,
     backfill_episode_rating_keys,
     run_asset_downloads,
     run_asset_downloads_for_series,
@@ -71,10 +75,12 @@ ENV_PREWARM_PREVIEWS = "TCM_PREWARM_PREVIEWS"
 ENV_PREWARM_BATCH_SIZE = "TCM_PREWARM_PREVIEWS_BATCH_SIZE"
 ENV_PREWARM_BATCH_INTERVAL = "TCM_PREWARM_PREVIEWS_BATCH_INTERVAL_SECONDS"
 ENV_PREWARM_LOOP_SECONDS = "TCM_PREWARM_PREVIEWS_LOOP_SECONDS"
+ENV_PREVIEW_CACHE_SWEEP_INTERVAL = "TCM_PREVIEW_CACHE_SWEEP_INTERVAL_SECONDS"
 
 _DEFAULT_PREWARM_BATCH_SIZE = 3
 _DEFAULT_PREWARM_BATCH_INTERVAL = 1.0
 _DEFAULT_PREWARM_LOOP_SECONDS = 0.0
+_DEFAULT_PREVIEW_CACHE_SWEEP_INTERVAL_SECONDS = 900.0
 
 
 _TRAILING_YEAR_PATTERNS = (
@@ -1389,6 +1395,172 @@ class PreviewPrewarmer:
         return candidate
 
 
+class PreviewCacheRefresher:
+    """Background worker to refresh persisted preview caches."""
+
+    def __init__(
+        self,
+        context: AppContext,
+        tv_manager: TvYamlManager,
+        *,
+        interval_seconds: float,
+        max_age_ms: int = PREVIEW_CACHE_MAX_AGE_MS,
+        refresh_buffer_ms: int = PREVIEW_CACHE_REFRESH_BUFFER_MS,
+    ) -> None:
+        self.context = context
+        self.tv_manager = tv_manager
+        self.interval_seconds = max(0.0, float(interval_seconds))
+        self.max_age_ms = max_age_ms
+        self.refresh_buffer_ms = max(0, int(refresh_buffer_ms))
+        self._stop_event = Event()
+        self._thread: Thread | None = None
+        self._run_lock = Lock()
+
+    def _log(self, message: str, level: int = logging.INFO) -> None:
+        _preview_log(message, level)
+
+    def _should_refresh(self, entry: PreviewCacheMetadata) -> bool:
+        if self.max_age_ms <= 0:
+            return True
+
+        age_ms: float | None = None
+        if entry.cached_at is not None:
+            try:
+                age_ms = max(0.0, (time.time() - float(entry.cached_at)) * 1000)
+            except Exception:  # pragma: no cover - defensive
+                age_ms = None
+
+        if age_ms is None:
+            return True
+
+        threshold = max(0.0, self.max_age_ms - self.refresh_buffer_ms)
+        return age_ms >= threshold
+
+    def _series_entries(self) -> dict[str | None, list[PreviewCacheMetadata]]:
+        groups: dict[str | None, list[PreviewCacheMetadata]] = {}
+        for entry in preview_cache_metadata():
+            groups.setdefault(entry.series_name, []).append(entry)
+        return groups
+
+    def _load_series_config(self, series_name: str, tv_data: dict) -> dict | None:
+        series_entries = tv_data.get("series") if isinstance(tv_data, dict) else None
+        if not isinstance(series_entries, dict):
+            return None
+
+        raw_config = series_entries.get(series_name)
+        if not isinstance(raw_config, dict):
+            return None
+
+        try:
+            return self.tv_manager.clone_series_yaml(series_name, raw_config)
+        except Exception as exc:  # pylint: disable=broad-except
+            self._log(
+                f"Unable to resolve config for {series_name} during preview cache sweep: {exc}",
+                logging.WARNING,
+            )
+            return None
+
+    def run_once(self) -> dict[str, int]:
+        if self.interval_seconds <= 0:
+            self._log("Preview cache refresher disabled; skipping sweep", logging.DEBUG)
+            return {"series": 0, "refreshed": 0, "skipped": 0, "errors": 0, "evicted": 0}
+
+        if not self._run_lock.acquire(blocking=False):
+            self._log("Preview cache refresher already running; skipping new sweep", logging.DEBUG)
+            return {"series": 0, "refreshed": 0, "skipped": 0, "errors": 0, "evicted": 0}
+
+        summary = {"series": 0, "refreshed": 0, "skipped": 0, "errors": 0, "evicted": 0}
+        try:
+            try:
+                tv_data = self.tv_manager.load()
+            except Exception as exc:  # pylint: disable=broad-except
+                self._log(f"Unable to load tv.yml for preview cache sweep: {exc}", logging.WARNING)
+                summary["errors"] += 1
+                return summary
+
+            groups = self._series_entries()
+            if not groups:
+                self._log("No persisted preview cache entries found; skipping sweep", logging.DEBUG)
+                return summary
+
+            for series_name, entries in groups.items():
+                if not series_name:
+                    summary["skipped"] += len(entries)
+                    continue
+
+                summary["series"] += 1
+                cache_keys = [entry.cache_key for entry in entries]
+                removed = enforce_preview_cache_limit(series_name, preferred_keys=cache_keys)
+                summary["evicted"] += removed
+
+                series_config = self._load_series_config(series_name, tv_data)
+                if series_config is None:
+                    self._log(
+                        f"Skipping preview cache refresh for {series_name}; configuration unavailable"
+                    )
+                    summary["skipped"] += len(entries)
+                    continue
+
+                for entry in sorted(entries, key=lambda item: item.cached_at or 0.0):
+                    episode_label = entry.preview_episode_key or "random"
+                    if not self._should_refresh(entry):
+                        summary["skipped"] += 1
+                        continue
+
+                    try:
+                        get_or_generate_preview(
+                            self.context,
+                            self.tv_manager,
+                            series_name,
+                            series_config,
+                            force=True,
+                            preview_episode_key=entry.preview_episode_key,
+                            prefer_existing=True,
+                        )
+                        summary["refreshed"] += 1
+                        self._log(
+                            f"Refreshed preview for {series_name} (episode={episode_label}) "
+                            f"[{entry.cache_key}]"
+                        )
+                    except Exception as exc:  # pylint: disable=broad-except
+                        summary["errors"] += 1
+                        self._log(
+                            f"Unable to refresh preview for {series_name} (episode={episode_label}): {exc}",
+                            logging.WARNING,
+                        )
+
+                removed_after = enforce_preview_cache_limit(series_name, preferred_keys=cache_keys)
+                summary["evicted"] += removed_after
+
+            self._log(
+                "Preview cache sweep complete; refreshed=%d, skipped=%d, evicted=%d, errors=%d"
+                % (
+                    summary["refreshed"],
+                    summary["skipped"],
+                    summary["evicted"],
+                    summary["errors"],
+                )
+            )
+            return summary
+        finally:
+            self._run_lock.release()
+
+    def _loop(self) -> None:
+        while not self._stop_event.wait(self.interval_seconds):
+            self.run_once()
+
+    def start(self) -> None:
+        if self.interval_seconds <= 0:
+            self._log("Preview cache refresher disabled by configuration")
+            return
+
+        if self._thread and self._thread.is_alive():
+            return
+
+        self._thread = Thread(target=self._loop, name="preview-cache-sweep", daemon=True)
+        self._thread.start()
+        self._log(f"Preview cache refresher scheduled every {self.interval_seconds:.2f} seconds")
+
 def _run_startup_tasks_async(context: AppContext, tv_manager: TvYamlManager) -> Thread:
     """Launch background work that should not block server startup."""
 
@@ -1476,6 +1648,59 @@ def _start_preview_prewarmer(context: AppContext, tv_manager: TvYamlManager) -> 
     return prewarmer
 
 
+def _preview_cache_sweep_interval_seconds(context: AppContext) -> float:
+    env_value = os.environ.get(ENV_PREVIEW_CACHE_SWEEP_INTERVAL)
+    if env_value is not None:
+        try:
+            return max(0.0, float(env_value))
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid %s value %r; using default %.2fs",
+                ENV_PREVIEW_CACHE_SWEEP_INTERVAL,
+                env_value,
+                _DEFAULT_PREVIEW_CACHE_SWEEP_INTERVAL_SECONDS,
+            )
+
+    try:
+        settings = load_settings(context.preference_file)
+        interval = settings.get("preview_cache_sweep_interval_seconds")
+        if isinstance(interval, (int, float)):
+            return max(0.0, float(interval))
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.debug("Unable to load preview cache sweep interval: %s", exc)
+
+    return _DEFAULT_PREVIEW_CACHE_SWEEP_INTERVAL_SECONDS
+
+
+def _start_preview_cache_refresher(
+    context: AppContext,
+    tv_manager: TvYamlManager,
+) -> PreviewCacheRefresher | None:
+    interval_seconds = _preview_cache_sweep_interval_seconds(context)
+    refresher = PreviewCacheRefresher(
+        context,
+        tv_manager,
+        interval_seconds=interval_seconds,
+        max_age_ms=PREVIEW_CACHE_MAX_AGE_MS,
+        refresh_buffer_ms=PREVIEW_CACHE_REFRESH_BUFFER_MS,
+    )
+
+    if interval_seconds <= 0:
+        logger.info(
+            "Preview cache refresher disabled (interval=%.2fs); set %s to enable",
+            interval_seconds,
+            ENV_PREVIEW_CACHE_SWEEP_INTERVAL,
+        )
+        return None
+
+    logger.info(
+        "Starting preview cache refresher (interval=%.2fs)",
+        interval_seconds,
+    )
+    refresher.start()
+    return refresher
+
+
 def run(port: int = 4343) -> None:
     _configure_logging()
 
@@ -1484,6 +1709,7 @@ def run(port: int = 4343) -> None:
 
     _run_startup_tasks_async(context, tv_manager)
     prewarmer = _start_preview_prewarmer(context, tv_manager)
+    cache_refresher = _start_preview_cache_refresher(context, tv_manager)
 
     start_recent_activity_monitor(context, tv_manager)
     start_daily_tv_yaml_backup(tv_manager)
