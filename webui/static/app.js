@@ -514,11 +514,96 @@ async function loadSettings() {
   }
 }
 
+function normalizePreviewEpisode(value) {
+  if (value === null || value === undefined) {
+    return 'random';
+  }
+
+  const normalized = `${value}`.trim();
+  if (!normalized || normalized.toLowerCase() === 'random') {
+    return 'random';
+  }
+
+  return normalized;
+}
+
+function configuredPreviewEpisode(entry) {
+  const config = entry?.config;
+  if (!config || typeof config !== 'object') {
+    return null;
+  }
+
+  const candidates = [config.previewEpisode, config.preview_episode];
+  for (const candidate of candidates) {
+    if (candidate === undefined || candidate === null) {
+      continue;
+    }
+
+    if (Array.isArray(candidate)) {
+      const first = candidate.find(Boolean);
+      if (first !== undefined && first !== null) {
+        return normalizePreviewEpisode(first);
+      }
+      continue;
+    }
+
+    return normalizePreviewEpisode(candidate);
+  }
+
+  return null;
+}
+
+function resolvePreviewEpisode(entry) {
+  const configured = configuredPreviewEpisode(entry);
+  if (configured !== null && configured !== undefined) {
+    return configured;
+  }
+
+  if (entry?.previewEpisode !== undefined && entry.previewEpisode !== null) {
+    return normalizePreviewEpisode(entry.previewEpisode);
+  }
+
+  return 'random';
+}
+
+function syncPreviewEpisodeConfig(entry, previewEpisodeOverride = null) {
+  if (!entry) {
+    return 'random';
+  }
+
+  const previewEpisode =
+    previewEpisodeOverride === null
+      ? resolvePreviewEpisode(entry)
+      : normalizePreviewEpisode(previewEpisodeOverride);
+
+  if (!entry.config || typeof entry.config !== 'object') {
+    entry.config = {};
+  }
+
+  const prefersSnake =
+    'preview_episode' in entry.config && !('previewEpisode' in entry.config);
+
+  if (previewEpisode === 'random') {
+    delete entry.config.previewEpisode;
+    delete entry.config.preview_episode;
+  } else if (prefersSnake) {
+    entry.config.preview_episode = previewEpisode;
+    delete entry.config.previewEpisode;
+  } else {
+    entry.config.previewEpisode = previewEpisode;
+    delete entry.config.preview_episode;
+  }
+
+  entry.previewEpisode = previewEpisode;
+
+  return previewEpisode;
+}
+
 function initializeEntryPreviewState(entry) {
   if (!entry) {
     return;
   }
-  entry.previewEpisode = entry.previewEpisode || 'random';
+  syncPreviewEpisodeConfig(entry);
   entry.previewEpisodeOptions = entry.previewEpisodeOptions || null;
   entry.previewEpisodeStatus = entry.previewEpisodeStatus || 'idle';
   entry.previewEpisodeError = entry.previewEpisodeError || null;
@@ -1121,8 +1206,8 @@ function renderEntry(entry) {
   };
 
   previewEpisodeSelect.addEventListener('change', async () => {
-    entry.previewEpisode = previewEpisodeSelect.value || 'random';
-    const preferCachedPreview = entry.previewEpisode === 'random';
+    const previewEpisode = syncPreviewEpisodeConfig(entry, previewEpisodeSelect.value);
+    const preferCachedPreview = previewEpisode === 'random';
     await invalidateEntryPreview(entry);
     loadEntryPreview(entry, { preferExisting: preferCachedPreview });
   });
@@ -5673,10 +5758,11 @@ function normalizeSnapshot(snapshot) {
 }
 
 function snapshotEntry(entry) {
+  const previewEpisode = syncPreviewEpisodeConfig(entry);
   return {
     name: entry.name,
     config: cloneData(entry.config),
-    previewEpisode: entry.previewEpisode || 'random',
+    previewEpisode: previewEpisode || 'random',
   };
 }
 
@@ -6243,6 +6329,7 @@ async function saveConfiguration() {
   try {
     sortEntries();
     renderEntries();
+    state.entries.forEach((entry) => syncPreviewEpisodeConfig(entry));
     const changedEntries = state.entries.filter(hasEntryChangedSinceLastSave);
     const payload = {
       libraries: state.libraries,
