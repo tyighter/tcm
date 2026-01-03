@@ -50,6 +50,7 @@ _DEFAULT_SYNC_COOLDOWN_SECONDS = 45.0
 _SYNC_COOLDOWN_SECONDS = _DEFAULT_SYNC_COOLDOWN_SECONDS
 PREVIEW_LOG_FILE = Path("/config/preview.log")
 PREVIEW_CACHE_DIR = Path("/config/preview-cache")
+PREVIEW_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 12  # 12 hours
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,12 @@ def _log_preview_event(
         preview_logger.error("%s | error=%s", message, error)
     else:
         preview_logger.info(message)
+
+
+def preview_logger() -> logging.Logger | None:
+    """Expose the preview logger for external callers."""
+
+    return _preview_logger()
 
 
 def _safe_cache_key(cache_key: str) -> str:
@@ -594,6 +601,47 @@ def _preview_cache_key(
     digest = hashlib.sha256(serialised.encode("utf-8")).hexdigest()
     suffix = preview_episode_key or "random"
     return f"{show_name}:{digest}:{suffix}"
+
+
+def preview_cache_key(
+    show_name: str,
+    series_config: dict[str, Any],
+    *,
+    preview_episode_key: str | None = None,
+) -> str:
+    """Public wrapper for preview cache key generation."""
+
+    return _preview_cache_key(
+        show_name,
+        series_config,
+        preview_episode_key=preview_episode_key,
+    )
+
+
+def preview_cache_is_fresh(
+    show_name: str,
+    series_config: dict[str, Any],
+    *,
+    preview_episode_key: str | None = None,
+    max_age_ms: int = PREVIEW_CACHE_MAX_AGE_MS,
+) -> bool:
+    """Return True if a persistent preview cache entry is still valid."""
+
+    cache_key = preview_cache_key(
+        show_name,
+        series_config,
+        preview_episode_key=preview_episode_key,
+    )
+    cached = _load_persistent_preview(cache_key)
+    if cached is None or cached.cached_at is None:
+        return False
+
+    try:
+        age_ms = max(0.0, (time.time() - float(cached.cached_at)) * 1000)
+    except Exception:
+        return False
+
+    return max_age_ms > 0 and age_ms <= max_age_ms
 
 
 def invalidate_preview_cache(series_name: str | None = None) -> None:

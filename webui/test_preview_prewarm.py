@@ -1,0 +1,95 @@
+import time
+from types import SimpleNamespace
+
+from webui import server, services
+
+
+def test_preview_cache_is_fresh(monkeypatch) -> None:
+    recent_payload = services.PreviewPayload(
+        mime="image/jpeg",
+        data="data",
+        source_path=None,
+        cached_at=time.time(),
+    )
+    monkeypatch.setattr(
+        services,
+        "_load_persistent_preview",
+        lambda _key: recent_payload,
+    )
+
+    assert services.preview_cache_is_fresh("Show", {"library": "TV"}, max_age_ms=1000)
+
+    stale_payload = services.PreviewPayload(
+        mime="image/jpeg",
+        data="data",
+        source_path=None,
+        cached_at=time.time() - 10,
+    )
+    monkeypatch.setattr(
+        services,
+        "_load_persistent_preview",
+        lambda _key: stale_payload,
+    )
+
+    assert not services.preview_cache_is_fresh("Show", {"library": "TV"}, max_age_ms=1000)
+
+
+def test_preview_prewarmer_uses_cache(monkeypatch) -> None:
+    monkeypatch.setattr(server, "_preview_log", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(server, "preview_cache_is_fresh", lambda *_args, **_kwargs: True)
+
+    calls: list[str] = []
+
+    def _get_or_generate_preview(_context, _tv_manager, name, _config, **_kwargs) -> None:
+        calls.append(name)
+
+    monkeypatch.setattr(server, "get_or_generate_preview", _get_or_generate_preview)
+
+    tv_manager = SimpleNamespace(
+        as_payload=lambda: {"series": [{"name": "Demo", "config": {"library": "TV"}}]}
+    )
+    prewarmer = server.PreviewPrewarmer(
+        SimpleNamespace(),
+        tv_manager,
+        batch_size=1,
+        batch_interval=0.0,
+        enabled=True,
+    )
+
+    result = prewarmer.run_once()
+
+    assert calls == []
+    assert result["skipped"] == 1
+
+
+def test_preview_prewarmer_refreshes_when_stale(monkeypatch) -> None:
+    monkeypatch.setattr(server, "_preview_log", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(server, "preview_cache_is_fresh", lambda *_args, **_kwargs: False)
+
+    calls: list[tuple[str, str | None]] = []
+
+    def _get_or_generate_preview(_context, _tv_manager, name, _config, **kwargs) -> None:
+        calls.append((name, kwargs.get("preview_episode_key")))
+
+    monkeypatch.setattr(server, "get_or_generate_preview", _get_or_generate_preview)
+
+    tv_manager = SimpleNamespace(
+        as_payload=lambda: {
+            "series": [
+                {"name": "Demo", "config": {"library": "TV", "previewEpisode": "episode-1"}}
+            ]
+        }
+    )
+    prewarmer = server.PreviewPrewarmer(
+        SimpleNamespace(),
+        tv_manager,
+        batch_size=1,
+        batch_interval=0.0,
+        enabled=True,
+    )
+
+    result = prewarmer.run_once()
+
+    assert ("Demo", None) in calls
+    assert ("Demo", "episode-1") in calls
+    assert result["refreshed"] == 2
