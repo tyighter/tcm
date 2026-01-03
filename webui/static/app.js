@@ -466,8 +466,8 @@ function logToServer(level, message, context = {}) {
   }
 }
 
-function logPreviewCacheEvent(event, entry, context = {}) {
-  const cacheKey = previewCacheKey(entry);
+async function logPreviewCacheEvent(event, entry, context = {}) {
+  const cacheKey = await previewCacheKey(entry);
   logToServer('INFO', `Preview cache: ${event}`, {
     entryId: entry?.id,
     name: entry?.name,
@@ -1726,7 +1726,7 @@ async function invalidateEntryPreview(entry) {
   entry.previewLoadingStrategy = undefined;
   entry.previewStale = true;
   entry.previewRefreshing = Boolean(entry.previewSrc);
-  logPreviewCacheEvent('invalidate-preview', entry, {
+  await logPreviewCacheEvent('invalidate-preview', entry, {
     hasPreview: Boolean(entry.previewSrc),
   });
   await clearPreviewCacheEntry(entry);
@@ -1749,7 +1749,7 @@ async function loadEntryPreview(entry, options = {}) {
       : null;
   const previewSeason = previewSeasonForEntry(entry, previewEpisode);
   const allowCachedPreview = preferExisting && !previewEpisode;
-  logPreviewCacheEvent('request-entry-preview', entry, {
+  await logPreviewCacheEvent('request-entry-preview', entry, {
     preferExisting,
     previewEpisode: previewEpisode || 'random',
     allowCachedPreview,
@@ -1781,7 +1781,7 @@ async function loadEntryPreview(entry, options = {}) {
         entry.previewLoadingStrategy = undefined;
         entry.previewRefreshing = false;
         await updatePreviewCache(entry);
-        logPreviewCacheEvent('static-preview-hit', entry, {
+        await logPreviewCacheEvent('static-preview-hit', entry, {
           previewEpisode: previewEpisode || 'random',
         });
         updateEntryPreview(entry);
@@ -1820,7 +1820,7 @@ async function loadEntryPreview(entry, options = {}) {
       entry.previewSrc = `data:${data.mime};base64,${data.data}`;
       entry.previewRefreshing = false;
       await updatePreviewCache(entry);
-      logPreviewCacheEvent('preview-generated', entry, {
+      await logPreviewCacheEvent('preview-generated', entry, {
         previewEpisode: previewEpisode || 'random',
         strategy: allowCachedPreview ? 'load-or-generate' : 'generate',
       });
@@ -1833,7 +1833,7 @@ async function loadEntryPreview(entry, options = {}) {
         name: entry.name,
         error: entry.previewError,
       });
-      logPreviewCacheEvent('preview-error', entry, {
+      await logPreviewCacheEvent('preview-error', entry, {
         previewEpisode: previewEpisode || 'random',
         message: entry.previewError,
       });
@@ -5800,6 +5800,20 @@ function serializeEntrySnapshot(entry) {
   return stableStringify(snapshotEntry(entry));
 }
 
+function resolveSnapshotName(snapshot) {
+  if (!snapshot) {
+    return null;
+  }
+
+  try {
+    const parsed = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
+    const name = parsed?.name;
+    return typeof name === 'string' && name.length ? name : null;
+  } catch (error) {
+    return null;
+  }
+}
+
 function deepEqualEntrySnapshots(a, b) {
   return stableStringify(a) === stableStringify(b);
 }
@@ -5948,7 +5962,7 @@ async function readPreviewCacheEntry(key) {
     );
     const normalized = normalizePreviewCacheValue(key, entry);
     if (normalized) {
-      state.previewCache[key] = normalized;
+      applyPreviewCacheState(key, normalized);
     }
     return normalized || null;
   } catch (error) {
@@ -5998,45 +6012,81 @@ function normalizePreviewCacheValue(key, value) {
   };
 }
 
+function applyPreviewCacheState(key, normalized) {
+  if (!key || !normalized?.src) {
+    return;
+  }
+
+  const existing = state.previewCache[key];
+  const existingTimestamp = normalizeTimestamp(existing?.cachedAt);
+  const normalizedTimestamp = normalizeTimestamp(normalized.cachedAt);
+
+  if (
+    !existing ||
+    (normalizedTimestamp !== null &&
+      (existingTimestamp === null || normalizedTimestamp >= existingTimestamp))
+  ) {
+    state.previewCache[key] = {
+      snapshot: normalized.snapshot,
+      src: normalized.src,
+      cachedAt: normalized.cachedAt,
+    };
+  }
+}
+
+async function migratePreviewCacheEntry(
+  key,
+  value,
+  migrationTasks,
+  options = { deleteOriginal: false, persistWhenUnchanged: false }
+) {
+  if (!key || !value) {
+    return;
+  }
+
+  const normalized = normalizePreviewCacheValue(key, value);
+  if (!normalized) {
+    return;
+  }
+
+  const migratedKey = await previewCacheKeyFromSnapshot(normalized.snapshot);
+  const targetKey = migratedKey || key;
+
+  applyPreviewCacheState(targetKey, normalized);
+
+  if (targetKey !== key) {
+    migrationTasks.push(writePreviewCacheEntry(targetKey, normalized));
+    if (options?.deleteOriginal) {
+      migrationTasks.push(deletePreviewCacheEntry(key));
+    }
+    return;
+  }
+
+  if (normalized.snapshot !== value.snapshot || options?.persistWhenUnchanged) {
+    migrationTasks.push(writePreviewCacheEntry(targetKey, normalized));
+  }
+}
+
 async function loadPreviewCache() {
   state.previewCache = {};
 
   const migrationTasks = [];
   const dbEntries = await readAllPreviewCacheEntries();
-  dbEntries.forEach((entry) => {
-    if (entry?.key && entry.src) {
-      const normalized = normalizePreviewCacheValue(entry.key, entry);
-      if (!normalized) {
-        return;
-      }
-      state.previewCache[entry.key] = {
-        snapshot: normalized.snapshot,
-        src: normalized.src,
-        cachedAt: normalized.cachedAt,
-      };
-      if (normalized.snapshot !== entry.snapshot) {
-        migrationTasks.push(writePreviewCacheEntry(entry.key, normalized));
-      }
-    }
-  });
+  await Promise.all(
+    dbEntries.map((entry) =>
+      migratePreviewCacheEntry(entry?.key, entry, migrationTasks, { deleteOriginal: true })
+    )
+  );
 
   const legacyCache = loadLegacyPreviewCache();
-  Object.entries(legacyCache).forEach(([key, value]) => {
-    const normalized = normalizePreviewCacheValue(key, value);
-    if (!normalized) {
-      return;
-    }
-
-    if (!state.previewCache[key]) {
-      state.previewCache[key] = {
-        snapshot: normalized.snapshot,
-        src: normalized.src,
-        cachedAt: normalized.cachedAt,
-      };
-    }
-
-    migrationTasks.push(writePreviewCacheEntry(key, normalized));
-  });
+  await Promise.all(
+    Object.entries(legacyCache).map(([key, value]) =>
+      migratePreviewCacheEntry(key, value, migrationTasks, {
+        deleteOriginal: true,
+        persistWhenUnchanged: true,
+      })
+    )
+  );
 
   if (migrationTasks.length) {
     await Promise.allSettled(migrationTasks);
@@ -6224,12 +6274,70 @@ async function clearLogoCacheEntry(entry) {
   await Promise.all(uniqueKeys.map((key) => deleteLogoCacheEntry(key)));
 }
 
-function previewCacheKey(entry) {
+const previewSnapshotHashCache = new Map();
+
+function bufferToHex(buffer) {
+  return Array.from(new Uint8Array(buffer))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function digestPreviewSnapshot(snapshot) {
+  if (!snapshot) {
+    return null;
+  }
+
+  if (previewSnapshotHashCache.has(snapshot)) {
+    return previewSnapshotHashCache.get(snapshot);
+  }
+
+  const compute = (async () => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(snapshot);
+    if (globalThis.crypto?.subtle?.digest) {
+      const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', data);
+      return bufferToHex(hashBuffer);
+    }
+    return hashString(snapshot);
+  })();
+
+  previewSnapshotHashCache.set(snapshot, compute);
+
+  try {
+    return await compute;
+  } catch (error) {
+    console.warn('Failed to hash preview snapshot', error);
+    previewSnapshotHashCache.delete(snapshot);
+    try {
+      return hashString(snapshot);
+    } catch (fallbackError) {
+      console.warn('Failed to compute fallback preview hash', fallbackError);
+      return null;
+    }
+  }
+}
+
+async function previewCacheKeyFromSnapshot(snapshot) {
+  const normalizedSnapshot = normalizeSnapshot(snapshot);
+  if (!normalizedSnapshot) {
+    return null;
+  }
+
+  const name = resolveSnapshotName(normalizedSnapshot);
+  if (!name) {
+    return null;
+  }
+
+  const digest = await digestPreviewSnapshot(normalizedSnapshot);
+  return digest ? `${name}:${digest}` : null;
+}
+
+async function previewCacheKey(entry, snapshotOverride = null) {
   if (!entry?.name) {
     return null;
   }
-  const snapshot = serializeEntrySnapshot(entry);
-  return `${entry.name}:${hashString(snapshot)}`;
+  const snapshot = snapshotOverride || serializeEntrySnapshot(entry);
+  return previewCacheKeyFromSnapshot(snapshot);
 }
 
 function legacyPreviewCacheKey(entry) {
@@ -6249,14 +6357,30 @@ function collectSeriesPreviewKeys(seriesName, preferredKeys = []) {
     return [];
   }
 
-  const keys = new Set(preferredKeys.filter(Boolean));
-  Object.keys(state.previewCache || {}).forEach((key) => {
-    if (isSeriesPreviewKey(seriesName, key)) {
-      keys.add(key);
-    }
-  });
+  const seen = new Set();
+  const orderedKeys = [];
 
-  return Array.from(keys);
+  preferredKeys
+    .filter(Boolean)
+    .forEach((key) => {
+      if (isSeriesPreviewKey(seriesName, key) && !seen.has(key)) {
+        seen.add(key);
+        orderedKeys.push(key);
+      }
+    });
+
+  const resolvedKeys = Object.keys(state.previewCache || {})
+    .filter((key) => isSeriesPreviewKey(seriesName, key) && !seen.has(key))
+    .map((key) => ({
+      key,
+      cachedAt:
+        normalizeTimestamp(state.previewCache?.[key]?.cachedAt) ??
+        Number.NEGATIVE_INFINITY,
+    }))
+    .sort((a, b) => (b.cachedAt || 0) - (a.cachedAt || 0))
+    .map((entry) => entry.key);
+
+  return orderedKeys.concat(resolvedKeys);
 }
 
 async function evictSeriesPreviewCache(seriesName, preferredKeys = []) {
@@ -6292,7 +6416,7 @@ function hashString(value) {
 }
 
 async function restoreCachedPreview(entry) {
-  const key = previewCacheKey(entry);
+  const key = await previewCacheKey(entry);
   const legacyKey = legacyPreviewCacheKey(entry);
   if (!key && !legacyKey) {
     return;
@@ -6303,29 +6427,26 @@ async function restoreCachedPreview(entry) {
   const legacy = normalizePreviewCacheValue(legacyKey, await readPreviewCacheEntry(legacyKey));
   const match = cached || legacy;
   if (!match) {
-    logPreviewCacheEvent('cache-miss', entry, { cacheKey: key, legacyKey });
+    await logPreviewCacheEvent('cache-miss', entry, { cacheKey: key, legacyKey });
   }
   if (match?.src) {
     entry.previewSrc = match.src;
     const expired = isPreviewCacheExpired(match.cachedAt);
     entry.previewStale = expired || match.snapshot !== snapshot;
-    logPreviewCacheEvent('cache-hit', entry, {
+    await logPreviewCacheEvent('cache-hit', entry, {
       cacheKey: match.key || key || legacyKey,
       expired,
       snapshotMatches: match.snapshot === snapshot,
     });
-    if (match.key && !state.previewCache[match.key]) {
-      state.previewCache[match.key] = {
-        snapshot: match.snapshot,
-        src: match.src,
-        cachedAt: match.cachedAt,
-      };
+    if (match.key) {
+      applyPreviewCacheState(match.key, match);
     }
   }
 }
 
 async function updatePreviewCache(entry) {
-  const key = previewCacheKey(entry);
+  const snapshot = serializeEntrySnapshot(entry);
+  const key = await previewCacheKey(entry, snapshot);
   if (!key || !entry.previewSrc) {
     return;
   }
@@ -6333,18 +6454,18 @@ async function updatePreviewCache(entry) {
   const preferredKeys = [key, legacyKey].filter(Boolean);
   await evictSeriesPreviewCache(entry.name, preferredKeys);
   const value = {
-    snapshot: serializeEntrySnapshot(entry),
+    snapshot,
     src: entry.previewSrc,
     cachedAt: Date.now(),
   };
-  state.previewCache[key] = value;
+  applyPreviewCacheState(key, value);
   entry.previewStale = false;
   await writePreviewCacheEntry(key, value);
   persistLegacyPreviewCache();
 }
 
 async function clearPreviewCacheEntry(entry) {
-  const key = previewCacheKey(entry);
+  const key = await previewCacheKey(entry);
   const legacyKey = legacyPreviewCacheKey(entry);
   if (key && state.previewCache[key]) {
     delete state.previewCache[key];
