@@ -6465,14 +6465,12 @@ async function restoreCachedPreview(entry) {
   }
   if (match?.src) {
     entry.previewSrc = match.src;
-    const matchKey = match.key || key || legacyKey || null;
-    const normalizedSnapshot = match.snapshot || snapshot || null;
-    const snapshotMatches = match.snapshot ? match.snapshot === snapshot : true;
+    const cachedSnapshot = match.snapshot || null;
     const expired = isPreviewCacheExpired(match.cachedAt);
     const shouldBackfillSnapshot =
-      !match.snapshot && resolvedKey && (resolvedKey === key || resolvedKey === legacyKey);
+      !cachedSnapshot && resolvedKey && (resolvedKey === key || resolvedKey === legacyKey);
     const effectiveSnapshot =
-      match.snapshot || (shouldBackfillSnapshot ? normalizedSnapshot : null);
+      cachedSnapshot || (shouldBackfillSnapshot ? normalizedSnapshot : null);
     const snapshotMatches =
       effectiveSnapshot === normalizedSnapshot ||
       (!effectiveSnapshot && resolvedKey && resolvedKey === key);
