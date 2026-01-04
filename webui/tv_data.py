@@ -7,6 +7,7 @@ import re
 import shutil
 import sys
 import tempfile
+from io import StringIO
 from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -311,6 +312,10 @@ class TvYamlManager:
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
         desired_mode = self._target_mode()
 
+        buffer = StringIO()
+        self._yaml.dump(data, buffer)
+        serialized = buffer.getvalue()
+
         temp_path: Path | None = None
         try:
             with tempfile.NamedTemporaryFile(
@@ -324,7 +329,7 @@ class TvYamlManager:
                         temp_path.chmod(desired_mode)
                     except OSError:
                         pass
-                self._yaml.dump(data, handle)
+                handle.write(serialized)
                 handle.flush()
                 os.fsync(handle.fileno())
 
