@@ -185,6 +185,14 @@ class WebRequestHandler(BaseHTTPRequestHandler):
     def _error(self, message: str, status: HTTPStatus = HTTPStatus.BAD_REQUEST) -> None:
         self._json_response({"error": message}, status=status)
 
+    def _tv_payload_or_error(self) -> dict | None:
+        try:
+            return self.tv_manager.as_payload()
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.error("Unable to load tv.yml for %s: %s", self.path, exc)
+            self._error(f"Unable to load tv.yml: {exc}", status=HTTPStatus.BAD_REQUEST)
+            return None
+
     def _serve_file(self, file_path: Path) -> None:
         if not file_path.exists() or not file_path.is_file():
             self.send_error(HTTPStatus.NOT_FOUND.value)
@@ -611,12 +619,18 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/config":
-            payload = self.tv_manager.as_payload()
+            payload = self._tv_payload_or_error()
+            if payload is None:
+                return
+
             self._json_response(payload)
             return
 
         if parsed.path == "/api/meta":
-            tv_payload = self.tv_manager.as_payload()
+            tv_payload = self._tv_payload_or_error()
+            if tv_payload is None:
+                return
+
             libraries = tv_payload.get("libraries", {})
             fields = build_series_fields(libraries)
             card_types = next(
