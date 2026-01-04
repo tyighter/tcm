@@ -6457,6 +6457,15 @@ async function restoreCachedPreview(entry) {
           cachedAt: match.cachedAt,
         });
       }
+      if (normalizedSnapshot && key && matchKey !== key) {
+        const migrated = { ...normalizedMatch, key };
+        applyPreviewCacheState(key, migrated);
+        await writePreviewCacheEntry(key, {
+          snapshot: normalizedSnapshot,
+          src: match.src,
+          cachedAt: match.cachedAt,
+        });
+      }
     }
   }
 }
