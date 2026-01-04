@@ -51,6 +51,7 @@ const LOGO_BACKGROUND_STORAGE_KEY = 'tcm-logo-backgrounds';
 const CACHE_DB_NAME = 'tcm-cache';
 const CACHE_DB_VERSION = 2;
 const CACHE_DB_OPEN_TIMEOUT_MS = 2000;
+const PREVIEW_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 12;
 const LOGO_DB_STORE = 'logos';
 const DEFAULT_BACKUP_DIRECTORY = '/config/backups';
 const FONT_EXTENSIONS = ['.ttf', '.otf', '.woff', '.woff2', '.ttc'];
@@ -138,6 +139,59 @@ function resolveEntrySlug(entry) {
   }
 
   return sanitizePathName(entry.name || '');
+}
+
+function normalizeTimestamp(timestamp) {
+  if (timestamp === undefined || timestamp === null) {
+    return null;
+  }
+
+  const numeric = Number(timestamp);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  // Normalize seconds-based epoch values to milliseconds to match Date.now().
+  if (numeric < 1_000_000_000_000) {
+    return numeric * 1000;
+  }
+
+  return numeric;
+}
+
+function isPreviewCacheExpired(cachedAt) {
+  const normalized = normalizeTimestamp(cachedAt);
+  if (!Number.isFinite(normalized)) {
+    return true;
+  }
+
+  return Date.now() - normalized > PREVIEW_CACHE_MAX_AGE_MS;
+}
+
+function loadLegacyPreviewCache(rawCache) {
+  if (!rawCache) {
+    return null;
+  }
+
+  try {
+    const parsed = typeof rawCache === 'string' ? JSON.parse(rawCache) : rawCache;
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+
+    const cachedAt = parsed.cachedAt ?? parsed.cached_at ?? parsed.updatedAt;
+    if (isPreviewCacheExpired(cachedAt)) {
+      return null;
+    }
+
+    return {
+      ...parsed,
+      cachedAt: normalizeTimestamp(cachedAt),
+    };
+  } catch (error) {
+    console.warn('Unable to load legacy preview cache', error);
+    return null;
+  }
 }
 
 const episodeTextHelperElement = createEpisodeTextFormatHelper();
