@@ -9,12 +9,10 @@ import random
 import re
 import subprocess
 import sys
-import tempfile
 import time
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from shutil import rmtree
 from threading import Lock
 from typing import Any, Callable, Iterable
 
@@ -798,34 +796,41 @@ def preview_cache_is_fresh(
     preview_episode_key: str | None = None,
     max_age_ms: int = PREVIEW_CACHE_MAX_AGE_MS,
 ) -> bool:
-    """Return True if a persistent preview cache entry is still valid."""
+    """Return True if an in-memory preview cache entry is still valid."""
 
     cache_key = preview_cache_key(
         show_name,
         series_config,
         preview_episode_key=preview_episode_key,
     )
-    cached = _load_persistent_preview(cache_key)
+    with _preview_cache_lock:
+        cached = _preview_cache.get(cache_key)
     if cached is None:
         _log_preview_cache_decision(
             show_name,
             cache_key,
             preview_episode_key=preview_episode_key,
-            decision="miss",
+            decision="stale",
             details={"reason": "not-found"},
         )
         return False
 
-    cached_source_mtime = cached.source_mtime
     current_source_mtime = _stat_mtime(cached.source_path)
-    if cached_source_mtime is None:
-        cached_source_mtime = current_source_mtime
+    cached_source_mtime = cached.source_mtime if cached.source_mtime is not None else current_source_mtime
 
-    if (
-        cached_source_mtime is not None
-        and current_source_mtime is not None
-        and current_source_mtime > cached_source_mtime
-    ):
+    if current_source_mtime is None:
+        _log_preview_cache_decision(
+            show_name,
+            cache_key,
+            preview_episode_key=preview_episode_key,
+            decision="stale",
+            details={
+                "reason": "missing-source",
+            },
+        )
+        return False
+
+    if cached_source_mtime is not None and current_source_mtime > cached_source_mtime:
         _log_preview_cache_decision(
             show_name,
             cache_key,
@@ -1150,31 +1155,6 @@ def get_or_generate_preview(
                 )
                 return cached.mime, cached.data
 
-        persistent_cached = _load_persistent_preview(cache_key)
-        if persistent_cached is not None:
-            if not _generated_preview_superseded(
-                _load_show,
-                persistent_cached,
-                prefer_existing=prefer_existing,
-                preview_episode_key=preview_episode_key,
-                show_name=show_name,
-                cache_key=cache_key,
-                origin="persistent-cache",
-            ):
-                with _preview_cache_lock:
-                    _preview_cache[cache_key] = persistent_cached
-                _log_preview_event(
-                    show_name,
-                    persistent_cached.source_path,
-                    status="success",
-                    origin="persistent-cache",
-                    episode_key=preview_episode_key,
-                    cached=True,
-                    persistent=True,
-                    existing_source=persistent_cached.existing_source,
-                )
-                return persistent_cached.mime, persistent_cached.data
-
     try:
         show = preloaded_show or _load_show_for_preview(
             context, tv_manager, show_name, series_config
@@ -1211,9 +1191,6 @@ def get_or_generate_preview(
     with _preview_cache_lock:
         _preview_cache[cache_key] = payload
 
-    _persist_preview_payload(cache_key, payload)
-    series_name, _ = _series_and_episode_from_cache_key(cache_key)
-    enforce_preview_cache_limit(series_name, preferred_keys=[cache_key])
     _log_preview_event(
         show_name,
         payload.source_path,
@@ -1258,6 +1235,9 @@ def generate_preview(
     if not episode.source.exists():
         raise RuntimeError("Episode source image is missing; run sync first")
 
+    if episode.destination is None:
+        raise RuntimeError("Episode destination is not set; configure a library path")
+
     extras = {**show.extras, **episode.extra_characteristics}
     wrapping_extras = {**show.profile.font.attributes, **extras}
 
@@ -1268,12 +1248,6 @@ def generate_preview(
         )
     else:
         title_characteristics = show.card_class.TITLE_CHARACTERISTICS
-
-    temp_dir = Path(tempfile.mkdtemp(prefix="tcm-preview-"))
-    destination = temp_dir / "preview.jpg"
-
-    original_destination = episode.destination
-    episode.destination = destination
 
     title_card = TitleCard(
         episode,
@@ -1290,23 +1264,20 @@ def generate_preview(
         raise RuntimeError("The selected font is missing characters for the preview")
 
     created = title_card.create()
-    if not created or not destination.exists():
-        episode.destination = original_destination
-        rmtree(temp_dir, ignore_errors=True)
+    if not created and not episode.destination.exists():
         raise RuntimeError("Failed to generate preview image")
 
+    destination = episode.destination
+    mime, _ = mimetypes.guess_type(destination.name)
+    resolved_mime = mime or "image/jpeg"
     data = destination.read_bytes()
 
-    # Reset and cleanup
-    episode.destination = original_destination
-    rmtree(temp_dir, ignore_errors=True)
-
     return PreviewPayload(
-        mime="image/jpeg",
+        mime=resolved_mime,
         data=base64.b64encode(data).decode("ascii"),
         source_path=destination,
         cached_at=time.time(),
-        source_mtime=_stat_mtime(episode.source),
+        source_mtime=_stat_mtime(destination),
     )
 
 
