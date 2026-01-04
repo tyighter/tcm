@@ -1627,6 +1627,32 @@ async function refreshEntryPreviews(entries = state.entries) {
   requestEntryPreviews(entries);
 }
 
+function schedulePreviewRefresh(entry, options = {}) {
+  if (!entry) {
+    return;
+  }
+
+  const { preferExisting = false, delay } = options;
+  if (preferExisting && entry.previewSrc && !entry.previewError) {
+    return;
+  }
+
+  if (entry.previewRefreshTimeout) {
+    clearTimeout(entry.previewRefreshTimeout);
+    entry.previewRefreshTimeout = null;
+  }
+
+  if (!delay && delay !== 0) {
+    void refreshEntryPreviews([entry]);
+    return;
+  }
+
+  entry.previewRefreshTimeout = setTimeout(() => {
+    entry.previewRefreshTimeout = null;
+    void refreshEntryPreviews([entry]);
+  }, delay);
+}
+
 async function fetchPreviewEpisodes(entry, onUpdate) {
   if (!entry || entry.previewEpisodeStatus === 'loading') {
     return;
