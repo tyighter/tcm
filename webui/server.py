@@ -27,22 +27,23 @@ from .config import AppContext, create_app_context
 from .options import build_card_type_extras, build_series_fields
 from .services import (
     ActionInProgressError,
-    download_logo_for_series,
+    backfill_episode_rating_keys,
+    backfill_rating_keys,
+    backfill_tmdb_ids,
     delete_series_cards,
+    download_logo_for_series,
+    ensure_episode_rating_keys_in_payload,
     forget_series_cards,
+    get_or_generate_preview,
     invalidate_preview_cache,
     list_preview_episodes,
     preview_logger,
-    backfill_episode_rating_keys,
     run_asset_downloads,
     run_asset_downloads_for_series,
-    backfill_tmdb_ids,
-    backfill_rating_keys,
     run_builder,
     run_builder_for_series,
     run_metadata_sync,
     revert_series_cards,
-    ensure_episode_rating_keys_in_payload,
     search_plex,
     _load_show_for_preview,
 )
@@ -876,22 +877,32 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 self._error("Preview requires a series name and configuration")
                 return
 
-            preview_episode = payload.get("previewEpisode") or None
+            preview_episode_key = payload.get("previewEpisode") or None
             preview_season = payload.get("season")
             preview_episode_number = payload.get("episode")
 
-            preview_path = self._resolve_preview_path(
-                series_name=show_name,
-                series_config=config,
-                preview_episode_key=preview_episode,
-                season=str(preview_season) if preview_season is not None else None,
-                episode=str(preview_episode_number) if preview_episode_number is not None else None,
-            )
-            if preview_path is None:
-                self._error("Preview card not found", status=HTTPStatus.NOT_FOUND)
+            if preview_episode_key == "random":
+                preview_episode_key = None
+
+            if preview_episode_key is None and preview_season is not None and preview_episode_number is not None:
+                preview_episode_key = f"{preview_season}-{preview_episode_number}"
+
+            try:
+                mime, data = get_or_generate_preview(
+                    self.context,
+                    self.tv_manager,
+                    show_name,
+                    config,
+                    force=True,
+                    preview_episode_key=preview_episode_key,
+                    prefer_existing=False,
+                )
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.exception("Unable to generate preview for %s", show_name)
+                self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
                 return
 
-            self._serve_file(preview_path)
+            self._json_response({"mime": mime, "data": data})
             return
 
         if parsed.path == "/api/preview/episodes":

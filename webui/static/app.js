@@ -4322,39 +4322,109 @@ async function openPreview(entry) {
   message.textContent = 'Loading preview...';
   modal.content.appendChild(message);
 
-  const previewEpisode =
-    entry.previewEpisode && entry.previewEpisode !== 'random'
-      ? entry.previewEpisode
-      : null;
+  const providedPreview =
+    entry.previewUrl || entry.preview_url || entry.config?.previewUrl || entry.config?.preview_url;
 
-  const previewSeason = previewSeasonForEntry(entry, previewEpisode);
-
-  const previewUrl = previewUrlForEntry(
-    { ...entry, previewEpisode, previewUrl: entry.previewUrl },
-    { cacheBust: true }
+  const previewEpisode = resolvePreviewEpisode(entry);
+  const previewEpisodeOption = (entry.previewEpisodeOptions || []).find(
+    (option) => option.key === previewEpisode
   );
 
-  if (!previewUrl) {
-    modal.content.textContent = 'Preview unavailable';
+  const requestId = (entry.previewRequestId || 0) + 1;
+  entry.previewRequestId = requestId;
+  entry.previewLoading = true;
+  entry.previewError = null;
+  updateEntryPreview(entry);
+
+  const applyPreviewImage = (src) => {
+    const img = document.createElement('img');
+    img.className = 'preview-image';
+    img.alt = `${entry.name} preview`;
+    img.onload = () => {
+      if (entry.previewRequestId !== requestId) {
+        return;
+      }
+      entry.previewSrc = src;
+      entry.previewError = null;
+      entry.previewLoading = false;
+      updateEntryPreview(entry);
+      modal.content.innerHTML = '';
+      modal.content.appendChild(img);
+    };
+    img.onerror = () => {
+      if (entry.previewRequestId !== requestId) {
+        return;
+      }
+      entry.previewError = 'Preview unavailable';
+      entry.previewLoading = false;
+      updateEntryPreview(entry);
+      modal.content.textContent = 'Preview unavailable';
+    };
+    img.src = src;
+  };
+
+  const failPreview = (error) => {
+    const errorMessage = error?.message || 'Preview unavailable';
+    if (entry.previewRequestId === requestId) {
+      entry.previewError = errorMessage;
+      entry.previewLoading = false;
+      updateEntryPreview(entry);
+    }
+    modal.content.textContent = errorMessage;
+  };
+
+  if (!entry?.name || !entry?.config) {
+    failPreview(new Error('Preview unavailable'));
     modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
     return;
   }
 
-  const img = document.createElement('img');
-  img.className = 'preview-image';
-  img.alt = `${entry.name} preview`;
-  img.onload = () => {
-    modal.content.innerHTML = '';
-    modal.content.appendChild(img);
-    entry.previewSrc = previewUrl;
-    entry.previewError = null;
-    entry.previewLoading = false;
-    updateEntryPreview(entry);
+  if (providedPreview) {
+    const separator = providedPreview.includes('?') ? '&' : '?';
+    applyPreviewImage(`${providedPreview}${separator}_=${Date.now()}`);
+    modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
+    return;
+  }
+
+  const payload = {
+    name: entry.name,
+    config: entry.config,
   };
-  img.onerror = () => {
-    modal.content.textContent = 'Preview unavailable';
-  };
-  img.src = previewUrl;
+  if (previewEpisode && previewEpisode !== 'random') {
+    payload.previewEpisode = previewEpisode;
+  }
+  if (previewEpisodeOption) {
+    if (previewEpisodeOption.season || previewEpisodeOption.season === 0) {
+      payload.season = previewEpisodeOption.season;
+    }
+    if (previewEpisodeOption.episode || previewEpisodeOption.episode === 0) {
+      payload.episode = previewEpisodeOption.episode;
+    }
+  }
+
+  try {
+    const response = await fetch('/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || 'Preview unavailable');
+    }
+    if (!data?.data) {
+      throw new Error('Preview unavailable');
+    }
+
+    const mime = data.mime || 'image/png';
+    const src = `data:${mime};base64,${data.data}`;
+    if (entry.previewRequestId !== requestId) {
+      return;
+    }
+    applyPreviewImage(src);
+  } catch (error) {
+    failPreview(error);
+  }
 
   modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
 }
