@@ -22,18 +22,22 @@ def test_app_js_syntax():
 
 
 def test_restore_cached_preview_executes():
-    """Run restoreCachedPreview with minimal stubs to confirm it executes."""
+    """Ensure previewUrlForEntry builds the correct static preview URL."""
     node = _node_path()
     if not node:
-        pytest.skip("node is required for preview cache harness")
+        pytest.skip("node is required for preview URL harness")
 
     app_js_source = APP_JS_PATH.read_text(encoding="utf-8")
-    sentinel = "async function restoreCachedPreview(entry) {"
+    sentinel = "function previewUrlForEntry(entry"
     start = app_js_source.find(sentinel)
-    assert start != -1, "restoreCachedPreview definition not found"
+    assert start != -1, "previewUrlForEntry definition not found"
+    signature_end = app_js_source.find(") {", start)
+    assert signature_end != -1, "previewUrlForEntry signature malformed"
+    body_start = app_js_source.find("{", signature_end)
+    assert body_start != -1, "previewUrlForEntry body not found"
     brace_count = 0
     end = None
-    for index in range(start, len(app_js_source)):
+    for index in range(body_start, len(app_js_source)):
         char = app_js_source[index]
         if char == "{":
             brace_count += 1
@@ -42,44 +46,17 @@ def test_restore_cached_preview_executes():
             if brace_count == 0:
                 end = index
                 break
-    assert end is not None, "could not isolate restoreCachedPreview body"
-    restore_function = app_js_source[start : end + 1]
+    assert end is not None, "could not isolate previewUrlForEntry body"
+    preview_function = app_js_source[start : end + 1]
 
     harness = f"""
-    {restore_function}
-    const events = [];
-    const calls = [];
-    const previewCacheKey = async () => "key";
-    const legacyPreviewCacheKey = () => "legacy";
-    const serializeEntrySnapshot = () => "snap";
-    const normalizeSnapshot = (value) => value;
-    const normalizePreviewCacheValue = (key, value) => value;
-    const readPreviewCacheEntry = async (key) => {{
-      if (key === "key") {{
-        return {{ key: "key", src: "img", snapshot: "snap", cachedAt: Date.now() - 1000 }};
-      }}
-      return null;
-    }};
-    const logPreviewCacheEvent = async (type, entry, extra) => events.push({{ type, extra }});
-    const isPreviewCacheExpired = () => false;
-    const applyPreviewCacheState = () => calls.push("apply");
-    const writePreviewCacheEntry = async () => calls.push("write");
-    const persistLegacyPreviewCache = () => calls.push("persist");
-    const entry = {{ name: "Series", previewSrc: null }};
-
-    restoreCachedPreview(entry)
-      .then(() => {{
-        console.log(JSON.stringify({{
-          previewSrc: entry.previewSrc,
-          previewStale: entry.previewStale,
-          events,
-          calls,
-        }}));
-      }})
-      .catch((error) => {{
-        console.error(error);
-        process.exit(1);
-      }});
+    {preview_function}
+    const resolveEntrySlug = (entry) => entry.slug || entry.name;
+    const resolvePreviewEpisode = (entry) => entry.previewEpisode || "random";
+    const previewSeasonForEntry = () => 2;
+    const url = previewUrlForEntry({{ name: "Series", slug: "series", previewEpisode: "1-03" }});
+    const params = new URLSearchParams(url.split("?")[1]);
+    console.log(JSON.stringify(Object.fromEntries(params.entries())));
     """
 
     completed = subprocess.run(
@@ -90,6 +67,8 @@ def test_restore_cached_preview_executes():
     )
     output = completed.stdout.strip().splitlines()[-1]
     data = json.loads(output)
-    assert data["previewSrc"] == "img"
-    assert data["previewStale"] is False
-    assert any(event["type"] == "cache-hit" for event in data["events"])
+    assert data["slug"] == "series"
+    assert data["name"] == "Series"
+    assert data["previewEpisode"] == "1-03"
+    assert data["season"] == "2"
+    assert "_" in data
