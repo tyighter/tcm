@@ -734,8 +734,7 @@ def backfill_episode_rating_keys(
             changed_series.append(series_name)
 
     if changed_series:
-        tv_manager._atomic_write(tv_data)  # pylint: disable=protected-access
-        tv_manager._data = tv_data  # pylint: disable=protected-access
+        tv_manager._write_locked(tv_data)  # pylint: disable=protected-access
 
     return {"updated": updated, "total": processed}
 
