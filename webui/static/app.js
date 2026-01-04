@@ -1748,7 +1748,7 @@ async function loadEntryPreview(entry, options = {}) {
       ? entry.previewEpisode
       : null;
   const previewSeason = previewSeasonForEntry(entry, previewEpisode);
-  const allowCachedPreview = preferExisting && !previewEpisode;
+  const allowCachedPreview = preferExisting;
   await logPreviewCacheEvent('request-entry-preview', entry, {
     preferExisting,
     previewEpisode: previewEpisode || 'random',
@@ -6423,9 +6423,11 @@ async function restoreCachedPreview(entry) {
   }
 
   const snapshot = serializeEntrySnapshot(entry);
+  const normalizedSnapshot = normalizeSnapshot(snapshot) || snapshot;
   const cached = normalizePreviewCacheValue(key, await readPreviewCacheEntry(key));
   const legacy = normalizePreviewCacheValue(legacyKey, await readPreviewCacheEntry(legacyKey));
   const match = cached || legacy;
+  const resolvedKey = match?.key || key || legacyKey;
   if (!match) {
     await logPreviewCacheEvent('cache-miss', entry, { cacheKey: key, legacyKey });
   }
@@ -6435,36 +6437,29 @@ async function restoreCachedPreview(entry) {
     const normalizedSnapshot = match.snapshot || snapshot || null;
     const snapshotMatches = match.snapshot ? match.snapshot === snapshot : true;
     const expired = isPreviewCacheExpired(match.cachedAt);
-
+    const shouldBackfillSnapshot =
+      !match.snapshot && resolvedKey && (resolvedKey === key || resolvedKey === legacyKey);
+    const effectiveSnapshot =
+      match.snapshot || (shouldBackfillSnapshot ? normalizedSnapshot : null);
+    const snapshotMatches =
+      effectiveSnapshot === normalizedSnapshot ||
+      (!effectiveSnapshot && resolvedKey && resolvedKey === key);
     entry.previewStale = expired || !snapshotMatches;
     await logPreviewCacheEvent('cache-hit', entry, {
-      cacheKey: matchKey,
+      cacheKey: resolvedKey,
       expired,
       snapshotMatches,
     });
-
-    const normalizedMatch = {
-      ...match,
-      snapshot: normalizedSnapshot,
-    };
-
-    if (matchKey) {
-      applyPreviewCacheState(matchKey, normalizedMatch);
-      if (!match.snapshot && normalizedSnapshot) {
-        await writePreviewCacheEntry(matchKey, {
-          snapshot: normalizedSnapshot,
-          src: match.src,
-          cachedAt: match.cachedAt,
-        });
-      }
-      if (normalizedSnapshot && key && matchKey !== key) {
-        const migrated = { ...normalizedMatch, key };
-        applyPreviewCacheState(key, migrated);
-        await writePreviewCacheEntry(key, {
-          snapshot: normalizedSnapshot,
-          src: match.src,
-          cachedAt: match.cachedAt,
-        });
+    if (resolvedKey) {
+      const normalizedValue = {
+        ...match,
+        key: resolvedKey,
+        snapshot: effectiveSnapshot,
+      };
+      applyPreviewCacheState(resolvedKey, normalizedValue);
+      if (shouldBackfillSnapshot && effectiveSnapshot) {
+        await writePreviewCacheEntry(resolvedKey, normalizedValue);
+        persistLegacyPreviewCache();
       }
     }
   }
@@ -6472,7 +6467,8 @@ async function restoreCachedPreview(entry) {
 
 async function updatePreviewCache(entry) {
   const snapshot = serializeEntrySnapshot(entry);
-  const key = await previewCacheKey(entry, snapshot);
+  const normalizedSnapshot = normalizeSnapshot(snapshot) || snapshot;
+  const key = await previewCacheKey(entry, normalizedSnapshot);
   if (!key || !entry.previewSrc) {
     return;
   }
@@ -6480,7 +6476,7 @@ async function updatePreviewCache(entry) {
   const preferredKeys = [key, legacyKey].filter(Boolean);
   await evictSeriesPreviewCache(entry.name, preferredKeys);
   const value = {
-    snapshot,
+    snapshot: normalizedSnapshot,
     src: entry.previewSrc,
     cachedAt: Date.now(),
   };
