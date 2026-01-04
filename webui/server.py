@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
 import time
-from typing import Callable
+from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
 from modules.CleanPath import CleanPath
@@ -527,6 +527,104 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         self.tv_manager.invalidate()
         self._json_response({"status": "ok"})
 
+    def _should_backfill_episode_rating_keys(self, payload: dict[str, Any]) -> bool:
+        if not getattr(self.context.preference_parser, "use_plex", False):
+            return False
+
+        series_entries = payload.get("series")
+        if not isinstance(series_entries, list):
+            return False
+
+        for entry in series_entries:
+            config = entry.get("config") if isinstance(entry, dict) else None
+            if not isinstance(config, dict):
+                continue
+            if config.get("rating_key") not in (None, ""):
+                return True
+
+        return False
+
+    def _backfill_episode_rating_keys_async(self) -> None:
+        def _task() -> None:
+            try:
+                latest_payload = self.tv_manager.as_payload()
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.warning("Unable to load tv.yml for async episode backfill: %s", exc)
+                return
+
+            try:
+                updated_payload, updated, processed = ensure_episode_rating_keys_in_payload(
+                    self.context, latest_payload
+                )
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.warning("Unable to backfill episode rating keys asynchronously: %s", exc)
+                return
+
+            if not updated:
+                return
+
+            total_series = processed or len(updated_payload.get("series") or [])
+            logger.info(
+                "Backfilled episode rating keys asynchronously for %s of %s series",
+                updated,
+                total_series,
+            )
+
+            original_by_name = {
+                entry.get("name"): entry
+                for entry in (latest_payload.get("series") or [])
+                if isinstance(entry, dict) and entry.get("name")
+            }
+
+            for entry in updated_payload.get("series") or []:
+                name = entry.get("name")
+                if not name:
+                    continue
+
+                updated_config = entry.get("config") or {}
+                if not isinstance(updated_config, dict):
+                    continue
+
+                updated_mappings = updated_config.get("episode_rating_keys")
+                if not isinstance(updated_mappings, dict):
+                    continue
+
+                existing_config = (original_by_name.get(name, {}) or {}).get("config") or {}
+                existing_mappings = (
+                    existing_config.get("episode_rating_keys")
+                    if isinstance(existing_config, dict)
+                    else {}
+                )
+
+                for show_key, episodes in updated_mappings.items():
+                    if not isinstance(episodes, dict) or not episodes:
+                        continue
+
+                    previous = (
+                        existing_mappings.get(show_key, {})
+                        if isinstance(existing_mappings, dict)
+                        else {}
+                    )
+                    changes = {
+                        label: key
+                        for label, key in episodes.items()
+                        if str(previous.get(label)) != str(key)
+                    }
+                    if not changes:
+                        continue
+
+                    try:
+                        self.tv_manager.update_episode_rating_keys(name, show_key, changes)
+                    except Exception as exc:  # pylint: disable=broad-except
+                        logger.warning(
+                            "Unable to persist episode rating keys for %s (%s): %s",
+                            name,
+                            show_key,
+                            exc,
+                        )
+
+        Thread(target=_task, name="episode-rating-key-backfill", daemon=True).start()
+
     # HTTP verb handlers ----------------------------------------------
     def do_GET(self) -> None:  # type: ignore[override]
         parsed = urlparse(self.path)
@@ -765,6 +863,8 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 self._error(str(exc))
                 return
 
+            backfill_episode_keys = self._should_backfill_episode_rating_keys(payload)
+
             try:
                 with self.tv_manager.priority_write():
                     try:
@@ -772,21 +872,14 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     except Exception as exc:  # pylint: disable=broad-except
                         logger.warning("Unable to create backup prior to save: %s", exc)
 
-                    payload, updated, processed = ensure_episode_rating_keys_in_payload(
-                        self.context, payload
-                    )
-                    if updated:
-                        logger.info(
-                            "Backfilled episode rating keys for %s of %s series before save",
-                            updated,
-                            processed or len(payload.get("series", []) or []),
-                        )
                     self.tv_manager.write(payload)
             except Exception as exc:  # pylint: disable=broad-except
                 self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
                 return
 
             self._json_response({"status": "ok"})
+            if backfill_episode_keys:
+                self._backfill_episode_rating_keys_async()
             return
 
         if parsed.path == "/api/settings":
