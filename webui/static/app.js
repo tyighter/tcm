@@ -58,6 +58,7 @@ const LOGO_DB_STORE = 'logos';
 const MAX_PREVIEW_CACHE_ENTRIES_PER_SERIES = 1;
 const BACKGROUND_PREVIEW_REFRESH_DELAY_MS = 800;
 const PREVIEW_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 12; // 12 hours
+const CACHE_DB_OPEN_TIMEOUT_MS = 2000;
 const DEFAULT_BACKUP_DIRECTORY = '/config/backups';
 const FONT_EXTENSIONS = ['.ttf', '.otf', '.woff', '.woff2', '.ttc'];
 
@@ -5838,6 +5839,7 @@ function syncSavedEntrySnapshots() {
 
 let cacheDbPromise = null;
 let cacheDbUnavailable = false;
+let cacheDbWarningShown = false;
 
 function normalizeTimestamp(value) {
   const timestamp = Number(value);
@@ -5885,6 +5887,33 @@ function openCacheDb() {
 
   cacheDbPromise = new Promise((resolve) => {
     const request = indexedDB.open(CACHE_DB_NAME, CACHE_DB_VERSION);
+    let settled = false;
+
+    const resolveSafely = (value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(value);
+    };
+
+    const notifyCacheDbUnavailable = (message, error = null) => {
+      cacheDbUnavailable = true;
+      if (error) {
+        console.warn(message, error);
+      } else {
+        console.warn(message);
+      }
+      if (!cacheDbWarningShown) {
+        showToast('Preview caching is disabled (browser storage unavailable).', 'warning');
+        cacheDbWarningShown = true;
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      notifyCacheDbUnavailable('Timed out while opening cache database');
+      resolveSafely(null);
+    }, CACHE_DB_OPEN_TIMEOUT_MS);
 
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -5897,17 +5926,20 @@ function openCacheDb() {
     };
 
     request.onsuccess = () => {
-      resolve(request.result);
+      clearTimeout(timeoutId);
+      resolveSafely(request.result);
     };
 
     request.onerror = () => {
-      console.warn('Failed to open cache database', request.error);
-      cacheDbUnavailable = true;
-      resolve(null);
+      clearTimeout(timeoutId);
+      notifyCacheDbUnavailable('Failed to open cache database', request.error);
+      resolveSafely(null);
     };
 
     request.onblocked = () => {
-      console.warn('Cache database open request is blocked');
+      clearTimeout(timeoutId);
+      notifyCacheDbUnavailable('Cache database open request is blocked');
+      resolveSafely(null);
     };
   });
 
