@@ -7,11 +7,12 @@ import re
 import shutil
 import sys
 import tempfile
+from contextlib import contextmanager
 from io import StringIO
 from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
-from threading import Event, Thread
+from threading import Event, RLock, Thread
 from typing import Any
 
 from modules.CleanPath import CleanPath
@@ -42,6 +43,17 @@ class TvYamlManager:
         self._yaml.indent(sequence=4, offset=2)
         self._yaml.preserve_quotes = True
         self._data: CommentedMap[str, Any] | None = None
+        self._write_lock = RLock()
+
+    @contextmanager
+    def priority_write(self):
+        """Reserve exclusive access for high-priority writes."""
+
+        self._write_lock.acquire()
+        try:
+            yield
+        finally:
+            self._write_lock.release()
 
     # ------------------------------------------------------------------
     # Public helpers
@@ -164,8 +176,7 @@ class TvYamlManager:
 
         current["series"] = series_map
 
-        self._atomic_write(current)
-        self._data = current
+        self._write_locked(current)
 
     def backup_daily(self, *, now: datetime | None = None, keep: int = 7) -> Path | None:
         """Create a dated backup of the tv.yml file and prune old copies."""
@@ -190,25 +201,26 @@ class TvYamlManager:
         if not self.file_path.exists():
             return None
 
-        backup_dir = self._backup_directory()
-        backup_dir.mkdir(parents=True, exist_ok=True)
+        with self.priority_write():
+            backup_dir = self._backup_directory()
+            backup_dir.mkdir(parents=True, exist_ok=True)
 
-        target = backup_dir / f"{self.file_path.stem}-latest{self.file_path.suffix}"
-        try:
-            shutil.copy2(self.file_path, target)
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.warning("Unable to create backup via copy2: %s; retrying with replace", exc)
-            temp_file: Path | None = None
+            target = backup_dir / f"{self.file_path.stem}-latest{self.file_path.suffix}"
             try:
-                with self.file_path.open("rb") as source, tempfile.NamedTemporaryFile(
-                    dir=backup_dir, delete=False
-                ) as destination:
-                    shutil.copyfileobj(source, destination)
-                    temp_file = Path(destination.name)
-                temp_file.replace(target)
-            finally:
-                if temp_file is not None:
-                    temp_file.unlink(missing_ok=True)
+                shutil.copy2(self.file_path, target)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.warning("Unable to create backup via copy2: %s; retrying with replace", exc)
+                temp_file: Path | None = None
+                try:
+                    with self.file_path.open("rb") as source, tempfile.NamedTemporaryFile(
+                        dir=backup_dir, delete=False
+                    ) as destination:
+                        shutil.copyfileobj(source, destination)
+                        temp_file = Path(destination.name)
+                    temp_file.replace(target)
+                finally:
+                    if temp_file is not None:
+                        temp_file.unlink(missing_ok=True)
 
         return target
 
@@ -302,9 +314,16 @@ class TvYamlManager:
 
         series_entries[series_name] = _to_commented(config)
 
-        self._atomic_write(tv_data)
-        self._data = tv_data
+        self._write_locked(tv_data)
         return True
+
+    def _write_locked(self, data: CommentedMap, *, update_cache: bool = True) -> None:
+        """Write YAML content to disk while blocking competing operations."""
+
+        with self._write_lock:
+            self._atomic_write(data)
+            if update_cache:
+                self._data = data
 
     def _atomic_write(self, data: CommentedMap) -> None:
         """Write YAML data to disk atomically to avoid partial files."""
