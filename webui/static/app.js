@@ -7,7 +7,6 @@ const state = {
   pendingEntryId: null,
   collapsedEntries: new Set(),
   lastSavedEntries: new Map(),
-  previewCache: {},
   logoCache: {},
   cardTypeExtras: {},
   logoBackgrounds: new Map(),
@@ -17,7 +16,6 @@ const state = {
   },
   settings: {
     series_sync_interval_seconds: 45,
-    preview_cache_sweep_interval_seconds: 900,
     preferences: {},
     tautulli: {
       url: '',
@@ -49,16 +47,11 @@ toastContainer.className = 'toast-container';
 document.body.appendChild(toastContainer);
 
 const CLIENT_LOG_ENDPOINT = '/api/client-log';
-const PREVIEW_CACHE_STORAGE_KEY = 'tcm-preview-cache';
 const LOGO_BACKGROUND_STORAGE_KEY = 'tcm-logo-backgrounds';
-const CACHE_DB_NAME = 'tcm-preview-cache';
+const CACHE_DB_NAME = 'tcm-cache';
 const CACHE_DB_VERSION = 2;
-const PREVIEW_DB_STORE = 'previews';
-const LOGO_DB_STORE = 'logos';
-const MAX_PREVIEW_CACHE_ENTRIES_PER_SERIES = 1;
-const BACKGROUND_PREVIEW_REFRESH_DELAY_MS = 800;
-const PREVIEW_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 12; // 12 hours
 const CACHE_DB_OPEN_TIMEOUT_MS = 2000;
+const LOGO_DB_STORE = 'logos';
 const DEFAULT_BACKUP_DIRECTORY = '/config/backups';
 const FONT_EXTENSIONS = ['.ttf', '.otf', '.woff', '.woff2', '.ttc'];
 
@@ -467,24 +460,11 @@ function logToServer(level, message, context = {}) {
   }
 }
 
-async function logPreviewCacheEvent(event, entry, context = {}) {
-  const cacheKey = await previewCacheKey(entry);
-  logToServer('INFO', `Preview cache: ${event}`, {
-    entryId: entry?.id,
-    name: entry?.name,
-    cacheKey,
-    previewEpisode: resolvePreviewEpisode(entry),
-    ...context,
-  });
-}
-
 // -----------------------------------------------------------------------------
 // Initialization
 // -----------------------------------------------------------------------------
 async function init() {
   try {
-    // Ensure the preview cache is ready before observers start requesting images.
-    await loadPreviewCache();
     await loadLogoCache();
     loadLogoBackgroundPreferences();
     await loadMetadata();
@@ -493,7 +473,7 @@ async function init() {
     registerEvents();
     setSearchVisibility(false);
     renderEntries();
-    requestEntryPreviews(state.entries, { preferExisting: true });
+    requestEntryPreviews(state.entries);
   } catch (error) {
     showToast(`Failed to load configuration: ${error.message}`, 'error');
   }
@@ -619,8 +599,9 @@ function initializeEntryPreviewState(entry) {
   entry.previewEpisodeOptions = entry.previewEpisodeOptions || null;
   entry.previewEpisodeStatus = entry.previewEpisodeStatus || 'idle';
   entry.previewEpisodeError = entry.previewEpisodeError || null;
-  entry.previewStale = false;
-  entry.previewRefreshing = false;
+  entry.previewLoading = false;
+  entry.previewSrc = entry.previewSrc || null;
+  entry.previewError = entry.previewError || null;
 }
 
 async function loadConfiguration() {
@@ -646,14 +627,11 @@ async function loadConfiguration() {
   const stalePreviews = [];
   await Promise.all(
     state.entries.map(async (entry) => {
-      await Promise.all([restoreCachedLogo(entry), restoreCachedPreview(entry)]);
-      if (entry.previewStale) {
-        stalePreviews.push(entry);
-      }
+      await restoreCachedLogo(entry);
+      stalePreviews.push(entry);
     })
   );
-  await warmPreviewCache(stalePreviews);
-  refreshStalePreviewCache(state.entries);
+  requestEntryPreviews(stalePreviews);
 }
 
 async function saveSettings(payload) {
@@ -1218,10 +1196,9 @@ function renderEntry(entry) {
   };
 
   previewEpisodeSelect.addEventListener('change', async () => {
-    const previewEpisode = syncPreviewEpisodeConfig(entry, previewEpisodeSelect.value);
-    const preferCachedPreview = previewEpisode === 'random';
+    syncPreviewEpisodeConfig(entry, previewEpisodeSelect.value);
     await invalidateEntryPreview(entry);
-    loadEntryPreview(entry, { preferExisting: preferCachedPreview });
+    loadEntryPreview(entry);
   });
 
   previewEpisodeControl.append(
@@ -1426,132 +1403,48 @@ function renderEntry(entry) {
 
 let previewObserver = null;
 const previewLoadOptions = new WeakMap();
-const previewRefreshTimers = new Map();
-const stalePreviewRefreshQueue = [];
-const stalePreviewRefreshIds = new Set();
-const stalePreviewRefreshOptions = new Map();
-let stalePreviewRefreshTimer = null;
-let stalePreviewRefreshActive = false;
 
-function cancelScheduledPreviewRefresh(entry) {
-  if (!entry?.id) {
-    return;
-  }
-  const pending = previewRefreshTimers.get(entry.id);
-  if (pending) {
-    clearTimeout(pending);
-    previewRefreshTimers.delete(entry.id);
-  }
-}
-
-function schedulePreviewRefresh(entry, { preferExisting = true, delay = 650 } = {}) {
-  if (!entry?.id) {
-    return;
-  }
-  cancelScheduledPreviewRefresh(entry);
-  const timer = setTimeout(async () => {
-    previewRefreshTimers.delete(entry.id);
-    await invalidateEntryPreview(entry);
-    entry.previewLoadingStrategy = preferExisting ? 'load' : 'generate';
-    updateEntryPreview(entry);
-    requestEntryPreviews([entry], { preferExisting });
-  }, Math.max(0, delay));
-  previewRefreshTimers.set(entry.id, timer);
-}
-
-function scheduleStalePreviewQueue() {
-  if (stalePreviewRefreshActive || stalePreviewRefreshTimer) {
-    return;
-  }
-  stalePreviewRefreshTimer = setTimeout(
-    processStalePreviewQueue,
-    BACKGROUND_PREVIEW_REFRESH_DELAY_MS
-  );
-}
-
-async function processStalePreviewQueue() {
-  stalePreviewRefreshTimer = null;
-  const entry = stalePreviewRefreshQueue.shift();
+function previewUrlForEntry(entry, { cacheBust = true } = {}) {
   if (!entry) {
-    return;
+    return null;
   }
 
-  stalePreviewRefreshIds.delete(entry.id);
-  const { preferExisting = true } = stalePreviewRefreshOptions.get(entry.id) || {};
-  stalePreviewRefreshOptions.delete(entry.id);
-  stalePreviewRefreshActive = true;
-
-  try {
-    if (entry.previewStale) {
-      entry.previewLoadingStrategy = preferExisting ? 'load' : 'generate';
-      entry.previewRefreshing = entry.previewRefreshing || Boolean(entry.previewSrc);
-      updateEntryPreview(entry);
-      await loadEntryPreview(entry, { preferExisting });
-    }
-  } finally {
-    stalePreviewRefreshActive = false;
-    if (stalePreviewRefreshQueue.length) {
-      stalePreviewRefreshTimer = setTimeout(
-        processStalePreviewQueue,
-        BACKGROUND_PREVIEW_REFRESH_DELAY_MS
-      );
-    }
-  }
-}
-
-function enqueueStalePreviewRefresh(entry, options = {}) {
-  if (!entry?.id || entry.previewLoading || !entry.previewStale) {
-    return;
+  const providedUrl =
+    entry.previewUrl || entry.preview_url || entry.config?.previewUrl || entry.config?.preview_url;
+  if (providedUrl) {
+    const separator = providedUrl.includes('?') ? '&' : '?';
+    return cacheBust ? `${providedUrl}${separator}_=${Date.now()}` : providedUrl;
   }
 
-  const { preferExisting = true } = options;
-
-  stalePreviewRefreshOptions.set(entry.id, { preferExisting });
-  if (!stalePreviewRefreshIds.has(entry.id)) {
-    stalePreviewRefreshQueue.push(entry);
-    stalePreviewRefreshIds.add(entry.id);
+  const params = new URLSearchParams();
+  const slug = resolveEntrySlug(entry);
+  if (slug) {
+    params.set('slug', slug);
   }
-  scheduleStalePreviewQueue();
-}
-
-function refreshStalePreviewCache(entries = state.entries) {
-  if (!Array.isArray(entries)) {
-    return;
+  if (entry?.name) {
+    params.set('name', entry.name);
   }
 
-  entries
-    .filter((entry) => entry && entry.previewStale)
-    .forEach((entry) => enqueueStalePreviewRefresh(entry));
-}
-
-async function warmPreviewCache(entries = [], { concurrency = 3, preferExisting = true } = {}) {
-  const queue = (entries || []).filter(
-    (entry) => entry?.id && entry.previewStale && !entry.previewLoading
-  );
-  if (!queue.length) {
-    return;
+  const previewEpisode = resolvePreviewEpisode(entry);
+  if (previewEpisode && previewEpisode !== 'random') {
+    params.set('previewEpisode', previewEpisode);
   }
 
-  const workerCount = Math.max(1, Math.min(concurrency, queue.length));
-  const workers = Array.from({ length: workerCount }, async () => {
-    while (queue.length) {
-      const entry = queue.shift();
-      if (!entry) {
-        continue;
-      }
+  const season = previewSeasonForEntry(entry, previewEpisode);
+  if (season || season === 0) {
+    params.set('season', season);
+  }
 
-      try {
-        entry.previewLoadingStrategy = preferExisting ? 'load' : 'generate';
-        entry.previewRefreshing = entry.previewRefreshing || Boolean(entry.previewSrc);
-        updateEntryPreview(entry);
-        await loadEntryPreview(entry, { preferExisting });
-      } catch (error) {
-        console.warn('Failed to warm preview cache', { name: entry?.name, error });
-      }
-    }
-  });
+  if (cacheBust) {
+    params.set('_', Date.now().toString());
+  }
 
-  await Promise.all(workers);
+  const query = params.toString();
+  if (!query) {
+    return null;
+  }
+
+  return `/api/preview/static?${query}`;
 }
 
 function updateEntryPreview(entry) {
@@ -1566,14 +1459,18 @@ function updateEntryPreview(entry) {
   const placeholder = wrapper.querySelector('.entry-preview__placeholder');
 
   const hasPreview = Boolean(entry.previewSrc);
-  const isRefreshing = Boolean(entry.previewRefreshing);
+  const isLoading = Boolean(entry.previewLoading);
   const hasError = Boolean(entry.previewError);
-  const isGenerating = entry.previewLoadingStrategy === 'generate';
   let statusText = '';
 
-  wrapper.classList.remove('entry-preview--error', 'entry-preview--loaded');
+  wrapper.classList.remove(
+    'entry-preview--error',
+    'entry-preview--loaded',
+    'entry-preview--refreshing',
+    'entry-preview--loading'
+  );
   wrapper.dataset.previewSrc = entry.previewSrc || '';
-  wrapper.classList.toggle('entry-preview--refreshing', isRefreshing);
+  wrapper.classList.toggle('entry-preview--loading', isLoading);
 
   if (image) {
     if (hasPreview) {
@@ -1590,10 +1487,8 @@ function updateEntryPreview(entry) {
   if (hasError) {
     statusText = entry.previewError;
     wrapper.classList.add('entry-preview--error');
-  } else if (!hasPreview) {
-    statusText = isGenerating ? 'Generating preview...' : 'Loading preview...';
-  } else if (isRefreshing) {
-    statusText = isGenerating ? 'Regenerating preview...' : 'Refreshing preview...';
+  } else if (!hasPreview || isLoading) {
+    statusText = 'Loading preview...';
   }
 
   if (placeholder) {
@@ -1619,7 +1514,7 @@ function ensurePreviewObserver() {
         const options = previewLoadOptions.get(target) || {};
 
         if (match) {
-          void loadEntryPreview(match, options);
+          void loadEntryPreview(match);
         }
 
         previewLoadOptions.delete(target);
@@ -1637,12 +1532,7 @@ function observeEntryPreview(entry, options = {}) {
     return;
   }
 
-  if (entry.previewStale) {
-    enqueueStalePreviewRefresh(entry, options);
-    return;
-  }
-
-  if (entry.previewSrc && !entry.previewStale) {
+  if (entry.previewSrc) {
     return;
   }
 
@@ -1674,190 +1564,61 @@ function previewSeasonForEntry(entry, previewEpisodeKey) {
   return null;
 }
 
-async function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result?.toString() || null);
-    reader.onerror = () => reject(new Error('Unable to read preview image'));
-    reader.readAsDataURL(blob);
-  });
-}
-
-async function fetchStaticPreview(entry, options = {}) {
-  const { season = null } = options;
-  const slug = resolveEntrySlug(entry);
-  const params = new URLSearchParams();
-  if (slug) {
-    params.set('slug', slug);
-  }
-  if (entry?.name) {
-    params.set('name', entry.name);
-  }
-  if (season || season === 0) {
-    params.set('season', season);
-  }
-
-  if ([...params.keys()].length === 0) {
-    return null;
-  }
-
-  params.set('_', Date.now().toString());
-
-  try {
-    const response = await fetch(`/api/preview/static?${params.toString()}`, {
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const blob = await response.blob();
-    return await blobToDataUrl(blob);
-  } catch (error) {
-    console.warn('Static preview lookup failed', error);
-    return null;
-  }
-}
-
 async function invalidateEntryPreview(entry) {
-  cancelScheduledPreviewRefresh(entry);
+  if (!entry) {
+    return;
+  }
   entry.previewError = null;
+  entry.previewSrc = null;
   entry.previewLoading = false;
-  entry.previewLoadingStrategy = undefined;
-  entry.previewStale = true;
-  entry.previewRefreshing = Boolean(entry.previewSrc);
-  await logPreviewCacheEvent('invalidate-preview', entry, {
-    hasPreview: Boolean(entry.previewSrc),
-  });
-  await clearPreviewCacheEntry(entry);
   updateEntryPreview(entry);
   observeEntryPreview(entry);
 }
 
-async function loadEntryPreview(entry, options = {}) {
-  const { preferExisting = true } = options;
-  if (
-    !entry ||
-    entry.previewLoading
-  ) {
+async function loadEntryPreview(entry) {
+  if (!entry || entry.previewLoading) {
     return;
   }
 
-  const previewEpisode =
-    entry.previewEpisode && entry.previewEpisode !== 'random'
-      ? entry.previewEpisode
-      : null;
-  const previewSeason = previewSeasonForEntry(entry, previewEpisode);
-  const allowCachedPreview = preferExisting;
-  await logPreviewCacheEvent('request-entry-preview', entry, {
-    preferExisting,
-    previewEpisode: previewEpisode || 'random',
-    allowCachedPreview,
-  });
+  const requestId = (entry.previewRequestId || 0) + 1;
+  entry.previewRequestId = requestId;
+  entry.previewLoading = true;
+  entry.previewError = null;
+  updateEntryPreview(entry);
 
-  if (!entry.previewSrc && allowCachedPreview) {
-    await restoreCachedPreview(entry);
-  }
-
-  if (entry.previewSrc && !entry.previewStale && allowCachedPreview) {
+  const src = previewUrlForEntry(entry);
+  if (!src) {
+    entry.previewError = 'Preview unavailable';
+    entry.previewLoading = false;
     updateEntryPreview(entry);
     return;
   }
 
-  entry.previewLoading = true;
-  entry.previewLoadingStrategy = allowCachedPreview ? 'load' : 'generate';
-  const requestId = (entry.previewRequestId || 0) + 1;
-  entry.previewRequestId = requestId;
-  entry.previewError = null;
-  updateEntryPreview(entry);
-
-  try {
-    if (allowCachedPreview) {
-      const staticPreview = await fetchStaticPreview(entry, { season: previewSeason });
-      if (entry.previewRequestId === requestId && staticPreview) {
-        entry.previewSrc = staticPreview;
-        entry.previewError = null;
-        entry.previewLoading = false;
-        entry.previewLoadingStrategy = undefined;
-        entry.previewRefreshing = false;
-        await updatePreviewCache(entry);
-        await logPreviewCacheEvent('static-preview-hit', entry, {
-          previewEpisode: previewEpisode || 'random',
-        });
-        updateEntryPreview(entry);
-        return;
-      }
-    }
-  } catch (error) {
-    console.warn('Static preview unavailable', error);
-  }
-
-  try {
-    const response = await fetch('/api/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: entry.name,
-        slug: resolveEntrySlug(entry),
-        season: previewSeason,
-        config: entry.config,
-        preferExisting: allowCachedPreview,
-        previewEpisode,
-      }),
-    });
-
-    if (!response.ok) {
-      const message = await response.text();
-      throw new Error(message || 'Preview request failed');
-    }
-
-    const blob = await response.blob();
-    const dataUrl = await blobToDataUrl(blob);
-    if (!dataUrl) {
-      throw new Error('Preview payload was missing image data');
-    }
-
-    if (entry.previewRequestId === requestId) {
-      entry.previewSrc = dataUrl;
-      entry.previewRefreshing = false;
-      await updatePreviewCache(entry);
-      await logPreviewCacheEvent('preview-generated', entry, {
-        previewEpisode: previewEpisode || 'random',
-        strategy: allowCachedPreview ? 'load-or-generate' : 'generate',
-      });
-    }
-  } catch (error) {
-    if (entry.previewRequestId === requestId) {
-      entry.previewError = error.message || 'Preview unavailable';
-      clientLog('preview-generation-failed', {
-        event: 'preview-generation-failed',
-        name: entry.name,
-        error: entry.previewError,
-      });
-      await logPreviewCacheEvent('preview-error', entry, {
-        previewEpisode: previewEpisode || 'random',
-        message: entry.previewError,
-      });
-    }
-  } finally {
-    if (entry.previewRequestId === requestId) {
-      entry.previewLoading = false;
-      entry.previewLoadingStrategy = undefined;
-      entry.previewRefreshing = false;
-      updateEntryPreview(entry);
-    }
-  }
-}
-
-function requestEntryPreviews(entries = state.entries, options = {}) {
-  entries.forEach((entry) => {
-    if (entry?.previewStale && !entry.previewLoading) {
-      enqueueStalePreviewRefresh(entry, options);
+  const image = new Image();
+  image.onload = () => {
+    if (entry.previewRequestId !== requestId) {
       return;
     }
+    entry.previewSrc = src;
+    entry.previewLoading = false;
+    entry.previewError = null;
+    updateEntryPreview(entry);
+  };
+  image.onerror = () => {
+    if (entry.previewRequestId !== requestId) {
+      return;
+    }
+    entry.previewError = 'Preview unavailable';
+    entry.previewLoading = false;
+    updateEntryPreview(entry);
+  };
 
-    observeEntryPreview(entry, options);
+  image.src = src;
+}
+
+function requestEntryPreviews(entries = state.entries) {
+  entries.forEach((entry) => {
+    observeEntryPreview(entry);
   });
 }
 
@@ -4529,10 +4290,10 @@ async function uploadFont(file, targetDirectory) {
 }
 
 async function openPreview(entry) {
-  const modal = buildModal('Generating preview');
+  const modal = buildModal('Preview');
   addFloatingCloseButton(modal, 'Close preview dialog');
   const message = document.createElement('p');
-  message.textContent = 'Creating preview, please wait...';
+  message.textContent = 'Loading preview...';
   modal.content.appendChild(message);
 
   const previewEpisode =
@@ -4542,61 +4303,32 @@ async function openPreview(entry) {
 
   const previewSeason = previewSeasonForEntry(entry, previewEpisode);
 
-  try {
-    const response = await fetch('/api/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: entry.name,
-        slug: resolveEntrySlug(entry),
-        season: previewSeason,
-        config: entry.config,
-        force: true,
-        preferExisting: false,
-        previewEpisode,
-      }),
-    });
+  const previewUrl = previewUrlForEntry(
+    { ...entry, previewEpisode, previewUrl: entry.previewUrl },
+    { cacheBust: true }
+  );
 
-    if (!response.ok) {
-      const message = await response.text();
-      throw new Error(message || 'Preview failed');
-    }
-
-    const blob = await response.blob();
-    const dataUrl = await blobToDataUrl(blob);
-
-    modal.content.innerHTML = '';
-    const img = document.createElement('img');
-    img.className = 'preview-image';
-    img.src = dataUrl;
-    entry.previewSrc = img.src;
-    entry.previewError = null;
-    await updatePreviewCache(entry);
-    updateEntryPreview(entry);
-    modal.content.appendChild(img);
-  } catch (error) {
-    console.warn('Preview generation failed, attempting static preview', error);
-    try {
-      const staticPreview = await fetchStaticPreview(entry, { season: previewSeason });
-      if (staticPreview) {
-        modal.content.innerHTML = '';
-        const img = document.createElement('img');
-        img.className = 'preview-image';
-        img.src = staticPreview;
-        entry.previewSrc = img.src;
-        entry.previewError = null;
-        await updatePreviewCache(entry);
-        updateEntryPreview(entry);
-        modal.content.appendChild(img);
-        return;
-      }
-    } catch (staticError) {
-      console.warn('Static preview unavailable', staticError);
-    }
-
-    modal.content.innerHTML = '';
-    modal.content.textContent = error.message;
+  if (!previewUrl) {
+    modal.content.textContent = 'Preview unavailable';
+    modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
+    return;
   }
+
+  const img = document.createElement('img');
+  img.className = 'preview-image';
+  img.alt = `${entry.name} preview`;
+  img.onload = () => {
+    modal.content.innerHTML = '';
+    modal.content.appendChild(img);
+    entry.previewSrc = previewUrl;
+    entry.previewError = null;
+    entry.previewLoading = false;
+    updateEntryPreview(entry);
+  };
+  img.onerror = () => {
+    modal.content.textContent = 'Preview unavailable';
+  };
+  img.src = previewUrl;
 
   modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
 }
@@ -5208,7 +4940,7 @@ function openSettingsModal() {
       onRestore: async () => {
         await loadConfiguration();
         renderEntries();
-        requestEntryPreviews(state.entries, { preferExisting: true });
+        requestEntryPreviews(state.entries);
         closeModal(modal.element);
       },
     });
@@ -5219,7 +4951,6 @@ function openSettingsModal() {
 
   const tautulli = state.settings?.tautulli || {};
   const seriesSyncInterval = Number(state.settings?.series_sync_interval_seconds);
-  const previewCacheSweepInterval = Number(state.settings?.preview_cache_sweep_interval_seconds);
   const preferences = state.settings?.preferences || {};
 
   const quickActions = document.createElement('div');
@@ -5355,22 +5086,6 @@ function openSettingsModal() {
     : 45;
   syncField.append(syncLabel, syncInput);
   syncControls.append(syncField);
-
-  const sweepField = document.createElement('label');
-  sweepField.className = 'modal-controls__field';
-  const sweepLabel = document.createElement('span');
-  sweepLabel.className = 'modal-controls__label';
-  sweepLabel.textContent = 'Preview cache sweep interval (seconds)';
-  const sweepInput = document.createElement('input');
-  sweepInput.type = 'number';
-  sweepInput.min = '0';
-  sweepInput.step = '1';
-  sweepInput.inputMode = 'numeric';
-  sweepInput.value = Number.isFinite(previewCacheSweepInterval)
-    ? Math.max(0, previewCacheSweepInterval)
-    : 900;
-  sweepField.append(sweepLabel, sweepInput);
-  syncControls.append(sweepField);
   syncSection.append(syncHeader, syncControls);
 
   const preferencesSection = document.createElement('div');
@@ -5506,14 +5221,9 @@ function openSettingsModal() {
     const syncIntervalSeconds = Number.isFinite(parsedSyncInterval)
       ? Math.max(0, parsedSyncInterval)
       : 45;
-    const parsedSweepInterval = Number(sweepInput.value);
-    const sweepIntervalSeconds = Number.isFinite(parsedSweepInterval)
-      ? Math.max(0, parsedSweepInterval)
-      : 900;
     try {
       await saveSettings({
         series_sync_interval_seconds: syncIntervalSeconds,
-        preview_cache_sweep_interval_seconds: sweepIntervalSeconds,
         tautulli: {
           url: urlInput.value,
           api_key: keyInput.value,
@@ -5845,46 +5555,6 @@ let cacheDbPromise = null;
 let cacheDbUnavailable = false;
 let cacheDbWarningShown = false;
 
-function normalizeTimestamp(value) {
-  const timestamp = Number(value);
-  if (!Number.isFinite(timestamp) || timestamp <= 0) {
-    return null;
-  }
-  const millisecondsThreshold = 1e11;
-  const normalized =
-    timestamp < millisecondsThreshold ? timestamp * 1000 : timestamp;
-  return normalized;
-}
-
-function isPreviewCacheExpired(cachedAt) {
-  const timestamp = normalizeTimestamp(cachedAt);
-  if (!timestamp) {
-    return true;
-  }
-  return Date.now() - timestamp > PREVIEW_CACHE_MAX_AGE_MS;
-}
-
-function loadLegacyPreviewCache() {
-  try {
-    const cached = localStorage.getItem(PREVIEW_CACHE_STORAGE_KEY);
-    return cached ? JSON.parse(cached) : {};
-  } catch (error) {
-    console.warn('Failed to load legacy preview cache', error);
-    return {};
-  }
-}
-
-function persistLegacyPreviewCache() {
-  try {
-    localStorage.setItem(
-      PREVIEW_CACHE_STORAGE_KEY,
-      JSON.stringify(state.previewCache)
-    );
-  } catch (error) {
-    console.warn('Failed to persist legacy preview cache', error);
-  }
-}
-
 function openCacheDb() {
   if (cacheDbUnavailable || typeof indexedDB === 'undefined') {
     cacheDbUnavailable = true;
@@ -5915,7 +5585,7 @@ function openCacheDb() {
         console.warn(message);
       }
       if (!cacheDbWarningShown) {
-        showToast('Preview caching is disabled (browser storage unavailable).', 'warning');
+        showToast('Image caching is disabled (browser storage unavailable).', 'warning');
         cacheDbWarningShown = true;
       }
     };
@@ -5927,9 +5597,6 @@ function openCacheDb() {
 
     request.onupgradeneeded = () => {
       const db = request.result;
-      if (!db.objectStoreNames.contains(PREVIEW_DB_STORE)) {
-        db.createObjectStore(PREVIEW_DB_STORE, { keyPath: 'key' });
-      }
       if (!db.objectStoreNames.contains(LOGO_DB_STORE)) {
         db.createObjectStore(LOGO_DB_STORE, { keyPath: 'key' });
       }
@@ -5975,167 +5642,6 @@ async function runCacheDbRequest(storeName, mode, executor) {
       reject(error);
     }
   });
-}
-
-async function readAllPreviewCacheEntries() {
-  try {
-    const entries = await runCacheDbRequest(PREVIEW_DB_STORE, 'readonly', (store) =>
-      store.getAll()
-    );
-    return Array.isArray(entries) ? entries : [];
-  } catch (error) {
-    console.warn('Failed to load previews from IndexedDB', error);
-    return [];
-  }
-}
-
-async function readPreviewCacheEntry(key) {
-  if (!key) {
-    return null;
-  }
-
-  if (state.previewCache[key]) {
-    return state.previewCache[key];
-  }
-
-  try {
-    const entry = await runCacheDbRequest(PREVIEW_DB_STORE, 'readonly', (store) =>
-      store.get(key)
-    );
-    const normalized = normalizePreviewCacheValue(key, entry);
-    if (normalized) {
-      applyPreviewCacheState(key, normalized);
-    }
-    return normalized || null;
-  } catch (error) {
-    console.warn('Failed to read preview cache entry', error);
-    return null;
-  }
-}
-
-async function writePreviewCacheEntry(key, value) {
-  if (!key || !value) {
-    return false;
-  }
-  try {
-    await runCacheDbRequest(PREVIEW_DB_STORE, 'readwrite', (store) =>
-      store.put({ ...value, key })
-    );
-    return true;
-  } catch (error) {
-    console.warn('Failed to persist preview cache to IndexedDB', error);
-    return false;
-  }
-}
-
-async function deletePreviewCacheEntry(key) {
-  if (!key) {
-    return;
-  }
-  try {
-    await runCacheDbRequest(PREVIEW_DB_STORE, 'readwrite', (store) =>
-      store.delete(key)
-    );
-  } catch (error) {
-    console.warn('Failed to delete preview cache entry', error);
-  }
-}
-
-function normalizePreviewCacheValue(key, value) {
-  if (!value || !value.src) {
-    return null;
-  }
-  const normalizedSnapshot = normalizeSnapshot(value.snapshot);
-  return {
-    key,
-    snapshot: normalizedSnapshot,
-    src: value.src,
-    cachedAt: normalizeTimestamp(value.cachedAt ?? value.cached_at),
-  };
-}
-
-function applyPreviewCacheState(key, normalized) {
-  if (!key || !normalized?.src) {
-    return;
-  }
-
-  const existing = state.previewCache[key];
-  const existingTimestamp = normalizeTimestamp(existing?.cachedAt);
-  const normalizedTimestamp = normalizeTimestamp(normalized.cachedAt);
-
-  if (
-    !existing ||
-    (normalizedTimestamp !== null &&
-      (existingTimestamp === null || normalizedTimestamp >= existingTimestamp))
-  ) {
-    state.previewCache[key] = {
-      snapshot: normalized.snapshot,
-      src: normalized.src,
-      cachedAt: normalized.cachedAt,
-    };
-  }
-}
-
-async function migratePreviewCacheEntry(
-  key,
-  value,
-  migrationTasks,
-  options = { deleteOriginal: false, persistWhenUnchanged: false }
-) {
-  if (!key || !value) {
-    return;
-  }
-
-  const normalized = normalizePreviewCacheValue(key, value);
-  if (!normalized) {
-    return;
-  }
-
-  const migratedKey = await previewCacheKeyFromSnapshot(normalized.snapshot);
-  const targetKey = migratedKey || key;
-
-  applyPreviewCacheState(targetKey, normalized);
-
-  if (targetKey !== key) {
-    migrationTasks.push(writePreviewCacheEntry(targetKey, normalized));
-    if (options?.deleteOriginal) {
-      migrationTasks.push(deletePreviewCacheEntry(key));
-    }
-    return;
-  }
-
-  if (normalized.snapshot !== value.snapshot || options?.persistWhenUnchanged) {
-    migrationTasks.push(writePreviewCacheEntry(targetKey, normalized));
-  }
-}
-
-async function loadPreviewCache() {
-  state.previewCache = {};
-
-  const migrationTasks = [];
-  const dbEntries = await readAllPreviewCacheEntries();
-  await Promise.all(
-    dbEntries.map((entry) =>
-      migratePreviewCacheEntry(entry?.key, entry, migrationTasks, { deleteOriginal: true })
-    )
-  );
-
-  const legacyCache = loadLegacyPreviewCache();
-  await Promise.all(
-    Object.entries(legacyCache).map(([key, value]) =>
-      migratePreviewCacheEntry(key, value, migrationTasks, {
-        deleteOriginal: true,
-        persistWhenUnchanged: true,
-      })
-    )
-  );
-
-  if (migrationTasks.length) {
-    await Promise.allSettled(migrationTasks);
-  }
-
-  // Keep the legacy cache in sync for fallback if IndexedDB is unavailable.
-  persistLegacyPreviewCache();
 }
 
 async function readAllLogoCacheEntries() {
@@ -6316,138 +5822,6 @@ async function clearLogoCacheEntry(entry) {
   await Promise.all(uniqueKeys.map((key) => deleteLogoCacheEntry(key)));
 }
 
-const previewSnapshotHashCache = new Map();
-
-function bufferToHex(buffer) {
-  return Array.from(new Uint8Array(buffer))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-async function digestPreviewSnapshot(snapshot) {
-  if (!snapshot) {
-    return null;
-  }
-
-  if (previewSnapshotHashCache.has(snapshot)) {
-    return previewSnapshotHashCache.get(snapshot);
-  }
-
-  const compute = (async () => {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(snapshot);
-    if (globalThis.crypto?.subtle?.digest) {
-      const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', data);
-      return bufferToHex(hashBuffer);
-    }
-    return hashString(snapshot);
-  })();
-
-  previewSnapshotHashCache.set(snapshot, compute);
-
-  try {
-    return await compute;
-  } catch (error) {
-    console.warn('Failed to hash preview snapshot', error);
-    previewSnapshotHashCache.delete(snapshot);
-    try {
-      return hashString(snapshot);
-    } catch (fallbackError) {
-      console.warn('Failed to compute fallback preview hash', fallbackError);
-      return null;
-    }
-  }
-}
-
-async function previewCacheKeyFromSnapshot(snapshot) {
-  const normalizedSnapshot = normalizeSnapshot(snapshot);
-  if (!normalizedSnapshot) {
-    return null;
-  }
-
-  const name = resolveSnapshotName(normalizedSnapshot);
-  if (!name) {
-    return null;
-  }
-
-  const digest = await digestPreviewSnapshot(normalizedSnapshot);
-  return digest ? `${name}:${digest}` : null;
-}
-
-async function previewCacheKey(entry, snapshotOverride = null) {
-  if (!entry?.name) {
-    return null;
-  }
-  const snapshot = snapshotOverride || serializeEntrySnapshot(entry);
-  return previewCacheKeyFromSnapshot(snapshot);
-}
-
-function legacyPreviewCacheKey(entry) {
-  return entry?.name || null;
-}
-
-function isSeriesPreviewKey(seriesName, key) {
-  return (
-    Boolean(seriesName) &&
-    Boolean(key) &&
-    (key === seriesName || key.startsWith(`${seriesName}:`))
-  );
-}
-
-function collectSeriesPreviewKeys(seriesName, preferredKeys = []) {
-  if (!seriesName) {
-    return [];
-  }
-
-  const seen = new Set();
-  const orderedKeys = [];
-
-  preferredKeys
-    .filter(Boolean)
-    .forEach((key) => {
-      if (isSeriesPreviewKey(seriesName, key) && !seen.has(key)) {
-        seen.add(key);
-        orderedKeys.push(key);
-      }
-    });
-
-  const resolvedKeys = Object.keys(state.previewCache || {})
-    .filter((key) => isSeriesPreviewKey(seriesName, key) && !seen.has(key))
-    .map((key) => ({
-      key,
-      cachedAt:
-        normalizeTimestamp(state.previewCache?.[key]?.cachedAt) ??
-        Number.NEGATIVE_INFINITY,
-    }))
-    .sort((a, b) => (b.cachedAt || 0) - (a.cachedAt || 0))
-    .map((entry) => entry.key);
-
-  return orderedKeys.concat(resolvedKeys);
-}
-
-async function evictSeriesPreviewCache(seriesName, preferredKeys = []) {
-  const seriesKeys = collectSeriesPreviewKeys(seriesName, preferredKeys);
-  if (!seriesKeys.length) {
-    return;
-  }
-
-  const orderedKeys = seriesKeys;
-  const keysToKeep = new Set(orderedKeys.slice(0, MAX_PREVIEW_CACHE_ENTRIES_PER_SERIES));
-  const keysToDelete = orderedKeys.filter((key) => !keysToKeep.has(key));
-
-  if (!keysToDelete.length) {
-    return;
-  }
-
-  keysToDelete.forEach((key) => {
-    delete state.previewCache[key];
-  });
-
-  await Promise.allSettled(keysToDelete.map((key) => deletePreviewCacheEntry(key)));
-
-  persistLegacyPreviewCache();
-}
-
 function hashString(value) {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) {
@@ -6455,95 +5829,6 @@ function hashString(value) {
     hash |= 0;
   }
   return hash.toString(16);
-}
-
-async function restoreCachedPreview(entry) {
-  const key = await previewCacheKey(entry);
-  const legacyKey = legacyPreviewCacheKey(entry);
-  if (!key && !legacyKey) {
-    return;
-  }
-
-  const snapshot = serializeEntrySnapshot(entry);
-  const normalizedSnapshot = normalizeSnapshot(snapshot) || snapshot;
-  const cached = normalizePreviewCacheValue(key, await readPreviewCacheEntry(key));
-  const legacy = normalizePreviewCacheValue(legacyKey, await readPreviewCacheEntry(legacyKey));
-  const match = cached || legacy;
-  const resolvedKey = match?.key || key || legacyKey;
-  if (!match) {
-    await logPreviewCacheEvent('cache-miss', entry, { cacheKey: key, legacyKey });
-  }
-  if (match?.src) {
-    entry.previewSrc = match.src;
-    const cachedSnapshot = match.snapshot || null;
-    const expired = isPreviewCacheExpired(match.cachedAt);
-    const shouldBackfillSnapshot =
-      !cachedSnapshot && resolvedKey && (resolvedKey === key || resolvedKey === legacyKey);
-    const effectiveSnapshot =
-      cachedSnapshot || (shouldBackfillSnapshot ? normalizedSnapshot : null);
-    const snapshotMatches =
-      effectiveSnapshot === normalizedSnapshot ||
-      (!effectiveSnapshot && resolvedKey && resolvedKey === key);
-    entry.previewStale = expired || !snapshotMatches;
-    await logPreviewCacheEvent('cache-hit', entry, {
-      cacheKey: resolvedKey,
-      expired,
-      snapshotMatches,
-    });
-    if (resolvedKey) {
-      const normalizedValue = {
-        ...match,
-        key: resolvedKey,
-        snapshot: effectiveSnapshot,
-      };
-      applyPreviewCacheState(resolvedKey, normalizedValue);
-      if (shouldBackfillSnapshot && effectiveSnapshot) {
-        await writePreviewCacheEntry(resolvedKey, normalizedValue);
-        persistLegacyPreviewCache();
-      }
-    }
-  }
-}
-
-async function updatePreviewCache(entry) {
-  const snapshot = serializeEntrySnapshot(entry);
-  const normalizedSnapshot = normalizeSnapshot(snapshot) || snapshot;
-  const key = await previewCacheKey(entry, normalizedSnapshot);
-  if (!key || !entry.previewSrc) {
-    return;
-  }
-  const legacyKey = legacyPreviewCacheKey(entry);
-  const preferredKeys = [key, legacyKey].filter(Boolean);
-  await evictSeriesPreviewCache(entry.name, preferredKeys);
-  const value = {
-    snapshot: normalizedSnapshot,
-    src: entry.previewSrc,
-    cachedAt: Date.now(),
-  };
-  applyPreviewCacheState(key, value);
-  entry.previewStale = false;
-  await writePreviewCacheEntry(key, value);
-  persistLegacyPreviewCache();
-}
-
-async function clearPreviewCacheEntry(entry) {
-  const key = await previewCacheKey(entry);
-  const legacyKey = legacyPreviewCacheKey(entry);
-  if (key && state.previewCache[key]) {
-    delete state.previewCache[key];
-  }
-  if (legacyKey && state.previewCache[legacyKey]) {
-    delete state.previewCache[legacyKey];
-  }
-
-  const deletions = [deletePreviewCacheEntry(key)];
-  if (legacyKey && legacyKey !== key) {
-    deletions.push(deletePreviewCacheEntry(legacyKey));
-  }
-
-  await Promise.all(deletions);
-
-  persistLegacyPreviewCache();
 }
 
 async function saveConfiguration() {
