@@ -4419,6 +4419,15 @@ async function openPreview(entry) {
     img.src = src;
   };
 
+  const showProvidedPreview = () => {
+    if (!providedPreview) {
+      return false;
+    }
+    const separator = providedPreview.includes('?') ? '&' : '?';
+    applyPreviewImage(`${providedPreview}${separator}_=${Date.now()}`);
+    return true;
+  };
+
   const failPreview = (error) => {
     const errorMessage = error?.message || 'Preview unavailable';
     if (entry.previewRequestId === requestId) {
@@ -4431,13 +4440,6 @@ async function openPreview(entry) {
 
   if (!entry?.name || !entry?.config) {
     failPreview(new Error('Preview unavailable'));
-    modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
-    return;
-  }
-
-  if (providedPreview) {
-    const separator = providedPreview.includes('?') ? '&' : '?';
-    applyPreviewImage(`${providedPreview}${separator}_=${Date.now()}`);
     modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
     return;
   }
@@ -4479,7 +4481,14 @@ async function openPreview(entry) {
     }
     applyPreviewImage(src);
   } catch (error) {
-    failPreview(error);
+    if (!showProvidedPreview()) {
+      failPreview(error);
+    }
+  }
+
+  if (!providedPreview) {
+    modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
+    return;
   }
 
   modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
