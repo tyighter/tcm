@@ -6431,15 +6431,32 @@ async function restoreCachedPreview(entry) {
   }
   if (match?.src) {
     entry.previewSrc = match.src;
+    const matchKey = match.key || key || legacyKey || null;
+    const normalizedSnapshot = match.snapshot || snapshot || null;
+    const snapshotMatches = match.snapshot ? match.snapshot === snapshot : true;
     const expired = isPreviewCacheExpired(match.cachedAt);
-    entry.previewStale = expired || match.snapshot !== snapshot;
+
+    entry.previewStale = expired || !snapshotMatches;
     await logPreviewCacheEvent('cache-hit', entry, {
-      cacheKey: match.key || key || legacyKey,
+      cacheKey: matchKey,
       expired,
-      snapshotMatches: match.snapshot === snapshot,
+      snapshotMatches,
     });
-    if (match.key) {
-      applyPreviewCacheState(match.key, match);
+
+    const normalizedMatch = {
+      ...match,
+      snapshot: normalizedSnapshot,
+    };
+
+    if (matchKey) {
+      applyPreviewCacheState(matchKey, normalizedMatch);
+      if (!match.snapshot && normalizedSnapshot) {
+        await writePreviewCacheEntry(matchKey, {
+          snapshot: normalizedSnapshot,
+          src: match.src,
+          cachedAt: match.cachedAt,
+        });
+      }
     }
   }
 }
