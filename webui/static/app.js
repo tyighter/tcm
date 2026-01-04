@@ -25,6 +25,8 @@ const state = {
   },
 };
 
+let saveInProgress = false;
+
 const dom = {
   entries: document.getElementById('entries'),
   search: document.getElementById('series-search'),
@@ -5981,7 +5983,28 @@ function hashString(value) {
   return hash.toString(16);
 }
 
+function setSaveButtonState(isSaving) {
+  if (!dom.save) {
+    return;
+  }
+
+  dom.save.disabled = isSaving;
+  const label = dom.save.querySelector('.button-label');
+  if (label) {
+    label.textContent = isSaving ? 'Saving...' : 'Save';
+  }
+}
+
 async function saveConfiguration() {
+  if (saveInProgress) {
+    showToast('Save already in progress...', 'info');
+    return;
+  }
+
+  saveInProgress = true;
+  setSaveButtonState(true);
+  const savingToast = showToast('Saving configuration...', 'info');
+
   try {
     sortEntries();
     renderEntries();
@@ -6016,7 +6039,14 @@ async function saveConfiguration() {
     );
     requestEntryPreviews(changedEntries);
   } catch (error) {
-    showToast(error.message, 'error');
+    const message = error?.message || 'Unable to save configuration';
+    showToast(message, 'error');
+  } finally {
+    saveInProgress = false;
+    setSaveButtonState(false);
+    if (savingToast) {
+      savingToast.remove();
+    }
   }
 }
 
@@ -6081,9 +6111,10 @@ function closeModal(element) {
 function showToast(message, type = 'info') {
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  toast.textContent = message;
+  toast.textContent = message || '';
   toastContainer.appendChild(toast);
   setTimeout(() => toast.remove(), 4500);
+  return toast;
 }
 
 async function triggerServerAction(

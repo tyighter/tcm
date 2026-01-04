@@ -2,8 +2,11 @@ import base64
 import io
 import json
 import logging
+from contextlib import contextmanager
+from copy import deepcopy
 from http import HTTPStatus
 from pathlib import Path
+from threading import Event
 from types import MethodType, SimpleNamespace
 
 from webui import server
@@ -94,6 +97,66 @@ def test_api_config_and_meta_return_error_on_invalid_tv_yaml(caplog) -> None:
         assert handler.status == HTTPStatus.BAD_REQUEST
         assert ("Content-Type", "application/json") in handler._headers
         assert "bad yaml" in caplog.text
+
+
+def test_save_config_backfills_episode_keys_async(monkeypatch) -> None:
+    update_complete = Event()
+    backfill_started = Event()
+    allow_backfill = Event()
+
+    class _RecordingTvManager:
+        def __init__(self) -> None:
+            self.payload = {
+                "libraries": {},
+                "series": [{"name": "Example (2024)", "config": {"rating_key": 555}}],
+            }
+            self.write_calls = 0
+            self.backup_calls = 0
+            self.updated = None
+
+        @contextmanager
+        def priority_write(self):
+            yield
+
+        def backup_on_save(self) -> None:
+            self.backup_calls += 1
+
+        def write(self, payload: dict) -> None:
+            self.write_calls += 1
+            self.payload = payload
+
+        def as_payload(self) -> dict:
+            return deepcopy(self.payload)
+
+        def update_episode_rating_keys(self, series_name: str, show_rating_key, mapping) -> bool:
+            self.updated = (series_name, str(show_rating_key), mapping)
+            update_complete.set()
+            return True
+
+    def _ensure_episode_rating_keys(context, payload, *_args, **_kwargs):
+        backfill_started.set()
+        allow_backfill.wait(timeout=1)
+        updated = deepcopy(payload)
+        updated["series"][0]["config"]["episode_rating_keys"] = {"555": {"S1E1": "123"}}
+        return updated, 1, 1
+
+    monkeypatch.setattr(server, "ensure_episode_rating_keys_in_payload", _ensure_episode_rating_keys)
+
+    tv_manager = _RecordingTvManager()
+    handler = _build_post_handler("/api/config", tv_manager, tv_manager.payload)
+
+    handler.do_POST()
+
+    assert handler.status == HTTPStatus.OK
+    assert tv_manager.write_calls == 1
+    assert tv_manager.backup_calls == 1
+
+    assert backfill_started.wait(timeout=1)
+    assert not update_complete.is_set()
+
+    allow_backfill.set()
+    assert update_complete.wait(timeout=1)
+    assert tv_manager.updated == ("Example (2024)", "555", {"S1E1": "123"})
 
 
 def test_api_preview_generates_card(monkeypatch) -> None:
