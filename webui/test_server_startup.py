@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import logging
@@ -67,6 +68,14 @@ def _build_handler(path: str, tv_manager: object) -> server.WebRequestHandler:
     return handler
 
 
+def _build_post_handler(path: str, tv_manager: object, payload: dict) -> server.WebRequestHandler:
+    handler = _build_handler(path, tv_manager)
+    body = json.dumps(payload).encode("utf-8")
+    handler.headers = {"Content-Length": str(len(body))}
+    handler.rfile = io.BytesIO(body)
+    return handler
+
+
 def test_api_config_and_meta_return_error_on_invalid_tv_yaml(caplog) -> None:
     tv_manager = _FailingPayloadTvManager(ValueError("bad yaml"))
 
@@ -85,3 +94,49 @@ def test_api_config_and_meta_return_error_on_invalid_tv_yaml(caplog) -> None:
         assert handler.status == HTTPStatus.BAD_REQUEST
         assert ("Content-Type", "application/json") in handler._headers
         assert "bad yaml" in caplog.text
+
+
+def test_api_preview_generates_card(monkeypatch) -> None:
+    generated: dict[str, object] = {}
+
+    def _mock_generate(context, tv_manager, name, config, *, force, preview_episode_key, prefer_existing):
+        generated.update(
+            {
+                "context": context,
+                "tv_manager": tv_manager,
+                "name": name,
+                "config": config,
+                "force": force,
+                "preview_episode_key": preview_episode_key,
+                "prefer_existing": prefer_existing,
+            }
+        )
+        return "image/png", base64.b64encode(b"demo").decode("ascii")
+
+    monkeypatch.setattr(server, "get_or_generate_preview", _mock_generate)
+
+    payload = {
+        "name": "Demo Show",
+        "config": {"library": "TV"},
+        "previewEpisode": "1-2",
+        "season": 1,
+        "episode": 2,
+    }
+    handler = _build_post_handler("/api/preview", SimpleNamespace(), payload)
+
+    handler.do_POST()
+
+    response_body = handler.wfile.getvalue()
+    assert response_body, "Expected preview response body"
+
+    response = json.loads(response_body)
+    assert response["mime"] == "image/png"
+    assert response["data"]
+    assert handler.status == HTTPStatus.OK
+    assert ("Content-Type", "application/json") in handler._headers
+
+    assert generated["name"] == payload["name"]
+    assert generated["config"] == payload["config"]
+    assert generated["preview_episode_key"] == "1-2"
+    assert generated["force"] is True
+    assert generated["prefer_existing"] is False
