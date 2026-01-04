@@ -1812,13 +1812,14 @@ async function loadEntryPreview(entry, options = {}) {
       throw new Error(message || 'Preview request failed');
     }
 
-    const data = await response.json();
-    if (!data?.mime || !data?.data) {
+    const blob = await response.blob();
+    const dataUrl = await blobToDataUrl(blob);
+    if (!dataUrl) {
       throw new Error('Preview payload was missing image data');
     }
 
     if (entry.previewRequestId === requestId) {
-      entry.previewSrc = `data:${data.mime};base64,${data.data}`;
+      entry.previewSrc = dataUrl;
       entry.previewRefreshing = false;
       await updatePreviewCache(entry);
       await logPreviewCacheEvent('preview-generated', entry, {
@@ -4556,15 +4557,18 @@ async function openPreview(entry) {
       }),
     });
 
-    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(data.error || 'Preview failed');
+      const message = await response.text();
+      throw new Error(message || 'Preview failed');
     }
+
+    const blob = await response.blob();
+    const dataUrl = await blobToDataUrl(blob);
 
     modal.content.innerHTML = '';
     const img = document.createElement('img');
     img.className = 'preview-image';
-    img.src = `data:${data.mime};base64,${data.data}`;
+    img.src = dataUrl;
     entry.previewSrc = img.src;
     entry.previewError = null;
     await updatePreviewCache(entry);
