@@ -5843,7 +5843,13 @@ let cacheDbWarningShown = false;
 
 function normalizeTimestamp(value) {
   const timestamp = Number(value);
-  return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : null;
+  if (!Number.isFinite(timestamp) || timestamp <= 0) {
+    return null;
+  }
+  const millisecondsThreshold = 1e11;
+  const normalized =
+    timestamp < millisecondsThreshold ? timestamp * 1000 : timestamp;
+  return normalized;
 }
 
 function isPreviewCacheExpired(cachedAt) {
