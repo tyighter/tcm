@@ -39,6 +39,17 @@ class PlexEpisodeWatchedHelperTests(TestCase):
 
         self.assertTrue(self.interface._is_episode_watched(plex_episode))
 
+    def test_manual_unwatch_overrides_history(self) -> None:
+        plex_episode = SimpleNamespace(
+            viewCount=0,
+            duration=20000,
+            viewOffset=1000,
+            isWatched=False,
+        )
+        plex_episode.history = lambda: ["play"]
+
+        self.assertFalse(self.interface._is_episode_watched(plex_episode))
+
     def test_otherwise_unwatched(self) -> None:
         plex_episode = SimpleNamespace(viewCount=0, duration=20000, viewOffset=1000)
         plex_episode.history = lambda: []

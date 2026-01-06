@@ -568,6 +568,38 @@ def get_or_fetch_recent_activity(context: AppContext, tv_manager: TvYamlManager)
     return payload
 
 
+def refresh_watch_state_for_series(context: AppContext, tv_manager: TvYamlManager, series_name: str) -> None:
+    """Ensure Plex watch state is refreshed before building a series."""
+
+    if not getattr(context, "preference_parser", None) or not context.preference_parser.use_plex:
+        return
+
+    lookup = [entry for entry in _series_lookup(tv_manager) if entry.get("name") == series_name]
+    if not lookup:
+        return
+
+    recent_watches: list[dict[str, Any]] = []
+    settings = TautulliSettings.from_settings()
+    if settings:
+        try:
+            recent_watches = fetch_recent_watches(settings, lookup)
+        except Exception as exc:  # pylint: disable=broad-except
+            tautulli_logger.debug(
+                "Unable to fetch recent Tautulli activity before building %s: %s",
+                series_name,
+                exc,
+            )
+
+    try:
+        _plex_watched_changes(context, lookup, recent_watches=recent_watches)
+    except Exception as exc:  # pylint: disable=broad-except
+        tautulli_logger.debug(
+            "Unable to refresh Plex watch cache before building %s: %s",
+            series_name,
+            exc,
+        )
+
+
 def _store_recent_activity(payload: dict[str, Any], cache_key: str) -> None:
     _recent_activity_cache[cache_key] = payload
     watched = len(payload.get("watched", []))

@@ -27,6 +27,7 @@ from modules.TitleCard import TitleCard
 from modules.SeriesInfo import SeriesInfo
 from modules.TMDbInterface import TMDbInterface
 
+from . import tautulli
 from .config import AppContext
 from .tv_data import TvYamlManager, _to_builtin, _to_commented
 from .user_settings import load_settings
@@ -1383,6 +1384,8 @@ def run_builder_for_series(
 
     if not show.valid:
         raise RuntimeError("Series configuration is invalid; check required fields")
+
+    tautulli.refresh_watch_state_for_series(context, tv_manager, series_name)
 
     def _run(manager: Manager) -> None:
         _maybe_sync_series_files(manager, force=force_sync)
