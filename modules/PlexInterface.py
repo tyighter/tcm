@@ -672,8 +672,9 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
         playhead is near the end), or when play history exists.
         """
 
+        is_watched_flag = getattr(plex_episode, 'isWatched', None)
         view_count = getattr(plex_episode, 'viewCount', 0) or 0
-        if view_count > 0:
+        if view_count > 0 or is_watched_flag is True:
             return True
 
         # Consider view offsets that indicate the episode is basically
@@ -691,6 +692,9 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
                     duration,
                 )
                 return True
+
+        if is_watched_flag is False:
+            return False
 
         history_callable = getattr(plex_episode, 'history', None)
         if callable(history_callable):

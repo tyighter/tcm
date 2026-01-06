@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import webui.tautulli as tautulli
 from webui.tautulli import (
@@ -8,6 +8,7 @@ from webui.tautulli import (
     _reset_plex_watch_state_cache,
     _series_lookup,
     _trigger_builds_for_recent_changes,
+    refresh_watch_state_for_series,
 )
 
 
@@ -137,6 +138,41 @@ class PlexWatchStateTests(TestCase):
 
         self.assertEqual(len(unwatched), 1)
         self.assertTrue(unwatched[0].get("unwatch"))
+
+
+class RefreshWatchStateForSeriesTests(TestCase):
+    def test_refreshes_from_plex_when_tautulli_unavailable(self) -> None:
+        tv_manager = DummyTvManager()
+        plex = DummyPlex("show-1")
+        context = DummyContext(plex, use_fallback=True)
+
+        with patch("webui.tautulli.TautulliSettings.from_settings", return_value=None), patch(
+            "webui.tautulli.fetch_recent_watches"
+        ) as fetch_watches, patch("webui.tautulli._plex_watched_changes") as watched_changes:
+            refresh_watch_state_for_series(context, tv_manager, "Example")
+
+        fetch_watches.assert_not_called()
+        watched_changes.assert_called_once()
+        _, lookup = watched_changes.call_args.args[:2]
+        self.assertEqual({entry["name"] for entry in lookup}, {"Example"})
+        self.assertEqual(watched_changes.call_args.kwargs["recent_watches"], [])
+
+    def test_refreshes_recent_activity_when_available(self) -> None:
+        tv_manager = DummyTvManager()
+        plex = DummyPlex("show-1")
+        context = DummyContext(plex, use_fallback=True)
+
+        settings = object()
+        with patch("webui.tautulli.TautulliSettings.from_settings", return_value=settings), patch(
+            "webui.tautulli.fetch_recent_watches", return_value=[{"episodeRatingKey": "abc"}]
+        ) as fetch_watches, patch("webui.tautulli._plex_watched_changes") as watched_changes:
+            refresh_watch_state_for_series(context, tv_manager, "Example")
+
+        fetch_watches.assert_called_once_with(settings, ANY)
+        watched_changes.assert_called_once()
+        self.assertEqual(
+            watched_changes.call_args.kwargs["recent_watches"], [{"episodeRatingKey": "abc"}]
+        )
 
 
 class ActivityDeduplicationTests(TestCase):
