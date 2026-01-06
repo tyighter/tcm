@@ -56,6 +56,7 @@ class FrameTitleCard(BaseCardType):
         'font_file', 'font_interline_spacing', 'font_interword_spacing',
         'font_kerning', 'font_size', 'font_vertical_shift',
         'episode_text_color', 'episode_text_position',
+        'episode_text_font_size',
     )
 
     def __init__(self, *,
