@@ -488,10 +488,11 @@ class TitleCard:
             return False
 
 
-    def create(self) -> bool:
+    def create(self, overwrite: bool = False) -> bool:
         """
         Create this title card. If the card already exists, a new one is
-        not  created. Return whether a card was created.
+        not  created unless overwrite is True. Return whether a card was
+        created.
 
         Returns:
             True if a title card was created, False otherwise.
@@ -501,9 +502,16 @@ class TitleCard:
         if self.maker is None or not self.maker.valid:
             return False
 
-        # If the card already exists, exit
+        # If the card already exists, exit unless overwriting
         if self.file.exists():
-            return False
+            if not overwrite:
+                return False
+            try:
+                self.file.unlink()
+            except Exception as e:
+                log.exception(f'Failed to overwrite card at '
+                              f'"{self.file.resolve()}" - {e}')
+                return False
 
         # Create parent folders if necessary for this card
         self.file.parent.mkdir(parents=True, exist_ok=True)
