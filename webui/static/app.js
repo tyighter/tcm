@@ -1317,14 +1317,12 @@ function renderEntry(entry) {
   const usedFields = new Set();
   const generalFieldRows = [];
   const fontFieldRows = [];
-  let extrasFieldRow = null;
-  let extrasFieldDefinition = null;
   let libraryFieldRow = null;
   state.fields.forEach((field) => {
-    const value = getValue(entry.config, field.path);
     if (field.id === 'extras') {
-      extrasFieldDefinition = field;
+      return;
     }
+    const value = getValue(entry.config, field.path);
     if (ID_FIELDS.has(field.id)) {
       return;
     }
@@ -1334,12 +1332,24 @@ function renderEntry(entry) {
       if (field.id === 'library') {
         libraryFieldRow = { field, row };
       } else if (field.path?.[0] === 'font') {
-        fontFieldRows.push(row);
-      } else if (field.id === 'extras') {
-        extrasFieldRow = row;
+        fontFieldRows.push({ field, row });
       } else {
         generalFieldRows.push({ field, row });
       }
+    }
+  });
+
+  const extraFields = configuredExtraFields(entry);
+  extraFields.forEach((field) => {
+    const value = getValue(entry.config, field.path);
+    if (value === undefined) {
+      return;
+    }
+    const row = renderFieldRow(entry, field, value);
+    if (isFontExtraField(field)) {
+      fontFieldRows.push({ field, row });
+    } else {
+      generalFieldRows.push({ field, row });
     }
   });
 
@@ -1355,52 +1365,6 @@ function renderEntry(entry) {
   generalFieldRows
     .sort((a, b) => compareFieldOptions(a.field, b.field))
     .forEach(({ row }) => body.appendChild(row));
-
-  const extrasSection = document.createElement('section');
-  extrasSection.className = 'entry-section entry-section--extras';
-
-  const extrasHeader = document.createElement('div');
-  extrasHeader.className = 'entry-section__header';
-
-  const extrasTitle = document.createElement('h3');
-  extrasTitle.className = 'entry-section__title';
-  extrasTitle.textContent = 'Extra card options';
-
-  extrasHeader.appendChild(extrasTitle);
-
-  const extrasFieldsContainer = document.createElement('div');
-  extrasFieldsContainer.className = 'entry-section__fields';
-
-  const enableExtras = () => {
-    if (!extrasFieldDefinition) {
-      return;
-    }
-    const defaultValue = defaultValueForField(extrasFieldDefinition);
-    setValue(entry.config, extrasFieldDefinition.path, defaultValue);
-    renderEntries();
-  };
-
-  const extrasFooter = document.createElement('div');
-  extrasFooter.className = 'entry-section__footer';
-
-  if (extrasFieldRow) {
-    extrasFieldsContainer.appendChild(extrasFieldRow);
-  } else if (extrasFieldDefinition) {
-    const helper = document.createElement('p');
-    helper.className = 'helper-text entry-section__empty';
-    helper.textContent = 'No extra options added yet. Add an extra to customize your card.';
-
-    const addExtrasButton = document.createElement('button');
-    addExtrasButton.className = 'add-line add-line--inline';
-    addExtrasButton.textContent = '+ Add extra option';
-    addExtrasButton.addEventListener('click', () => enableExtras());
-
-    extrasFieldsContainer.appendChild(helper);
-    extrasFooter.appendChild(addExtrasButton);
-  }
-
-  extrasSection.append(extrasHeader, extrasFieldsContainer, extrasFooter);
-  body.appendChild(extrasSection);
 
   const fontSection = document.createElement('section');
   fontSection.className = 'entry-section entry-section--font';
@@ -1422,7 +1386,9 @@ function renderEntry(entry) {
     helper.textContent = 'No font options added yet. Add lines to configure typography.';
     fontFieldsContainer.appendChild(helper);
   } else {
-    fontFieldRows.forEach((row) => fontFieldsContainer.appendChild(row));
+    fontFieldRows
+      .sort((a, b) => compareFieldOptions(a.field, b.field))
+      .forEach(({ row }) => fontFieldsContainer.appendChild(row));
   }
 
   const fontFooter = document.createElement('div');
@@ -1435,7 +1401,8 @@ function renderEntry(entry) {
     openFieldSelector(entry, {
       title: 'Add font line',
       emptyMessage: 'All font options are already configured for this entry.',
-      availableFilter: (field) => field.path?.[0] === 'font',
+      availableFilter: (field) =>
+        field.path?.[0] === 'font' || (field.isExtra && isFontExtraField(field)),
     })
   );
 
@@ -1456,7 +1423,7 @@ function renderEntry(entry) {
   addLineButton.addEventListener('click', () =>
     openFieldSelector(entry, {
       availableFilter: (field) =>
-        field.path?.[0] !== 'font' && field.id !== 'extras' && !ID_FIELDS.has(field.id),
+        field.path?.[0] !== 'font' && !ID_FIELDS.has(field.id) && !isFontExtraField(field),
     })
   );
 
@@ -1855,10 +1822,11 @@ function renderFieldRow(entry, field, value) {
   controls.className = 'field-controls';
 
   const showRemoveButton =
-    field.type !== 'font' &&
-    field.id !== 'library' &&
-    field.id !== 'card_type' &&
-    field.path?.[0] !== 'font';
+    field.isExtra ||
+    (field.type !== 'font' &&
+      field.id !== 'library' &&
+      field.id !== 'card_type' &&
+      field.path?.[0] !== 'font');
   const removeButton = showRemoveButton ? document.createElement('button') : null;
   if (removeButton) {
     removeButton.textContent = '✕';
@@ -2956,6 +2924,35 @@ function normalizeExtraKey(key) {
   return (key || '').toString().trim().toLowerCase();
 }
 
+function isFontExtraKey(key) {
+  if (!key) {
+    return false;
+  }
+  const normalized = key.toString().toLowerCase();
+  return (
+    normalized.includes('font') ||
+    normalized.includes('stroke') ||
+    normalized.includes('kerning') ||
+    normalized.includes('interline') ||
+    normalized.includes('interword') ||
+    normalized.includes('vertical_shift')
+  );
+}
+
+function knownExtraKeys() {
+  const keys = new Set();
+  const extras = state.cardTypeExtras || {};
+  Object.values(extras).forEach((list) => {
+    (list || []).forEach((item) => {
+      const key = typeof item === 'string' ? item : item?.key;
+      if (key) {
+        keys.add(normalizeExtraKey(key));
+      }
+    });
+  });
+  return keys;
+}
+
 function extrasForCardType(cardType) {
   const normalized = normalizeCardType(cardType);
   const availableExtras = state.cardTypeExtras || {};
@@ -2974,6 +2971,143 @@ function findExtraDefinition(cardType, key) {
   const extras = extrasForCardType(cardType);
   const normalizedKey = normalizeExtraKey(key);
   return extras.find((item) => normalizeExtraKey(item.key) === normalizedKey) || null;
+}
+
+function buildExtraField(key, definition) {
+  const fieldType = (() => {
+    if (definition?.choices?.length) {
+      return 'choice';
+    }
+    if (definition?.expectedType === 'boolean') {
+      return 'boolean';
+    }
+    if (definition?.expectedType === 'int' || definition?.expectedType === 'float') {
+      return 'number';
+    }
+    if (isEpisodeTextFontKey(key)) {
+      return 'font';
+    }
+    if (isColorFieldKey(key)) {
+      return 'color';
+    }
+    return 'text';
+  })();
+
+  const choices = definition?.choices
+    ? definition.choices.map((choice) => ({ value: choice, label: choice }))
+    : undefined;
+
+  return {
+    id: `extras.${key}`,
+    label: definition?.label || formatExtraLabel(key),
+    path: ['extras', key],
+    type: fieldType,
+    choices,
+    isExtra: true,
+    extraKey: key,
+  };
+}
+
+function isFontExtraField(field) {
+  return Boolean(field?.isExtra && (field.type === 'font' || isFontExtraKey(field.extraKey)));
+}
+
+function configuredExtraFields(entry) {
+  const cardType = getValue(entry.config, ['card_type']) || getDefaultCardType();
+  const definitions = extrasForCardType(cardType);
+  const definitionMap = new Map(
+    definitions.map((definition) => [normalizeExtraKey(definition.key), definition])
+  );
+  const knownKeys = knownExtraKeys();
+  const extrasValue = getValue(entry.config, ['extras']) || {};
+  return Object.keys(extrasValue)
+    .map((key) => {
+      const normalizedKey = normalizeExtraKey(key);
+      const definition = definitionMap.get(normalizedKey);
+      if (!definition && knownKeys.has(normalizedKey)) {
+        return null;
+      }
+      return buildExtraField(key, definition);
+    })
+    .filter(Boolean);
+}
+
+function availableExtraFields(entry) {
+  const cardType = getValue(entry.config, ['card_type']) || getDefaultCardType();
+  const definitions = extrasForCardType(cardType);
+  const extrasValue = getValue(entry.config, ['extras']) || {};
+  const existingKeys = new Set(Object.keys(extrasValue).map((key) => normalizeExtraKey(key)));
+  return definitions
+    .filter((definition) => !existingKeys.has(normalizeExtraKey(definition.key)))
+    .map((definition) => buildExtraField(definition.key, definition));
+}
+
+function openCustomExtraModal(entry) {
+  const modal = buildModal('Add custom extra');
+  addFloatingCloseButton(modal, 'Close custom extra dialog');
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'field-selector';
+
+  const helper = document.createElement('p');
+  helper.className = 'helper-text';
+  helper.textContent = 'Enter a custom extra key to add it as a configurable line.';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Custom extra key';
+  input.className = 'modal-search';
+
+  const error = document.createElement('p');
+  error.className = 'helper-text';
+  error.hidden = true;
+
+  const addButton = document.createElement('button');
+  addButton.type = 'button';
+  addButton.textContent = 'Add extra';
+  addButton.disabled = true;
+
+  const updateState = () => {
+    const key = input.value.trim();
+    addButton.disabled = key === '';
+    error.hidden = true;
+  };
+
+  input.addEventListener('input', updateState);
+
+  const submit = () => {
+    const key = input.value.trim();
+    if (!key) {
+      return;
+    }
+    const extrasValue = getValue(entry.config, ['extras']) || {};
+    const normalizedKey = normalizeExtraKey(key);
+    const existingKeys = Object.keys(extrasValue).map((existing) => normalizeExtraKey(existing));
+    if (existingKeys.includes(normalizedKey)) {
+      error.textContent = 'That extra key is already configured.';
+      error.hidden = false;
+      return;
+    }
+    const cardType = getValue(entry.config, ['card_type']) || getDefaultCardType();
+    const definition = findExtraDefinition(cardType, key);
+    const field = buildExtraField(key, definition);
+    updateField(entry, field, defaultValueForField(field));
+    closeModal(modal.element);
+    renderEntries();
+  };
+
+  addButton.addEventListener('click', submit);
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      submit();
+    }
+  });
+
+  wrapper.append(helper, input, error);
+  modal.content.appendChild(wrapper);
+  modal.footer.append(addButton, closeButton(() => closeModal(modal.element)));
+
+  requestAnimationFrame(() => input.focus());
 }
 
 function openExtrasPicker(cardType, rows, renderRows, updateRows) {
@@ -3363,7 +3497,7 @@ function shouldForcePreviewRefresh(field) {
   if (PREVIEW_FORCE_FIELDS.has(field.id)) {
     return true;
   }
-  return field.path?.[0] === 'font';
+  return field.path?.[0] === 'font' || field.path?.[0] === 'extras';
 }
 
 function handleEntryConfigChange(entry, field) {
@@ -3691,9 +3825,20 @@ function openFieldSelector(
   const modal = buildModal(title);
   addFloatingCloseButton(modal, 'Close add field dialog');
 
-  const available = state.fields
+  const baseFields = state.fields.filter((field) => field.id !== 'extras');
+  const extraFields = availableExtraFields(entry);
+  const customExtraField = {
+    id: 'extras.custom',
+    label: 'Custom extra',
+    path: ['extras', 'custom'],
+    type: 'extra',
+    isCustomExtra: true,
+    isExtra: true,
+  };
+
+  const available = [...baseFields, ...extraFields, customExtraField]
     .filter((field) => !availableFilter || availableFilter(field))
-    .filter((field) => getValue(entry.config, field.path) === undefined)
+    .filter((field) => getValue(entry.config, field.path) === undefined || field.isCustomExtra)
     .sort((a, b) =>
       (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' })
     );
@@ -3745,6 +3890,11 @@ function openFieldSelector(
         return;
       }
       renderFieldGroups(groupsContainer, filtered, (field) => {
+        if (field.isCustomExtra) {
+          closeModal(modal.element);
+          openCustomExtraModal(entry);
+          return;
+        }
         const defaultValue = defaultValueForField(field);
         updateField(entry, field, defaultValue);
         closeModal(modal.element);
@@ -3766,18 +3916,14 @@ function openOptionSearch(entry, initialTerm = '') {
   const modal = buildModal('Search options');
   addFloatingCloseButton(modal, 'Close option search dialog');
 
-  const extrasField = state.fields.find((field) => field.id === 'extras');
-
   const buildOptions = () => {
     const availableFields = state.fields.filter(
-      (field) => getValue(entry.config, field.path) === undefined && !ID_FIELDS.has(field.id)
+      (field) =>
+        field.id !== 'extras' &&
+        getValue(entry.config, field.path) === undefined &&
+        !ID_FIELDS.has(field.id)
     );
-
-    const cardType = getValue(entry.config, ['card_type']) || getDefaultCardType();
-    const existingExtras = getValue(entry.config, ['extras']) || {};
-    const availableExtras = extrasForCardType(cardType).filter(
-      (extra) => existingExtras[extra.key] === undefined
-    );
+    const availableExtras = availableExtraFields(entry);
 
     const options = [];
 
@@ -3802,26 +3948,32 @@ function openOptionSearch(entry, initialTerm = '') {
       });
     });
 
-    availableExtras.forEach((extra) => {
-      const label = extra.label || formatExtraLabel(extra.key);
+    availableExtras.forEach((extraField) => {
+      const label = extraField.label || formatExtraLabel(extraField.extraKey);
       options.push({
-        id: `extra:${extra.key}`,
+        id: `extra:${extraField.extraKey}`,
         label,
-        category: 'Extra option',
-        meta: 'extras',
-        keywords: `${extra.key} ${label} extras extra option`.toLowerCase(),
+        category: isFontExtraField(extraField) ? 'Font option' : 'Extra option',
+        meta: `extras › ${extraField.extraKey}`,
+        keywords: `${extraField.extraKey} ${label} extras extra option`.toLowerCase(),
         onSelect: () => {
-          const extrasValue = getValue(entry.config, ['extras']) || {};
-          const updated = { ...extrasValue, [extra.key]: extrasValue[extra.key] ?? '' };
-          if (extrasField) {
-            updateField(entry, extrasField, updated);
-          } else {
-            setValue(entry.config, ['extras'], updated);
-          }
+          updateField(entry, extraField, defaultValueForField(extraField));
           closeModal(modal.element);
           renderEntries();
         },
       });
+    });
+
+    options.push({
+      id: 'extra:custom',
+      label: 'Custom extra',
+      category: 'Extra option',
+      meta: 'extras',
+      keywords: 'custom extra extras option'.toLowerCase(),
+      onSelect: () => {
+        closeModal(modal.element);
+        openCustomExtraModal(entry);
+      },
     });
 
     return options;
