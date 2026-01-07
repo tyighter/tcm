@@ -1262,7 +1262,7 @@ def generate_preview(
     if not valid:
         raise RuntimeError("The selected font is missing characters for the preview")
 
-    created = title_card.create()
+    created = title_card.create(overwrite=True)
     if not created and not episode.destination.exists():
         raise RuntimeError("Failed to generate preview image")
 
