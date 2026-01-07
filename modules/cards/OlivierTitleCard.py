@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Literal, Optional
 
 from modules.BaseCardType import BaseCardType, ImageMagickCommands
 from modules.Debug import log
@@ -47,6 +47,9 @@ class OlivierTitleCard(BaseCardType):
     """Gradient image"""
     GRADIENT = REF_DIRECTORY.parent / 'overline' / 'small_gradient.png'
 
+    """Default left/right margin for title text."""
+    TITLE_TEXT_OFFSET = 320
+
     __slots__ = (
         'source_file', 'output_file', 'title_text', 'hide_episode_text',
         'episode_prefix', 'episode_text', 'font_color', 'font_file',
@@ -56,6 +59,7 @@ class OlivierTitleCard(BaseCardType):
         'episode_text_vertical_shift', 'episode_text_font',
         'episode_prefix_font', 'font_replacements', 'text_vertical_shift',
         'episode_text_spacing', 'episode_text_offset', 'title_text_margin',
+        'title_text_line_end_offset', 'episode_text_justification',
     )
 
     def __init__(self,
@@ -83,6 +87,8 @@ class OlivierTitleCard(BaseCardType):
             font_replacements: Optional[dict[str, str]] = None,
             text_vertical_shift: int = 0,
             title_text_margin: int = 0,
+            title_text_line_end_offset: int = 0,
+            episode_text_justification: Literal['left', 'center', 'right'] = 'left',
             preferences: Optional['Preferences'] = None, # type: ignore
             **unused,
         ) -> None:
@@ -137,6 +143,7 @@ class OlivierTitleCard(BaseCardType):
         self.font_vertical_shift = font_vertical_shift
         self.text_vertical_shift = text_vertical_shift
         self.title_text_margin = title_text_margin
+        self.title_text_line_end_offset = title_text_line_end_offset
 
         # Optional extras
         self.omit_gradient = omit_gradient
@@ -154,6 +161,16 @@ class OlivierTitleCard(BaseCardType):
             self.valid = False
         self.stroke_color = stroke_color
         self.episode_text_vertical_shift = episode_text_vertical_shift
+        self.episode_text_justification = str(episode_text_justification).lower()
+        if self.episode_text_justification not in {'left', 'center', 'right'}:
+            log.error(
+                'Invalid episode_text_justification "{justification}" - '
+                'must be left, center, or right'.format(
+                    justification=episode_text_justification
+                )
+            )
+            self.episode_text_justification = 'left'
+            self.valid = False
 
         default_prefix_font = self._resolve_font_path(self.EPISODE_PREFIX_FONT)
         default_number_font = self._resolve_font_path(self.EPISODE_NUMBER_FONT)
@@ -194,7 +211,7 @@ class OlivierTitleCard(BaseCardType):
         stroke_width = 8.0 * self.font_stroke_width
         kerning = 0.5 * self.font_kerning
         interline_spacing = -20 + self.font_interline_spacing
-        horizontal_shift = 320 + self.title_text_margin
+        horizontal_shift = self.TITLE_TEXT_OFFSET + self.title_text_margin
         vertical_shift = 785 + self.font_vertical_shift + self.text_vertical_shift
 
         return [
@@ -227,6 +244,7 @@ class OlivierTitleCard(BaseCardType):
         kerning = 19 * self.episode_text_font_size
         stroke_width = 5 * self.episode_text_font_size
         vertical_shift = -150 + self.episode_text_vertical_shift + self.text_vertical_shift
+        horizontal_shift = self._episode_text_start_x()
 
         return [
             f'-gravity west',
@@ -236,11 +254,11 @@ class OlivierTitleCard(BaseCardType):
             f'-fill black',
             f'-stroke black',
             f'-strokewidth {stroke_width}',
-            f'-annotate +325{vertical_shift:+} "{self.episode_prefix}"',
+            f'-annotate +{horizontal_shift:g}{vertical_shift:+} "{self.episode_prefix}"',
             f'-fill "{self.episode_text_color}"',
             f'-stroke "{self.episode_text_color}"',
             f'-strokewidth 0',
-            f'-annotate +325{vertical_shift:+} "{self.episode_prefix}"',
+            f'-annotate +{horizontal_shift:g}{vertical_shift:+} "{self.episode_prefix}"',
         ]
 
 
@@ -257,7 +275,7 @@ class OlivierTitleCard(BaseCardType):
         size = 60 * self.episode_text_font_size
         stroke_width = 7 * self.episode_text_font_size
 
-        horizontal_offset = 325 + float(self.episode_text_offset)
+        horizontal_offset = self._episode_text_start_x() + float(self.episode_text_offset)
         vertical_shift = -150 + float(self.episode_text_vertical_shift) + self.text_vertical_shift
 
         return [
@@ -274,6 +292,57 @@ class OlivierTitleCard(BaseCardType):
             f'-strokewidth 1',
             f'-annotate {horizontal_offset:+g}{vertical_shift:+g} "{self.episode_text}"',
         ]
+
+
+    @staticmethod
+    def _coerce_float(value, default: float) -> float:
+        """Attempt to coerce a value to float, returning default on error."""
+
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    @classmethod
+    def _title_measurement(cls, extras: dict) -> dict:
+        """Build measurement settings for width-aware title wrapping."""
+
+        font_size = cls._coerce_float(extras.get('font_size', 1.0), 1.0)
+        font_kerning = cls._coerce_float(extras.get('font_kerning', 1.0), 1.0)
+        interword_spacing = cls._coerce_float(
+            extras.get('font_interword_spacing', 0), 0.0
+        )
+        font_file = extras.get('font_file', cls.TITLE_FONT)
+
+        return {
+            'font_file': font_file,
+            'point_size': 124 * font_size,
+            'kerning': 0.5 * font_kerning,
+            'interword_spacing': interword_spacing,
+        }
+
+    @classmethod
+    def _title_width_budget(cls, extras: dict) -> float:
+        """Get the pixel width budget for wrapped titles."""
+
+        line_end_offset = cls._coerce_float(
+            extras.get('title_text_line_end_offset', 0), 0.0
+        )
+        return cls.WIDTH - (2 * cls.TITLE_TEXT_OFFSET) + line_end_offset
+
+    @staticmethod
+    def adjust_title_characteristics(
+            title_characteristics: dict,
+            extras: dict,
+        ) -> dict:
+        """
+        Adjust how titles are split using measured text widths.
+        """
+        adjusted = dict(title_characteristics)
+        adjusted['measurement'] = OlivierTitleCard._title_measurement(extras)
+        adjusted['width_budget'] = OlivierTitleCard._title_width_budget(extras)
+
+        return adjusted
 
 
     def _get_episode_text_offset(self) -> float:
@@ -311,6 +380,64 @@ class OlivierTitleCard(BaseCardType):
         offset_per_char = text_offset['EPISODE'] / len('EPISODE')
         return offset_per_char * len(self.episode_prefix) * 1.10 \
             * self.episode_text_font_size + spacing_width
+
+
+    def _episode_text_width(self) -> float:
+        """Return the measured width of the full episode text."""
+
+        if self.hide_episode_text:
+            return 0.0
+
+        size = 60 * self.episode_text_font_size
+        kerning = 19 * self.episode_text_font_size
+
+        episode_width = self._measure_text_width(
+            text=self.episode_text,
+            font=self.episode_text_font,
+            size=size,
+            kerning=kerning,
+            stroke_width=7 * self.episode_text_font_size,
+        )
+
+        if self.episode_prefix is None:
+            return episode_width
+
+        prefix_width = self._measure_text_width(
+            text=self.episode_prefix,
+            font=self.episode_prefix_font,
+            size=size,
+            kerning=kerning,
+            stroke_width=5 * self.episode_text_font_size,
+        )
+        spacing_width = self._measure_spacing_width(
+            size=size,
+            kerning=kerning,
+        )
+
+        if prefix_width > 0:
+            return prefix_width + spacing_width + episode_width
+
+        return float(self.episode_text_offset) + episode_width
+
+
+    def _episode_text_start_x(self) -> float:
+        """Return the starting X position for the episode text."""
+
+        left_edge = self.TITLE_TEXT_OFFSET + self.title_text_margin
+        width_budget = (
+            self.WIDTH
+            - (2 * self.TITLE_TEXT_OFFSET)
+            + self._coerce_float(self.title_text_line_end_offset, 0.0)
+        )
+        right_edge = left_edge + width_budget
+        episode_width = self._episode_text_width()
+
+        if self.episode_text_justification == 'right':
+            return right_edge - episode_width
+        if self.episode_text_justification == 'center':
+            return left_edge + (width_budget - episode_width) / 2
+
+        return left_edge
 
 
     def _measure_spacing_width(self, *, size: float, kerning: float) -> float:

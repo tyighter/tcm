@@ -318,7 +318,16 @@ def build_series_fields(libraries: dict[str, Any]) -> list[dict[str, Any]]:
     return fields
 
 
+_EXTRA_LABEL_OVERRIDES = {
+    "title_text_line_end_offset": "Title Text Margin",
+    "title_text_margin": "Title Text Horizontal Offset",
+}
+
+
 def _format_extra_label(key: str) -> str:
+    if key in _EXTRA_LABEL_OVERRIDES:
+        return _EXTRA_LABEL_OVERRIDES[key]
+
     parts = [part.capitalize() for part in key.split('_') if part]
     return ' '.join(parts) or 'Custom extra'
 
