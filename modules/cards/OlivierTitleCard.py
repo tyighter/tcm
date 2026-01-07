@@ -433,11 +433,46 @@ class OlivierTitleCard(BaseCardType):
         episode_width = self._episode_text_width()
 
         if self.episode_text_justification == 'right':
+            title_width = self._title_text_width()
+            if title_width > 0:
+                right_edge = left_edge + title_width
             return right_edge - episode_width
         if self.episode_text_justification == 'center':
             return left_edge + (width_budget - episode_width) / 2
 
         return left_edge
+
+
+    def _title_text_width(self) -> float:
+        """Measure the max width of the title text."""
+
+        if not self.title_text:
+            return 0.0
+
+        font_size = 124 * self.font_size
+        stroke_width = 8.0 * self.font_stroke_width
+        kerning = 0.5 * self.font_kerning
+        interline_spacing = -20 + self.font_interline_spacing
+        line_count = len(self.title_text.splitlines())
+
+        width, _ = self.image_magick.get_text_dimensions(
+            [
+                f'-font "{self.font_file}"',
+                f'-pointsize {font_size}',
+                f'-kerning {kerning}',
+                f'-interline-spacing {interline_spacing}',
+                f'-interword-spacing {self.font_interword_spacing}',
+                f'-stroke "{self.stroke_color}"',
+                f'-strokewidth {stroke_width}',
+                f'label:"{self.title_text}"',
+            ],
+            interline_spacing=interline_spacing,
+            line_count=line_count,
+            width='max',
+            height='sum',
+        )
+
+        return width
 
 
     def _measure_spacing_width(self, *, size: float, kerning: float) -> float:
