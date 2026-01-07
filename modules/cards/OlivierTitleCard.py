@@ -55,7 +55,7 @@ class OlivierTitleCard(BaseCardType):
         'stroke_color', 'episode_text_color', 'episode_text_font_size',
         'episode_text_vertical_shift', 'episode_text_font',
         'episode_prefix_font', 'font_replacements', 'text_vertical_shift',
-        'episode_text_spacing', 'episode_text_offset',
+        'episode_text_spacing', 'episode_text_offset', 'title_text_margin',
     )
 
     def __init__(self,
@@ -82,6 +82,7 @@ class OlivierTitleCard(BaseCardType):
             stroke_color: str = STROKE_COLOR,
             font_replacements: Optional[dict[str, str]] = None,
             text_vertical_shift: int = 0,
+            title_text_margin: int = 0,
             preferences: Optional['Preferences'] = None, # type: ignore
             **unused,
         ) -> None:
@@ -135,6 +136,7 @@ class OlivierTitleCard(BaseCardType):
         self.font_stroke_width = font_stroke_width
         self.font_vertical_shift = font_vertical_shift
         self.text_vertical_shift = text_vertical_shift
+        self.title_text_margin = title_text_margin
 
         # Optional extras
         self.omit_gradient = omit_gradient
@@ -192,6 +194,7 @@ class OlivierTitleCard(BaseCardType):
         stroke_width = 8.0 * self.font_stroke_width
         kerning = 0.5 * self.font_kerning
         interline_spacing = -20 + self.font_interline_spacing
+        horizontal_shift = 320 + self.title_text_margin
         vertical_shift = 785 + self.font_vertical_shift + self.text_vertical_shift
 
         return [
@@ -204,11 +207,11 @@ class OlivierTitleCard(BaseCardType):
             f'-fill "{self.stroke_color}"',
             f'-stroke "{self.stroke_color}"',
             f'-strokewidth {stroke_width}',
-            f'-annotate +320+{vertical_shift} "{self.title_text}" \)',
+            f'-annotate +{horizontal_shift}+{vertical_shift} "{self.title_text}" \)',
             f'\( -fill "{self.font_color}"',
             f'-stroke "{self.font_color}"',
             f'-strokewidth 0',
-            f'-annotate +320+{vertical_shift} "{self.title_text}" \)',
+            f'-annotate +{horizontal_shift}+{vertical_shift} "{self.title_text}" \)',
         ]
 
 
