@@ -1365,6 +1365,7 @@ def run_builder_for_series(
     series_config: dict[str, Any] | None = None,
     *,
     force_sync: bool = False,
+    assume_locked: bool = False,
 ) -> None:
     """Run the builder pipeline for a single series."""
 
@@ -1401,7 +1402,7 @@ def run_builder_for_series(
 
         manager._Manager__run(serial=True)  # pylint: disable=protected-access
 
-    _run_manager_job(_run)
+    _run_manager_job(_run, assume_locked=assume_locked)
 
 
 def download_logo_for_series(
@@ -1515,11 +1516,19 @@ def run_asset_downloads_for_series(
     _run_manager_job(_run)
 
 
-def _run_fixer_command(arguments: list[str], *, input_text: str | None = None) -> None:
+def _run_fixer_command(
+    arguments: list[str],
+    *,
+    input_text: str | None = None,
+    assume_locked: bool = False,
+) -> None:
     """Execute fixer.py with the supplied arguments, ensuring exclusivity."""
 
-    if not _action_lock.acquire(blocking=False):
-        raise ActionInProgressError("Another task is already running")
+    acquired = False
+    if not assume_locked:
+        acquired = _action_lock.acquire(blocking=False)
+        if not acquired:
+            raise ActionInProgressError("Another task is already running")
 
     try:
         result = subprocess.run(
@@ -1530,7 +1539,8 @@ def _run_fixer_command(arguments: list[str], *, input_text: str | None = None) -
             input=input_text,
         )
     finally:
-        _action_lock.release()
+        if acquired:
+            _action_lock.release()
 
     if result.returncode != 0:
         stderr = result.stderr.strip()
@@ -1596,6 +1606,8 @@ def delete_series_cards(
     tv_manager: TvYamlManager,
     series_name: str,
     series_config: dict[str, Any] | None = None,
+    *,
+    assume_locked: bool = False,
 ) -> None:
     """Delete generated cards for a single series using fixer.py."""
 
@@ -1639,20 +1651,66 @@ def delete_series_cards(
         extension,
     ]
 
-    _run_fixer_command(args, input_text="Y\n")
+    _run_fixer_command(args, input_text="Y\n", assume_locked=assume_locked)
 
 
-def _run_manager_job(task: Callable[[Manager], None]) -> None:
-    """Execute a Manager job while ensuring only one runs at a time."""
+def run_fresh_build_for_series(
+    context: AppContext,
+    tv_manager: TvYamlManager,
+    series_name: str,
+    series_config: dict[str, Any] | None = None,
+) -> None:
+    """Delete, forget, revert, and rebuild cards for a single series."""
 
     if not _action_lock.acquire(blocking=False):
         raise ActionInProgressError("Another task is already running")
 
     try:
+        delete_series_cards(
+            context,
+            tv_manager,
+            series_name,
+            series_config,
+            assume_locked=True,
+        )
+        forget_args = _build_fixer_arguments(
+            tv_manager, series_name, series_config, "--forget-cards"
+        )
+        _run_fixer_command(forget_args, assume_locked=True)
+        revert_args = _build_fixer_arguments(
+            tv_manager, series_name, series_config, "--revert-series"
+        )
+        _run_fixer_command(revert_args, assume_locked=True)
+        run_builder_for_series(
+            context,
+            tv_manager,
+            series_name,
+            series_config,
+            assume_locked=True,
+        )
+    finally:
+        _action_lock.release()
+
+
+def _run_manager_job(
+    task: Callable[[Manager], None],
+    *,
+    assume_locked: bool = False,
+) -> None:
+    """Execute a Manager job while ensuring only one runs at a time."""
+
+    acquired = False
+    if not assume_locked:
+        acquired = _action_lock.acquire(blocking=False)
+        if not acquired:
+            raise ActionInProgressError("Another task is already running")
+
+    try:
         manager = Manager()
         task(manager)
     finally:
-        _action_lock.release()
+        if acquired:
+            _action_lock.release()
 
 
 def run_metadata_sync(*, force_sync: bool = False) -> None:

@@ -880,7 +880,26 @@ function openEntryActionsModal(entry, entryPayload) {
     'danger'
   );
 
-  actions.append(downloadButton, revertButton, forgetButton, deleteButton);
+  const freshBuildButton = createActionButton(
+    'Fresh Build',
+    'Delete, forget, and rebuild every card for this series',
+    'autorenew',
+    () =>
+      triggerServerAction(
+        freshBuildButton,
+        '/api/actions/fresh-build-series',
+        `Fresh build complete for ${entry.name}`,
+        {
+          workingLabel: 'Fresh building...',
+          refresh: false,
+          payload: entryPayload(),
+          onSuccess: () => refreshEntryPreviews([entry]),
+        }
+      ),
+    'danger'
+  );
+
+  actions.append(downloadButton, revertButton, forgetButton, deleteButton, freshBuildButton);
   modal.content.appendChild(actions);
 
   const dismiss = closeButton(() => closeModal(modal.element));
@@ -4378,9 +4397,6 @@ async function openPreview(entry) {
   message.textContent = 'Loading preview...';
   modal.content.appendChild(message);
 
-  const providedPreview =
-    entry.previewUrl || entry.preview_url || entry.config?.previewUrl || entry.config?.preview_url;
-
   const previewEpisode = resolvePreviewEpisode(entry);
   const previewEpisodeOption = (entry.previewEpisodeOptions || []).find(
     (option) => option.key === previewEpisode
@@ -4417,15 +4433,6 @@ async function openPreview(entry) {
       modal.content.textContent = 'Preview unavailable';
     };
     img.src = src;
-  };
-
-  const showProvidedPreview = () => {
-    if (!providedPreview) {
-      return false;
-    }
-    const separator = providedPreview.includes('?') ? '&' : '?';
-    applyPreviewImage(`${providedPreview}${separator}_=${Date.now()}`);
-    return true;
   };
 
   const failPreview = (error) => {
@@ -4481,14 +4488,7 @@ async function openPreview(entry) {
     }
     applyPreviewImage(src);
   } catch (error) {
-    if (!showProvidedPreview()) {
-      failPreview(error);
-    }
-  }
-
-  if (!providedPreview) {
-    modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
-    return;
+    failPreview(error);
   }
 
   modal.footer.appendChild(closeButton(() => closeModal(modal.element)));
