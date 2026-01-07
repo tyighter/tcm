@@ -42,6 +42,7 @@ from .services import (
     run_asset_downloads_for_series,
     run_builder,
     run_builder_for_series,
+    run_fresh_build_for_series,
     run_metadata_sync,
     revert_series_cards,
     search_plex,
@@ -1081,6 +1082,30 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     self.context, self.tv_manager, series_name, series_config
                 ),
                 context=f"build-series:{series_name}",
+            )
+            return
+
+        if parsed.path == "/api/actions/fresh-build-series":
+            try:
+                payload = self._parse_json()
+            except ValueError as exc:
+                self._error(str(exc))
+                return
+
+            series_name = payload.get("name")
+            if not series_name:
+                self._error("Missing series name")
+                return
+
+            series_config = payload.get("config") if isinstance(payload, dict) else None
+            logger.info("Fresh build requested for %s", series_name)
+            logger.debug("Series config: %s", series_config)
+            invalidate_preview_cache(series_name)
+            self._run_manager_action(
+                lambda: run_fresh_build_for_series(
+                    self.context, self.tv_manager, series_name, series_config
+                ),
+                context=f"fresh-build-series:{series_name}",
             )
             return
 
