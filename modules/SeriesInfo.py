@@ -18,8 +18,9 @@ class SeriesInfo(DatabaseInfoContainer):
 
     __slots__ = (
         'name', 'year', 'emby_id', 'imdb_id', 'jellyfin_id', 'sonarr_id',
-        'tmdb_id', 'tvdb_id', 'tvrage_id', 'match_titles', 'full_name',
-        'match_name', 'full_match_name', 'clean_name', 'full_clean_name',
+        'tmdb_id', 'tvdb_id', 'tvrage_id', 'rating_key', 'match_titles',
+        'full_name', 'match_name', 'full_match_name', 'clean_name',
+        'full_clean_name',
     )
 
 
@@ -34,6 +35,7 @@ class SeriesInfo(DatabaseInfoContainer):
             tmdb_id: Optional[int] = None,
             tvdb_id: Optional[int] = None,
             tvrage_id: Optional[int] = None,
+            rating_key: Optional[Union[int, str]] = None,
             match_titles: bool = True,
         ) -> None:
         """
@@ -70,6 +72,7 @@ class SeriesInfo(DatabaseInfoContainer):
         self.tmdb_id = None
         self.tvdb_id = None
         self.tvrage_id = None
+        self.rating_key = rating_key
         self.match_titles = match_titles
 
         self.set_emby_id(emby_id)
@@ -105,6 +108,7 @@ class SeriesInfo(DatabaseInfoContainer):
         ret += f', tmdb_id={self.tmdb_id}' if self.tmdb_id else ''
         ret += f', tvdb_id={self.tvdb_id}' if self.tvdb_id else ''
         ret += f', tvrage_id={self.tvrage_id}' if self.tvrage_id else ''
+        ret += f', rating_key={self.rating_key}' if self.rating_key else ''
 
         return f'{ret}>'
 
