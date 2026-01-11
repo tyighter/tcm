@@ -535,7 +535,7 @@ def backfill_rating_keys(context: AppContext, tv_manager: TvYamlManager) -> dict
             payload["series"].append({"name": name, "config": config})
             continue
 
-        rating_key = plex.get_series_rating_key(library, series_info)
+        rating_key = plex.get_series_rating_key(library, series_info, config)
         if rating_key is None:
             payload["series"].append({"name": name, "config": config})
             continue

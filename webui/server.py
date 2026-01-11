@@ -14,6 +14,7 @@ from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
 from modules.CleanPath import CleanPath
+from modules.SeriesInfo import SeriesInfo
 from .card_type_images import (
     DEFAULT_THUMBNAIL_SLUG_MAP,
     REPO_THUMBNAIL_ROOT,
@@ -174,6 +175,40 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             logger.error("Unable to load tv.yml for %s: %s", self.path, exc)
             self._error(f"Unable to load tv.yml: {exc}", status=HTTPStatus.BAD_REQUEST)
             return None
+
+    def _annotate_plex_lookup_status(self, payload: dict) -> None:
+        if not self.context.preference_parser.use_plex:
+            return
+
+        try:
+            plex = self.context.get_plex_interface()
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning("Unable to check Plex match status: %s", exc)
+            return
+
+        entries = payload.get("series")
+        if not isinstance(entries, list):
+            return
+
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            config = entry.get("config")
+            if not isinstance(config, dict):
+                continue
+            library = config.get("library")
+            if not library:
+                entry["plex_lookup_failed"] = False
+                continue
+
+            try:
+                series_info = SeriesInfo(entry.get("name", ""), config.get("year"))
+            except Exception:
+                entry["plex_lookup_failed"] = True
+                continue
+
+            rating_key = plex.get_series_rating_key(library, series_info, config)
+            entry["plex_lookup_failed"] = rating_key is None
 
     def _serve_file(self, file_path: Path) -> None:
         if not file_path.exists() or not file_path.is_file():
@@ -740,6 +775,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             if payload is None:
                 return
 
+            self._annotate_plex_lookup_status(payload)
             self._json_response(payload)
             return
 
