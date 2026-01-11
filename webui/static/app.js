@@ -673,6 +673,7 @@ async function loadConfiguration() {
       name: entry.name,
       slug: entry.slug || sanitizePathName(entry.name),
       config: entry.config || {},
+      plexLookupFailed: entry.plex_lookup_failed === true,
     };
     initializeEntryPreviewState(mapped);
     return mapped;
@@ -4693,6 +4694,9 @@ function isPlexMissing(entry) {
   if (!isServiceEnabled('plexEnabled')) {
     return false;
   }
+  if (entry?.plexLookupFailed) {
+    return true;
+  }
   const { config } = entry || {};
   if (!config || !hasValue(config.library)) {
     return true;
@@ -4717,12 +4721,20 @@ function statusPill(text, tone = 'muted') {
   return pill;
 }
 
+function clearPlexLookupFailure(entry) {
+  if (entry) {
+    entry.plexLookupFailed = false;
+  }
+}
+
 function applyLibraryValue(entry, value) {
   if (!hasValue(value)) {
     delete entry.config.library;
+    clearPlexLookupFailure(entry);
     return;
   }
   entry.config.library = value;
+  clearPlexLookupFailure(entry);
 }
 
 function applyTmdbValue(entry, rawValue) {
@@ -4744,11 +4756,13 @@ function applyRatingKeyValue(entry, rawValue) {
   const value = rawValue.trim();
   if (!value) {
     delete entry.config.rating_key;
+    clearPlexLookupFailure(entry);
     return;
   }
 
   const numeric = Number(value);
   entry.config.rating_key = Number.isFinite(numeric) ? numeric : value;
+  clearPlexLookupFailure(entry);
 }
 
 function buildUnmatchedRow(entry, onResolved) {
@@ -4906,6 +4920,7 @@ function buildUnmatchedRow(entry, onResolved) {
       entry.config.imdb_id = ids.imdb_id;
     }
 
+    clearPlexLookupFailure(entry);
     refreshStatuses();
   };
 

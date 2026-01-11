@@ -178,19 +178,39 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
            reraise=True)
     def __get_series(self,
             library: PlexLibrary,
-            series_info: SeriesInfo) -> Optional[PlexShow]:
+            series_info: SeriesInfo,
+            config: Optional[dict[str, Any]] = None) -> Optional[PlexShow]:
         """
         Get the Series object from within the given Library associated
-        with the given SeriesInfo. This tries to match by TVDb ID,
-        TMDb ID, name, and finally name.
+        with the given SeriesInfo. This tries to match by rating key,
+        TVDb ID, TMDb ID, name, and finally name.
 
         Args:
             library: The Library object to search for within Plex.
             series_info: Series to get the episodes of.
+            config: Optional configuration payload containing Plex metadata.
 
         Returns:
             The Series associated with this SeriesInfo object.
         """
+
+        rating_key = getattr(series_info, 'rating_key', None)
+        if rating_key is None and config:
+            rating_key = config.get('rating_key')
+
+        if rating_key is not None:
+            try:
+                rating_key_value = int(rating_key)
+            except (TypeError, ValueError):
+                rating_key_value = rating_key
+
+            try:
+                entry = self.__server.fetchItem(rating_key_value)
+            except NotFound:
+                pass
+            else:
+                if isinstance(entry, PlexShow):
+                    return entry
 
         # Try by IMDb ID
         if series_info.has_id('imdb_id'):
@@ -428,13 +448,17 @@ class PlexInterface(EpisodeDataSource, MediaServer, SyncInterface):
 
 
     @catch_and_log('Error getting series rating key', default=None)
-    def get_series_rating_key(self, library_name: str, series_info: SeriesInfo) -> Optional[str]:
+    def get_series_rating_key(self,
+            library_name: str,
+            series_info: SeriesInfo,
+            config: Optional[dict[str, Any]] = None,
+        ) -> Optional[str]:
         """Return the Plex rating key for a series if available."""
 
         if not (library := self.__get_library(library_name)):
             return None
 
-        if not (series := self.__get_series(library, series_info)):
+        if not (series := self.__get_series(library, series_info, config)):
             return None
 
         try:
