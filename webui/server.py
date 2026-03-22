@@ -24,7 +24,7 @@ from .card_type_images import (
     slugify_card_type,
     static_thumbnail_cache_complete,
 )
-from .config import AppContext, create_app_context
+from .config import AppContext, create_app_context, preference_setup_required
 from .options import build_card_type_extras, build_series_fields
 from .services import (
     ActionInProgressError,
@@ -805,7 +805,12 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/settings":
-            self._json_response(load_settings(self.context.preference_file))
+            settings = load_settings(self.context.preference_file)
+            settings["preference_setup_required"] = preference_setup_required(
+                self.context.preference_file
+            )
+            settings["preference_file_generated"] = self.context.preference_file_generated
+            self._json_response(settings)
             return
 
         if parsed.path == "/api/backups":

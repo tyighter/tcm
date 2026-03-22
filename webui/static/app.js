@@ -16,6 +16,8 @@ const state = {
   },
   settings: {
     series_sync_interval_seconds: 45,
+    preference_setup_required: false,
+    preference_file_generated: false,
     preferences: {},
     tautulli: {
       url: '',
@@ -530,6 +532,7 @@ async function init() {
     setSearchVisibility(false);
     renderEntries();
     requestEntryPreviews(state.entries);
+    maybeOpenPreferenceWizard();
   } catch (error) {
     showToast(`Failed to load configuration: ${error.message}`, 'error');
   }
@@ -5484,7 +5487,7 @@ function openSettingsModal() {
 
   const preferencesKeys = Object.keys(preferences || {});
   const filteredPreferencesKeys = preferencesKeys.filter(
-    (key) => key !== 'tautulli',
+    (key) => key !== 'tautulli' && key !== 'webui',
   );
   if (filteredPreferencesKeys.length) {
     filteredPreferencesKeys.forEach((key) => {
@@ -5614,6 +5617,103 @@ function openSettingsModal() {
 
   modal.content.append(quickActions, tautulliSection, syncSection, preferencesSection, status);
   modal.footer.append(saveButton, closeButton(() => closeModal(modal.element)));
+}
+
+function maybeOpenPreferenceWizard() {
+  if (!state.settings?.preference_setup_required) {
+    return;
+  }
+
+  openPreferenceWizardModal();
+}
+
+function openPreferenceWizardModal() {
+  const modal = buildModal('Initial preferences setup');
+
+  const helper = document.createElement('p');
+  helper.className = 'helper-text';
+  helper.textContent =
+    'Complete these required preferences before using the rest of the app.';
+  modal.content.appendChild(helper);
+
+  const preferences = state.settings?.preferences || {};
+  const options = preferences.options && typeof preferences.options === 'object'
+    ? preferences.options
+    : {};
+
+  const form = document.createElement('div');
+  form.className = 'modal-controls';
+
+  const sourceField = document.createElement('label');
+  sourceField.className = 'modal-controls__field';
+  const sourceLabel = document.createElement('span');
+  sourceLabel.className = 'modal-controls__label';
+  sourceLabel.textContent = 'Source directory';
+  const sourceInput = document.createElement('input');
+  sourceInput.type = 'text';
+  sourceInput.value = options.source || '/config/source/';
+  sourceField.append(sourceLabel, sourceInput);
+
+  const seriesField = document.createElement('label');
+  seriesField.className = 'modal-controls__field';
+  const seriesLabel = document.createElement('span');
+  seriesLabel.className = 'modal-controls__label';
+  seriesLabel.textContent = 'Series YAML path';
+  const seriesInput = document.createElement('input');
+  seriesInput.type = 'text';
+  seriesInput.value = options.series || '/config/tv.yml';
+  seriesField.append(seriesLabel, seriesInput);
+
+  form.append(sourceField, seriesField);
+  modal.content.appendChild(form);
+
+  const status = document.createElement('p');
+  status.className = 'helper-text';
+  modal.content.appendChild(status);
+
+  const saveButton = document.createElement('button');
+  saveButton.type = 'button';
+  saveButton.textContent = 'Save and continue';
+  saveButton.addEventListener('click', async () => {
+    const source = sourceInput.value.trim();
+    const series = seriesInput.value.trim();
+
+    if (!source || !series) {
+      status.textContent = 'Source directory and series YAML path are required.';
+      return;
+    }
+
+    saveButton.disabled = true;
+    status.textContent = 'Saving preferences...';
+
+    try {
+      await saveSettings({
+        preferences: {
+          options: {
+            source,
+            series,
+          },
+          webui: {
+            setup_complete: true,
+          },
+        },
+      });
+      state.settings.preference_setup_required = false;
+      status.textContent = 'Preferences saved.';
+      showToast('Preferences saved');
+      closeModal(modal.element);
+      await loadConfiguration();
+      renderEntries();
+      requestEntryPreviews(state.entries);
+    } catch (error) {
+      status.textContent = error.message || 'Unable to save preferences';
+      showToast(status.textContent, 'error');
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
+
+  modal.footer.appendChild(saveButton);
 }
 
 // -----------------------------------------------------------------------------

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from typing import Optional
+from yaml import safe_dump, safe_load
 
 from modules.FontValidator import FontValidator
 from modules.MediaInfoSet import MediaInfoSet
@@ -24,6 +25,7 @@ class AppContext:
     preference_parser: PreferenceParser
     preference_file: Path
     is_docker: bool
+    preference_file_generated: bool
     _plex_interface: Optional["PlexInterface"] = None
     _plex_lock: Lock = Lock()
 
@@ -98,12 +100,77 @@ def _resolve_preference_file(repo_root: Path) -> Path:
     return repo_root / "config" / "preferences.yml"
 
 
+def _bootstrap_preference_data() -> dict:
+    """Default preference content for first-run startup."""
+
+    return {
+        "options": {
+            "source": "/config/source/",
+            "series": "/config/tv.yml",
+        },
+        "webui": {
+            "setup_complete": False,
+        },
+    }
+
+
+def ensure_preference_file(preference_file: Path) -> bool:
+    """
+    Ensure a preference file exists.
+
+    Returns:
+        True when a new file was generated, False if one already existed.
+    """
+
+    if preference_file.exists():
+        return False
+
+    preference_file.parent.mkdir(parents=True, exist_ok=True)
+    preference_file.write_text(
+        safe_dump(_bootstrap_preference_data(), sort_keys=False),
+        encoding="utf-8",
+    )
+    return True
+
+
+def preference_setup_required(preference_file: Path) -> bool:
+    """Whether the first-run preference wizard should be shown."""
+
+    if not preference_file.exists():
+        return True
+
+    try:
+        loaded = safe_load(preference_file.read_text(encoding="utf-8")) or {}
+    except (OSError, ValueError):
+        return True
+
+    if not isinstance(loaded, dict):
+        return True
+
+    options = loaded.get("options", {})
+    if not isinstance(options, dict):
+        return True
+
+    source = str(options.get("source", "")).strip()
+    series = str(options.get("series", "")).strip()
+
+    if not source or not series:
+        return True
+
+    webui = loaded.get("webui", {})
+    if isinstance(webui, dict) and webui.get("setup_complete") is False:
+        return True
+
+    return False
+
+
 def create_app_context() -> AppContext:
     """Create the shared application context."""
 
     repo_root = Path(__file__).resolve().parent.parent
     preference_file = _resolve_preference_file(repo_root)
     is_docker = os.environ.get(ENV_IS_DOCKER, "false").lower() == "true"
+    preference_file_generated = ensure_preference_file(preference_file)
 
     parser = PreferenceParser(preference_file, is_docker)
     if not parser.valid:
@@ -121,4 +188,5 @@ def create_app_context() -> AppContext:
         preference_parser=parser,
         preference_file=preference_file,
         is_docker=is_docker,
+        preference_file_generated=preference_file_generated,
     )
