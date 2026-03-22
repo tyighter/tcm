@@ -33,6 +33,21 @@ for default_file in "${default_files[@]}"; do
 done
 
 python3 - <<'PY'
+from pathlib import Path
+
+from modules.MissingFontReport import write_missing_font_report
+
+try:
+    write_missing_font_report(
+        preferences_file=Path('/config/preferences.yml'),
+        output_file=Path('/config/missingfonts.yml'),
+        is_docker=True,
+    )
+except Exception as exc:  # pylint: disable=broad-except
+    print(f"Warning: unable to generate missing font report: {exc}")
+PY
+
+python3 - <<'PY'
 from webui.card_type_images import bake_card_type_thumbnails
 
 try:
