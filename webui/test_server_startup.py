@@ -10,6 +10,7 @@ from threading import Event
 from types import MethodType, SimpleNamespace
 
 from webui import server
+from webui.config import ensure_preference_file, preference_setup_required
 
 
 class _FailingTvManager:
@@ -58,7 +59,11 @@ def _build_handler(path: str, tv_manager: object) -> server.WebRequestHandler:
     handler = server.WebRequestHandler.__new__(server.WebRequestHandler)
     handler.path = path
     handler.tv_manager = tv_manager
-    handler.context = SimpleNamespace(preference_parser=SimpleNamespace(use_tmdb=True, use_plex=True))
+    handler.context = SimpleNamespace(
+        preference_parser=SimpleNamespace(use_tmdb=True, use_plex=True),
+        preference_file=Path("/tmp/preferences.yml"),
+        preference_file_generated=False,
+    )
     handler.font_directory = Path("/fonts")
 
     handler._headers = []  # type: ignore[attr-defined]
@@ -203,3 +208,28 @@ def test_api_preview_generates_card(monkeypatch) -> None:
     assert generated["preview_episode_key"] == "1-2"
     assert generated["force"] is True
     assert generated["prefer_existing"] is False
+
+
+def test_ensure_preference_file_generates_defaults(tmp_path) -> None:
+    preference_file = tmp_path / "preferences.yml"
+
+    generated = ensure_preference_file(preference_file)
+
+    assert generated is True
+    assert preference_file.exists()
+    assert preference_setup_required(preference_file) is True
+
+
+def test_preference_setup_required_false_when_values_and_setup_complete(tmp_path) -> None:
+    preference_file = tmp_path / "preferences.yml"
+    preference_file.write_text(
+        """
+options:
+  source: /config/source/
+  series: /config/tv.yml
+webui:
+  setup_complete: true
+""".strip()
+    )
+
+    assert preference_setup_required(preference_file) is False
