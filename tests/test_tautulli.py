@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import ANY, patch
+from datetime import datetime, timezone
 
 import webui.tautulli as tautulli
 from webui.tautulli import (
@@ -200,3 +201,36 @@ class ActivityDeduplicationTests(TestCase):
                 context, tv_manager, previous_payload, current_payload
             )
             run_builder.assert_called_once_with(context, tv_manager, "Example")
+
+    def test_first_poll_recent_additions_trigger_build_once(self) -> None:
+        tv_manager = DummyTvManager()
+        plex = DummyPlex("show-1")
+        context = DummyContext(plex, use_fallback=True)
+
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        recent_entry = {
+            "series": "Example",
+            "episode": "Pilot",
+            "season": "Season 1",
+            "timestamp": now_ms,
+            "showRatingKey": "show-1",
+            "episodeRatingKey": "show-1-1",
+        }
+
+        first_payload = {"watched": [], "added": [recent_entry]}
+        second_payload = {"watched": [], "added": [recent_entry]}
+
+        with patch("webui.tautulli.run_builder_for_series") as run_builder:
+            _trigger_builds_for_recent_changes(
+                context,
+                tv_manager,
+                None,
+                first_payload,
+                first_poll_cutoff_timestamp_ms=now_ms - 5000,
+            )
+            run_builder.assert_called_once_with(context, tv_manager, "Example")
+
+            _trigger_builds_for_recent_changes(
+                context, tv_manager, first_payload, second_payload
+            )
+            self.assertEqual(run_builder.call_count, 1)

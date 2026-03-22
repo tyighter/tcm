@@ -806,15 +806,21 @@ def _trigger_builds_for_recent_changes(
     tv_manager: TvYamlManager,
     previous_payload: dict[str, Any] | None,
     current_payload: dict[str, Any],
+    *,
+    first_poll_cutoff_timestamp_ms: int | None = None,
 ) -> None:
-    if not previous_payload:
-        return None
-
     previous_payload = previous_payload or {}
     previous_added = previous_payload.get("added", [])
     previous_watched = previous_payload.get("watched", [])
 
     new_added = _new_entries(previous_added, current_payload.get("added", []))
+    if first_poll_cutoff_timestamp_ms is not None:
+        new_added = [
+            entry
+            for entry in new_added
+            if (_normalize_timestamp(entry.get("timestamp")) or 0)
+            >= first_poll_cutoff_timestamp_ms
+        ]
     new_watch_state_changes = _new_entries(
         previous_watched, current_payload.get("watched", [])
     )
@@ -867,7 +873,12 @@ def _trigger_builds_for_recent_changes(
 
 
 def _monitor_recent_activity(
-    context: AppContext, tv_manager: TvYamlManager, interval_seconds: int
+    context: AppContext,
+    tv_manager: TvYamlManager,
+    interval_seconds: int,
+    *,
+    process_first_poll_additions: bool = True,
+    first_poll_grace_window_seconds: int | None = None,
 ) -> None:
     last_cache_key: str | None = None
     previous_payload: dict[str, Any] | None = None
@@ -901,8 +912,32 @@ def _monitor_recent_activity(
             continue
 
         try:
+            first_poll_cutoff_timestamp_ms: int | None = None
+            if process_first_poll_additions and previous_payload is None:
+                grace_window_seconds = (
+                    first_poll_grace_window_seconds
+                    if first_poll_grace_window_seconds is not None
+                    else interval_seconds
+                )
+                grace_window_seconds = max(0, int(grace_window_seconds))
+                tautulli_logger.info(
+                    "Processing first poll additions with grace window: %d seconds",
+                    grace_window_seconds,
+                )
+                first_poll_cutoff_timestamp_ms = int(
+                    (
+                        datetime.now(tz=timezone.utc)
+                        - timedelta(seconds=grace_window_seconds)
+                    ).timestamp()
+                    * 1000
+                )
+
             _trigger_builds_for_recent_changes(
-                context, tv_manager, previous_payload, payload
+                context,
+                tv_manager,
+                previous_payload,
+                payload,
+                first_poll_cutoff_timestamp_ms=first_poll_cutoff_timestamp_ms,
             )
         except Exception as exc:  # pylint: disable=broad-except
             tautulli_logger.warning(
