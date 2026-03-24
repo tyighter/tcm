@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import mimetypes
@@ -242,6 +243,25 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         except ConnectionResetError:
             logger.warning(
                 "Client connection reset before file response could be sent for %s",
+                self.path,
+            )
+
+    def _serve_binary(self, data: bytes, mime: str = "application/octet-stream") -> None:
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", mime or "application/octet-stream")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+
+        try:
+            self.wfile.write(data)
+        except BrokenPipeError:
+            logger.warning(
+                "Client disconnected before binary response could be sent for %s",
+                self.path,
+            )
+        except ConnectionResetError:
+            logger.warning(
+                "Client connection reset before binary response could be sent for %s",
                 self.path,
             )
 
@@ -764,7 +784,32 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 episode=episode,
             )
             if preview_path is None:
-                self.send_error(HTTPStatus.NOT_FOUND.value)
+                if preview_episode_key is None and season is not None and episode is not None:
+                    preview_episode_key = f"{season}-{episode}"
+
+                try:
+                    mime, data = get_or_generate_preview(
+                        self.context,
+                        self.tv_manager,
+                        series_name,
+                        series_config,
+                        force=False,
+                        preview_episode_key=preview_episode_key,
+                        prefer_existing=True,
+                    )
+                except Exception:
+                    logger.exception("Unable to generate static preview for %s", series_name)
+                    self.send_error(HTTPStatus.NOT_FOUND.value)
+                    return
+
+                try:
+                    self._serve_binary(base64.b64decode(data), mime)
+                except Exception:
+                    logger.exception(
+                        "Unable to decode generated static preview for %s",
+                        series_name,
+                    )
+                    self.send_error(HTTPStatus.NOT_FOUND.value)
                 return
 
             self._serve_file(preview_path)
