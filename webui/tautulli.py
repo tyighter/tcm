@@ -76,6 +76,7 @@ _plex_watch_state_last_polled: int | None = None
 
 _DEFAULT_CACHE_KEY = "__all__"
 _MIN_ACTIVITY_POLL_INTERVAL_SECONDS = 15
+_STARTUP_ACTIVITY_LOOKBACK_DAYS = 14
 
 _TRAILING_YEAR_PATTERNS = (
     re.compile(r"\s*\(\d{4}\)\s*$"),
@@ -362,7 +363,7 @@ def fetch_recent_watches(settings: TautulliSettings, lookup: list[dict[str, Any]
             )
         )
 
-    filtered = _filter_recent(recent)
+    filtered = _filter_recent(recent, days=_STARTUP_ACTIVITY_LOOKBACK_DAYS)
     tautulli_logger.info(
         "Filtered watched entries (%d): %s", len(filtered), json.dumps(filtered, ensure_ascii=False)
     )
@@ -487,7 +488,11 @@ def fetch_recently_added(
                     )
                 )
 
-    filtered = _filter_recent(entries, timestamp_field="timestamp")
+    filtered = _filter_recent(
+        entries,
+        days=_STARTUP_ACTIVITY_LOOKBACK_DAYS,
+        timestamp_field="timestamp",
+    )
     tautulli_logger.info(
         "Filtered recently added entries (%d): %s",
         len(filtered),
@@ -914,22 +919,26 @@ def _monitor_recent_activity(
         try:
             first_poll_cutoff_timestamp_ms: int | None = None
             if process_first_poll_additions and previous_payload is None:
-                grace_window_seconds = (
-                    first_poll_grace_window_seconds
-                    if first_poll_grace_window_seconds is not None
-                    else interval_seconds
-                )
-                grace_window_seconds = max(0, int(grace_window_seconds))
-                tautulli_logger.info(
-                    "Processing first poll additions with grace window: %d seconds",
-                    grace_window_seconds,
-                )
+                if first_poll_grace_window_seconds is not None:
+                    grace_window_seconds = max(0, int(first_poll_grace_window_seconds))
+                    tautulli_logger.info(
+                        "Processing first poll additions with grace window override: %d seconds",
+                        grace_window_seconds,
+                    )
+                    cutoff_datetime = datetime.now(tz=timezone.utc) - timedelta(
+                        seconds=grace_window_seconds
+                    )
+                else:
+                    tautulli_logger.info(
+                        "Processing first poll additions with %d-day startup lookback",
+                        _STARTUP_ACTIVITY_LOOKBACK_DAYS,
+                    )
+                    cutoff_datetime = datetime.now(tz=timezone.utc) - timedelta(
+                        days=_STARTUP_ACTIVITY_LOOKBACK_DAYS
+                    )
+
                 first_poll_cutoff_timestamp_ms = int(
-                    (
-                        datetime.now(tz=timezone.utc)
-                        - timedelta(seconds=grace_window_seconds)
-                    ).timestamp()
-                    * 1000
+                    cutoff_datetime.timestamp() * 1000
                 )
 
             _trigger_builds_for_recent_changes(

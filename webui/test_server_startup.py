@@ -210,6 +210,44 @@ def test_api_preview_generates_card(monkeypatch) -> None:
     assert generated["prefer_existing"] is False
 
 
+def test_api_preview_static_falls_back_to_generated_preview(monkeypatch) -> None:
+    handler = _build_handler("/api/preview/static?name=Demo%20Show", SimpleNamespace())
+
+    monkeypatch.setattr(
+        handler,
+        "_find_series_entry",
+        lambda **_kwargs: ("Demo Show", {"library": "TV"}),
+    )
+    monkeypatch.setattr(handler, "_resolve_preview_path", lambda **_kwargs: None)
+
+    generated: dict[str, object] = {}
+
+    def _mock_get_or_generate(context, tv_manager, name, config, *, force, preview_episode_key, prefer_existing):
+        generated.update(
+            {
+                "name": name,
+                "config": config,
+                "force": force,
+                "preview_episode_key": preview_episode_key,
+                "prefer_existing": prefer_existing,
+            }
+        )
+        return "image/png", base64.b64encode(b"demo-static").decode("ascii")
+
+    monkeypatch.setattr(server, "get_or_generate_preview", _mock_get_or_generate)
+
+    handler.do_GET()
+
+    assert handler.status == HTTPStatus.OK
+    assert ("Content-Type", "image/png") in handler._headers
+    assert handler.wfile.getvalue() == b"demo-static"
+    assert generated["name"] == "Demo Show"
+    assert generated["config"] == {"library": "TV"}
+    assert generated["force"] is False
+    assert generated["preview_episode_key"] is None
+    assert generated["prefer_existing"] is True
+
+
 def test_ensure_preference_file_generates_defaults(tmp_path) -> None:
     preference_file = tmp_path / "preferences.yml"
 

@@ -5,10 +5,12 @@ from datetime import datetime, timezone
 
 import webui.tautulli as tautulli
 from webui.tautulli import (
+    TautulliSettings,
     _plex_watched_changes,
     _reset_plex_watch_state_cache,
     _series_lookup,
     _trigger_builds_for_recent_changes,
+    fetch_recent_watches,
     refresh_watch_state_for_series,
 )
 
@@ -234,3 +236,19 @@ class ActivityDeduplicationTests(TestCase):
                 context, tv_manager, first_payload, second_payload
             )
             self.assertEqual(run_builder.call_count, 1)
+
+
+class RecentActivityLookbackTests(TestCase):
+    def test_fetch_recent_watches_uses_startup_lookback_window(self) -> None:
+        settings = TautulliSettings(url="http://localhost", api_key="key")
+        lookup = [{"name": "Example", "rating_key": 101, "aliases": ["example"]}]
+
+        with patch("webui.tautulli._filter_recent", return_value=[]) as filter_recent:
+            with patch.object(
+                settings,
+                "request",
+                return_value={"data": []},
+            ):
+                fetch_recent_watches(settings, lookup)
+
+        self.assertEqual(filter_recent.call_args.kwargs["days"], 14)
