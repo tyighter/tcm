@@ -12,27 +12,27 @@ series:
     rating_key: 165878
     episode_rating_keys:
       '165878':
-        S1E1: '185533'
-        S1E2: '185534'
-        S1E3: '185535'
-        S1E4: '185536'
-        S1E5: '185537'
-        S1E6: '185538'
-        S1E7: '185539'
-        S1E8: '185540'
-        S1E9: '185541'
-        S1E10: '185542'
-        S2E1: '185596'
-        S2E2: '185597'
-        S2E3: '185598'
-        S2E4: '185599'
-        S2E5: '185600'
-        S2E6: '185601'
-        S2E7: '185602'
-        S2E8: '185603'
-        S2E9: '185604'
-        S2E10: '185605'
-        S2E11: '185606'
+        S1E1: '205856'
+        S1E2: '205857'
+        S1E3: '205858'
+        S1E4: '205859'
+        S1E5: '205860'
+        S1E6: '205861'
+        S1E7: '205862'
+        S1E8: '205863'
+        S1E9: '205864'
+        S1E10: '205865'
+        S2E1: '205866'
+        S2E2: '205867'
+        S2E3: '205868'
+        S2E4: '205869'
+        S2E5: '205870'
+        S2E6: '205871'
+        S2E7: '205872'
+        S2E8: '205873'
+        S2E9: '205874'
+        S2E10: '205875'
+        S2E11: '205876'
         S2E12: '185607'
         S2E13: '185608'
         S2E14: '185609'
@@ -142,6 +142,14 @@ series:
         S9E4: '185633'
         S9E5: '191582'
         S9E6: '195246'
+        S9E7: '204514'
+        S9E8: '205962'
+        S9E9: '205588'
+        S9E10: '206993'
+        S9E11: '210892'
+        S9E12: '211782'
+        S9E13: '230303'
+        S9E14: '231061'
   "A Man on the Inside (2024)":
     library: TV Shows
     card_type: standard
@@ -269,6 +277,14 @@ series:
         S5E6: '191381'
         S5E7: '200220'
         S5E8: '201598'
+        S5E9: '204492'
+        S5E10: '205073'
+        S5E11: '205451'
+        S5E12: '206824'
+        S5E13: '207867'
+        S5E14: '211631'
+        S5E15: '230204'
+        S5E16: '230969'
   "Adam Eats the 80s (2022)":
     library: TV Shows
     card_type: landscape
@@ -667,6 +683,94 @@ series:
         S4E28: '98769'
         S4E29: '98770'
         S4E30: '98771'
+  "Avatar: The Last Airbender (2005)":
+    library: TV Shows
+    card_type: anime
+    tmdb_id: 246
+    tvdb_id: 74852
+    imdb_id: tt0417299
+    font:
+      file: /config/fonts/papyrus.ttf
+      case: title
+      size: 150%
+    seasons:
+      '1': 'Book One: Water'
+      '2': 'Book Two: Earth'
+      '3': 'Book Three: Fire'
+      hide: auto
+    previewEpisode: 1-3
+    extras:
+      episode_text_font: /config/fonts/papyrus.ttf
+      episode_text_font_size: 1.4
+    episode_text_format: Episode {episode_number_cardinal}
+    episode_text_case: title
+    translation:
+      - language: JA
+        key: Kanji
+    rating_key: 98776
+    episode_rating_keys:
+      '98776':
+        S1E1: '98778'
+        S1E2: '98779'
+        S1E3: '98780'
+        S1E4: '98781'
+        S1E5: '98782'
+        S1E6: '98783'
+        S1E7: '98784'
+        S1E8: '98785'
+        S1E9: '98786'
+        S1E10: '98787'
+        S1E11: '98788'
+        S1E12: '98789'
+        S1E13: '98790'
+        S1E14: '98791'
+        S1E15: '98792'
+        S1E16: '98793'
+        S1E17: '98794'
+        S1E18: '98795'
+        S1E19: '98796'
+        S1E20: '98797'
+        S2E1: '98821'
+        S2E2: '98822'
+        S2E3: '98823'
+        S2E4: '98824'
+        S2E5: '98825'
+        S2E6: '98826'
+        S2E7: '98827'
+        S2E8: '98828'
+        S2E9: '98829'
+        S2E10: '98830'
+        S2E11: '98831'
+        S2E12: '98832'
+        S2E13: '98833'
+        S2E14: '98834'
+        S2E15: '98835'
+        S2E16: '98836'
+        S2E17: '98837'
+        S2E18: '98838'
+        S2E19: '98839'
+        S2E20: '98840'
+        S3E1: '98799'
+        S3E2: '98800'
+        S3E3: '98801'
+        S3E4: '98802'
+        S3E5: '98803'
+        S3E6: '98804'
+        S3E7: '98805'
+        S3E8: '98806'
+        S3E9: '98807'
+        S3E10: '98808'
+        S3E11: '98809'
+        S3E12: '98810'
+        S3E13: '98811'
+        S3E14: '98812'
+        S3E15: '98813'
+        S3E16: '98814'
+        S3E17: '98815'
+        S3E18: '98816'
+        S3E19: '98817'
+        S3E20: '98818'
+        S3E21: '98819'
   "Bar Rescue (2011)":
     library: TV Shows
     card_type: tinted frame
@@ -957,6 +1061,11 @@ series:
         S9E37: '99227'
         S9E38: '99228'
         S9E40: '99229'
+        S10E1: '218657'
+        S10E2: '218658'
+        S10E3: '218659'
+        S10E4: '218660'
+        S10E5: '231058'
   "Big Fat Quiz (2004)":
     library: TV Shows
     card_type: logo
@@ -1011,6 +1120,8 @@ series:
         S2025E2: '203650'
         S1E2020: '204341'
         S2007E1: '204370'
+        S2026E1: '204533'
+        S2013E1: '204967'
   "Blue Planet (2001)":
     library: TV Shows
     card_type: landscape
@@ -2499,6 +2610,7 @@ series:
       file: /config/fonts/fallout.otf
       color: '#EADD48'
       size: 250%
+      case: title
     tmdb_id: 106379
     rating_key: 106048
     tvdb_id: 416744
@@ -2517,30 +2629,37 @@ series:
         S2E2: '203578'
         S2E3: '204193'
         S2E4: '204432'
+        S2E5: '205046'
+        S2E6: '205317'
+        S2E7: '206725'
+        S2E8: '207781'
     episode_text_format: 'Episode: {episode_number_cardinal}'
     extras:
-      episode_text_vertical_shift: 420
+      episode_text_vertical_shift: 450
       text_vertical_shift: 500
       episode_text_font_size: 1.8
       episode_text_font: /config/fonts/silostencil.ttf
       title_text_line_end_offset: 50
       episode_text_justification: left
-    previewEpisode: 1-7
+    previewEpisode: 1-2
   "Fargo (2014)":
     library: TV Shows
-    card_type: tinted frame
+    card_type: anime
     watched_style: unique
     unwatched_style: grayscale blur
     font:
       file: /config/fonts/fargo.otf
       case: title
-      color: '#EE4B2B'
-      size: 155%
+      color: '#d11d1d'
+      size: 175%
     extras:
       episode_text_font_size: 2.3
-      episode_text_color: '#ffffff'
-      frame_color: '#ADD8E6'
+      episode_text_color: '#72a7b5'
+      frame_color: '#'
       frame_width: 8
+      episode_text_case: title
+      episode_text_font: /config/fonts/Mondia ExtraBold.otf
+      episode_text_vertical_shift: -75
     seasons:
       '1': '2006'
       '2': '1979'
@@ -2553,26 +2672,26 @@ series:
     imdb_id: tt2802850
     episode_rating_keys:
       '106066':
-        S1E1: '106068'
-        S1E2: '106069'
-        S1E3: '106070'
-        S1E4: '106071'
-        S1E5: '106072'
-        S1E6: '106073'
-        S1E7: '106074'
-        S1E8: '106075'
-        S1E9: '106076'
-        S1E10: '106077'
-        S2E1: '106079'
-        S2E2: '106080'
-        S2E3: '106081'
-        S2E4: '106082'
-        S2E5: '106083'
-        S2E6: '106084'
-        S2E7: '106085'
-        S2E8: '106086'
-        S2E9: '106087'
-        S2E10: '106088'
+        S1E1: '218635'
+        S1E2: '218636'
+        S1E3: '218637'
+        S1E4: '218638'
+        S1E5: '218639'
+        S1E6: '218640'
+        S1E7: '218641'
+        S1E8: '218642'
+        S1E9: '218643'
+        S1E10: '218644'
+        S2E1: '218646'
+        S2E2: '218647'
+        S2E3: '218648'
+        S2E4: '218649'
+        S2E5: '218650'
+        S2E6: '218651'
+        S2E7: '218652'
+        S2E8: '218653'
+        S2E9: '218654'
+        S2E10: '218655'
         S3E1: '106090'
         S3E2: '106091'
         S3E3: '106092'
@@ -2604,6 +2723,10 @@ series:
         S5E8: '106120'
         S5E9: '106121'
         S5E10: '106122'
+    episode_text_format: '{episode_number_ordinal} Episode'
+    translation:
+      - language: JA
+        key: Kanji
   "For All Mankind (2019)":
     library: TV Shows
     card_type: standard
@@ -3068,6 +3191,82 @@ series:
         S4E8: '107955'
         S4E9: '107956'
         S4E10: '107957'
+  "Hannibal (2013)":
+    library: TV Shows
+    card_type: anime
+    tmdb_id: 40008
+    tvdb_id: 259063
+    imdb_id: tt2243973
+    font:
+      file: /config/fonts/fonnts.com-calgary_serial-regular.otf
+      case: lower
+      size: 175%
+      replacements:
+        é: e
+        è: e
+        ê: e
+        Œ: OE
+        œ: oe
+        '-': ' '
+        ô: o
+        ō: o
+        delete_missing: true
+    episode_text_format: '{season_number_ordinal} Meal, {episode_number_ordinal} Course '
+    seasons:
+      hide: true
+    extras:
+      episode_text_case: upper
+      episode_text_font: /config/fonts/fonnts.com-calgary_serial-regular.otf
+      episode_text_font_size: 1.9
+      episode_text_vertical_shift: -75
+    previewEpisode: 2-11
+    unwatched_style: blur grayscale
+    watched_style: unique
+    translation:
+      - language: JA
+        key: Kanji
+    rating_key: 182784
+    episode_rating_keys:
+      '182784':
+        S1E1: '182828'
+        S1E2: '182829'
+        S1E3: '182804'
+        S1E4: '182805'
+        S1E5: '182807'
+        S1E6: '182808'
+        S1E7: '182809'
+        S1E8: '182811'
+        S1E9: '182810'
+        S1E10: '182812'
+        S1E11: '182814'
+        S1E12: '182813'
+        S1E13: '182802'
+        S2E1: '182837'
+        S2E2: '182839'
+        S2E3: '182817'
+        S2E4: '182819'
+        S2E5: '182820'
+        S2E6: '182818'
+        S2E7: '182821'
+        S2E8: '182822'
+        S2E9: '182823'
+        S2E10: '182824'
+        S2E11: '182825'
+        S2E12: '182826'
+        S2E13: '182827'
+        S3E1: '182786'
+        S3E2: '182787'
+        S3E3: '182788'
+        S3E4: '182789'
+        S3E5: '182790'
+        S3E6: '182791'
+        S3E7: '182793'
+        S3E8: '182794'
+        S3E9: '182795'
+        S3E10: '182796'
+        S3E11: '182797'
+        S3E12: '182798'
+        S3E13: '182799'
   "High Potential (2024)":
     library: TV Shows
     cand_type: standard
@@ -3101,6 +3300,13 @@ series:
         S2E5: '180020'
         S2E7: '185034'
         S2E8: '204426'
+        S2E9: '205309'
+        S2E10: '205314'
+        S2E11: '206726'
+        S2E12: '207780'
+        S2E13: '211542'
+        S2E14: '229871'
+        S2E15: '230851'
   "His Dark Materials (2019)":
     library: TV Shows
     card_type: olivier
@@ -3414,7 +3620,7 @@ series:
     extras:
       banner_fill_color: rgba(135,10,10,0.6)
     tmdb_id: 46286
-    rating_key: 109104
+    rating_key: 208193
     tvdb_id: 254986
     imdb_id: tt1865740
     episode_rating_keys:
@@ -3649,6 +3855,237 @@ series:
         S17E8: '200235'
         S17E9: '201655'
         S17E10: '202181'
+      '208193':
+        S0E2: '208195'
+        S0E7: '208330'
+        S0E8: '208331'
+        S1E1: '208333'
+        S1E2: '208334'
+        S1E3: '208335'
+        S1E4: '208336'
+        S1E5: '208337'
+        S1E6: '208338'
+        S1E7: '208339'
+        S1E8: '208340'
+        S2E1: '208342'
+        S2E2: '208343'
+        S2E3: '208344'
+        S2E4: '208345'
+        S2E5: '208346'
+        S2E6: '208347'
+        S2E7: '208348'
+        S2E8: '208349'
+        S2E9: '208350'
+        S2E10: '208351'
+        S2E11: '208352'
+        S2E12: '208353'
+        S2E13: '208354'
+        S3E1: '208356'
+        S3E2: '208357'
+        S3E3: '208358'
+        S3E4: '208359'
+        S3E5: '208360'
+        S3E6: '208361'
+        S3E7: '208362'
+        S3E8: '208363'
+        S3E9: '208364'
+        S3E10: '208365'
+        S3E11: '208366'
+        S3E12: '208367'
+        S3E13: '208368'
+        S4E1: '208370'
+        S4E2: '208371'
+        S4E3: '208372'
+        S4E4: '208373'
+        S4E5: '208374'
+        S4E6: '208375'
+        S4E7: '208376'
+        S4E8: '208377'
+        S4E9: '208378'
+        S4E10: '208379'
+        S4E11: '208380'
+        S4E12: '208381'
+        S4E13: '208382'
+        S5E1: '208384'
+        S5E2: '208385'
+        S5E3: '208386'
+        S5E4: '208387'
+        S5E5: '208388'
+        S5E6: '208389'
+        S5E7: '208390'
+        S5E8: '208391'
+        S5E9: '208392'
+        S5E10: '208393'
+        S5E11: '208394'
+        S5E12: '208395'
+        S5E13: '208396'
+        S5E14: '208397'
+        S5E15: '208398'
+        S5E16: '208399'
+        S6E1: '208401'
+        S6E2: '208402'
+        S6E3: '208403'
+        S6E4: '208404'
+        S6E5: '208405'
+        S6E6: '208406'
+        S6E7: '208407'
+        S6E8: '208408'
+        S6E9: '208409'
+        S6E10: '208410'
+        S6E11: '208411'
+        S6E12: '208412'
+        S6E13: '208413'
+        S6E14: '208414'
+        S6E15: '208415'
+        S6E16: '208416'
+        S7E1: '208418'
+        S7E2: '208419'
+        S7E3: '208420'
+        S7E4: '208421'
+        S7E5: '208422'
+        S7E6: '208423'
+        S7E7: '208424'
+        S7E8: '208425'
+        S7E9: '208426'
+        S7E10: '208427'
+        S7E11: '208428'
+        S7E12: '208429'
+        S7E13: '208430'
+        S8E1: '208431'
+        S8E2: '208432'
+        S8E3: '208433'
+        S8E4: '208434'
+        S8E5: '208435'
+        S8E6: '208436'
+        S8E7: '208437'
+        S8E8: '208438'
+        S8E9: '208439'
+        S8E10: '208440'
+        S8E11: '208441'
+        S8E12: '208442'
+        S8E13: '208239'
+        S8E14: '208240'
+        S8E15: '208241'
+        S8E16: '208242'
+        S9E1: '208244'
+        S9E2: '208245'
+        S9E3: '208246'
+        S9E4: '208247'
+        S9E5: '208248'
+        S9E6: '208249'
+        S9E7: '208250'
+        S9E8: '208251'
+        S9E9: '208252'
+        S9E10: '208253'
+        S9E11: '208254'
+        S9E12: '208255'
+        S9E13: '208256'
+        S9E14: '208257'
+        S9E15: '208258'
+        S9E16: '208259'
+        S10E1: '208261'
+        S10E2: '208262'
+        S10E3: '208263'
+        S10E4: '208264'
+        S10E5: '208265'
+        S10E6: '208266'
+        S10E7: '208267'
+        S10E8: '208268'
+        S10E9: '208269'
+        S10E10: '208270'
+        S10E11: '208271'
+        S10E12: '208272'
+        S10E13: '208273'
+        S10E14: '208274'
+        S10E15: '208275'
+        S10E16: '208276'
+        S11E1: '208278'
+        S11E2: '208279'
+        S11E3: '208280'
+        S11E4: '208281'
+        S11E5: '208282'
+        S11E6: '208283'
+        S11E7: '208284'
+        S11E8: '208285'
+        S11E9: '208286'
+        S11E10: '208287'
+        S11E11: '208288'
+        S11E12: '208289'
+        S11E13: '208290'
+        S11E14: '208291'
+        S11E15: '208292'
+        S11E16: '208293'
+        S12E1: '208295'
+        S12E2: '208296'
+        S12E3: '208297'
+        S12E4: '208298'
+        S12E5: '208299'
+        S12E6: '208300'
+        S12E7: '208301'
+        S12E8: '208302'
+        S12E9: '208303'
+        S12E10: '208304'
+        S12E11: '208305'
+        S12E12: '208306'
+        S12E13: '208307'
+        S12E14: '208308'
+        S12E15: '208309'
+        S12E16: '208310'
+        S13E1: '208312'
+        S13E2: '208313'
+        S13E3: '208314'
+        S13E4: '208315'
+        S13E5: '208316'
+        S13E6: '208317'
+        S13E7: '208318'
+        S13E8: '208319'
+        S13E9: '208320'
+        S13E10: '208321'
+        S13E11: '208322'
+        S13E12: '208323'
+        S13E13: '208324'
+        S13E14: '208325'
+        S13E15: '208326'
+        S14E1: '208327'
+        S14E2: '208328'
+        S14E3: '208329'
+        S14E4: '208197'
+        S14E5: '208198'
+        S14E6: '208199'
+        S14E7: '208200'
+        S14E8: '208201'
+        S14E9: '208202'
+        S14E10: '208203'
+        S15E1: '208205'
+        S15E2: '208206'
+        S15E3: '208207'
+        S15E4: '208208'
+        S15E5: '208209'
+        S15E6: '208210'
+        S15E7: '208211'
+        S15E8: '208212'
+        S15E9: '208213'
+        S15E10: '208214'
+        S16E1: '208216'
+        S16E2: '208217'
+        S16E3: '208218'
+        S16E4: '208219'
+        S16E5: '208220'
+        S16E6: '208221'
+        S16E7: '208222'
+        S16E8: '208223'
+        S16E9: '208224'
+        S16E10: '208225'
+        S17E1: '208227'
+        S17E2: '208228'
+        S17E3: '208229'
+        S17E4: '208230'
+        S17E5: '208231'
+        S17E6: '208232'
+        S17E7: '208233'
+        S17E8: '208234'
+        S17E9: '208235'
+        S17E10: '208236'
   "Ink Master: Angels (2017)":
     library: TV Shows
     card_type: comic book
@@ -3770,33 +4207,7 @@ series:
         S4E12: '109425'
         S4E13: '109426'
         S4E14: '109427'
-  "IT: Welcome to Derry (2025)":
-    library: TV Shows
-    card_type: divider
-    tmdb_id: 200875
-    tvdb_id: 418424
-    imdb_id: tt19244304
-    watched_style: unique
-    unwatched_style: blur grayscale
-    font:
-      file: /config/fonts/king1.otf
-      size: 200%
-    seasons:
-      hide: true
-    image_source_priority: tmdb, plex
-    episode_text_format: Chapter {episode_number}
-    rating_key: 184299
-    episode_rating_keys:
-      '184299':
-        S1E1: '184301'
-        S1E2: '185349'
-        S1E3: '192151'
-        S1E4: '197048'
-        S1E5: '198138'
-        S1E6: '200656'
-        S1E7: '201293'
-        S1E8: '202089'
-  "Its Always Sunny in Philadelphia (2005)":
+  "It's Always Sunny in Philadelphia (2005)":
     library: TV Shows
     card_type: divider
     font:
@@ -3992,6 +4403,32 @@ series:
         S17E6: '109666'
         S17E7: '109667'
         S17E8: '109668'
+  "IT: Welcome to Derry (2025)":
+    library: TV Shows
+    card_type: divider
+    tmdb_id: 200875
+    tvdb_id: 418424
+    imdb_id: tt19244304
+    watched_style: unique
+    unwatched_style: blur grayscale
+    font:
+      file: /config/fonts/king1.otf
+      size: 200%
+    seasons:
+      hide: true
+    image_source_priority: tmdb, plex
+    episode_text_format: Chapter {episode_number}
+    rating_key: 184299
+    episode_rating_keys:
+      '184299':
+        S1E1: '184301'
+        S1E2: '185349'
+        S1E3: '192151'
+        S1E4: '197048'
+        S1E5: '198138'
+        S1E6: '200656'
+        S1E7: '201293'
+        S1E8: '202089'
   "Kitchen Nightmares (US) (2007)":
     library: TV Shows
     card_type: tinted frame
@@ -4126,6 +4563,7 @@ series:
         S8E9: '110597'
         S8E10: '110598'
         S8E11: '110599'
+        S6E10: '204968'
   "Laid-Back Camp (2018)":
     library: TV Shows
     card_type: anime
@@ -4815,6 +5253,8 @@ series:
         S4E11: '113558'
         S4E12: '113559'
         S4E13: '113560'
+    extras:
+      episode_text_font_size: 1.9
   "Muscles & Mayhem: An Unauthorized Story of American Gladiators (2023)":
     library: TV Shows
     card_type: divider
@@ -5211,14 +5651,14 @@ series:
     imdb_id: tt13146488
     episode_rating_keys:
       '115192':
-        S1E1: '115201'
-        S1E2: '115202'
-        S1E3: '115203'
-        S1E4: '115204'
-        S1E5: '115205'
-        S1E6: '115206'
-        S1E7: '115207'
-        S1E8: '115208'
+        S1E1: '206686'
+        S1E2: '206687'
+        S1E3: '206688'
+        S1E4: '206689'
+        S1E5: '206690'
+        S1E6: '206691'
+        S1E7: '206692'
+        S1E8: '206693'
         S2E1: '115194'
         S2E2: '115195'
         S2E3: '115196'
@@ -5319,6 +5759,7 @@ series:
         NINE: IX
         TEN: X
         delete_missing: true
+      vertical_shift: 25
     tmdb_id: 103540
     rating_key: 198461
     tvdb_id: 415151
@@ -5338,11 +5779,15 @@ series:
         S2E3: '202174'
         S2E4: '203604'
         S2E5: '204222'
-    episode_text_format: 'Book {season_number_cardinal}: Chapter {episode_number_cardinal}'
+        S2E6: '204501'
+        S2E7: '205055'
+        S2E8: '205448'
+    episode_text_format: Chapter {episode_number_cardinal}
     extras:
       episode_text_case: upper
       episode_text_font: /config/fonts/greek.ttf
-      episode_text_font_size: 1.5
+      episode_text_font_size: 1.7
+      episode_text_vertical_shift: -55
     seasons:
       '1': The Lightning Thief
       '2': The Sea of Monsters
@@ -5350,6 +5795,7 @@ series:
     translation:
       - language: JA
         key: Kanji
+    previewEpisode: 2-6
   "Planet Earth (2006)":
     library: TV Shows
     card_type: landscape
@@ -5454,9 +5900,9 @@ series:
         S1E3: '115533'
         S1E4: '115534'
         S1E5: '115535'
-        S1E6: '115536'
-        S1E7: '115537'
-        S1E8: '115538'
+        S1E6: '211089'
+        S1E7: '211090'
+        S1E8: '211091'
   "Poker Face (2023)":
     library: TV Shows
     card_type: standard
@@ -6908,18 +7354,18 @@ series:
         S8E4: '199060'
         S8E5: '199061'
         S8E6: '199062'
-        S8E7: '199063'
-        S8E8: '199064'
-        S8E9: '199065'
-        S8E10: '199066'
-        S8E11: '199067'
-        S8E12: '199068'
-        S8E13: '199069'
-        S8E14: '199070'
-        S8E15: '199071'
-        S8E16: '199072'
-        S8E17: '199073'
-        S8E18: '199074'
+        S8E7: '208809'
+        S8E8: '208810'
+        S8E9: '208811'
+        S8E10: '208812'
+        S8E11: '208813'
+        S8E12: '208814'
+        S8E13: '208815'
+        S8E14: '208816'
+        S8E15: '208817'
+        S8E16: '208818'
+        S8E17: '208819'
+        S8E18: '208820'
         S9E1: '199075'
         S9E2: '199076'
         S9E3: '199077'
@@ -7165,6 +7611,12 @@ series:
         S23E8: '202177'
         S23E9: '203575'
         S23E10: '204430'
+        S23E11: '206480'
+        S23E12: '206481'
+        S23E13: '206817'
+        S23E14: '208237'
+        S23E15: '210276'
+        S23E16: '210277'
   "Quantum Leap (1989)":
     tmdb_id: 4018
     library: TV Shows
@@ -7954,6 +8406,62 @@ series:
         S2E8: '204363'
         S2E9: '204364'
         S2E10: '204365'
+  "St. Denis Medical (2024)":
+    library: TV Shows
+    card_type: standard
+    tmdb_id: 251941
+    tvdb_id: 435916
+    imdb_id: tt21433690
+    previewEpisode: 1-15
+    font:
+      file: /config/fonts/gill-sans-nova-condensed.ttf
+      size: 190%
+      case: title
+    extras:
+      episode_text_font_size: 1.9
+      episode_text_font: /config/fonts/gill-sans-nova-condensed.ttf
+    seasons:
+      hide: true
+    episode_text_format: Season {season_number} | Episode {episode_number}
+    rating_key: 120475
+    episode_rating_keys:
+      '120475':
+        S1E1: '120477'
+        S1E2: '120478'
+        S1E3: '120479'
+        S1E4: '120480'
+        S1E5: '120481'
+        S1E6: '120482'
+        S1E7: '120483'
+        S1E8: '120484'
+        S1E9: '120485'
+        S1E10: '120486'
+        S1E11: '120487'
+        S1E12: '120488'
+        S1E13: '120489'
+        S1E14: '120490'
+        S1E15: '120491'
+        S1E16: '120492'
+        S1E17: '120493'
+        S1E18: '120494'
+        S2E1: '191167'
+        S2E2: '191180'
+        S2E3: '192239'
+        S2E4: '197165'
+        S2E5: '198165'
+        S2E6: '200000'
+        S2E7: '201469'
+        S2E8: '202134'
+        S2E9: '204394'
+        S2E10: '205014'
+        S2E11: '206569'
+        S2E12: '207587'
+        S2E13: '211454'
+        S2E14: '212482'
+        S2E15: '230757'
+        S2E16: '231794'
+    unwatched_style: grayscale
+    watched_style: unique
   "Star Trek: Deep Space Nine (1993)":
     library: TV Shows
     font:
@@ -8413,7 +8921,7 @@ series:
         S2E4: '120818'
         S2E5: '120819'
         S2E6: '120820'
-        S2E7: '120821'
+        S2E7: '208537'
         S2E8: '120822'
         S2E9: '120823'
         S2E10: '120824'
@@ -10044,7 +10552,7 @@ series:
       - language: JA
         key: Kanji
     tmdb_id: 72844
-    rating_key: 124298
+    rating_key: 209231
     tvdb_id: 345246
     imdb_id: tt6763664
     episode_rating_keys:
@@ -10068,6 +10576,26 @@ series:
         S2E7: '124318'
         S2E8: '124319'
         S2E9: '124320'
+      '209231':
+        S1E1: '209233'
+        S1E2: '209234'
+        S1E3: '209235'
+        S1E4: '209236'
+        S1E5: '209237'
+        S1E6: '209238'
+        S1E7: '209239'
+        S1E8: '209240'
+        S1E9: '209241'
+        S1E10: '209242'
+        S2E1: '209245'
+        S2E2: '209246'
+        S2E3: '209247'
+        S2E4: '209248'
+        S2E5: '209249'
+        S2E6: '209250'
+        S2E7: '209251'
+        S2E8: '209252'
+        S2E9: '209253'
   "The IT Crowd (2006)":
     library: TV Shows
     card_type: sherlock
@@ -10830,6 +11358,10 @@ series:
         S3E7: '202498'
         S3E8: '203656'
         S3E9: '204255'
+        S3E10: '204538'
+        S3E11: '211974'
+        S3E12: '230405'
+        S3E13: '231171'
   "The Witcher (2019)":
     library: TV Shows
     card_type: divider
