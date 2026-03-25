@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import contextvars
 import hashlib
 import json
 import logging
@@ -11,6 +12,7 @@ import subprocess
 import sys
 import time
 from copy import deepcopy
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
@@ -42,11 +44,23 @@ _action_lock = Lock()
 _preview_cache_lock = Lock()
 _preview_cache: dict[str, "PreviewPayload"] = {}
 _preview_log_lock = Lock()
+_show_loggers: dict[str, logging.Logger] = {}
+_show_log_forwarder_lock = Lock()
+_show_log_forwarder_configured = False
+_active_show_log: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "active_show_log",
+    default=None,
+)
+_suppress_main_logs: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "suppress_main_logs",
+    default=False,
+)
 _sync_lock = Lock()
 _last_sync: float = 0.0
 _DEFAULT_SYNC_COOLDOWN_SECONDS = 45.0
 _SYNC_COOLDOWN_SECONDS = _DEFAULT_SYNC_COOLDOWN_SECONDS
 PREVIEW_LOG_FILE = Path("/config/preview.log")
+SHOW_LOG_DIR = Path("/config/showlogs")
 PREVIEW_CACHE_DIR = Path("/config/preview-cache")
 PREVIEW_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 12  # 12 hours
 PREVIEW_CACHE_REFRESH_BUFFER_MS = 1000 * 60 * 30  # Refresh when within 30 minutes of expiry
@@ -89,7 +103,7 @@ def _preview_logger() -> logging.Logger | None:
 
         try:
             PREVIEW_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-            handler = logging.FileHandler(PREVIEW_LOG_FILE, mode="a")
+            handler = logging.FileHandler(PREVIEW_LOG_FILE, mode="w")
         except OSError as exc:  # pragma: no cover - filesystem errors are environment-specific
             logger.warning("Unable to write preview log to %s: %s", PREVIEW_LOG_FILE, exc)
             return None
@@ -122,8 +136,8 @@ def _log_preview_event(
 ) -> None:
     """Write a structured preview event to the preview log file."""
 
-    preview_logger = _preview_logger()
-    if preview_logger is None:
+    show_logger = _show_logger(show_name)
+    if show_logger is None:
         return
 
     episode_label = episode_key or "random"
@@ -144,9 +158,122 @@ def _log_preview_event(
     )
 
     if error:
-        preview_logger.error("%s | error=%s", message, error)
+        show_logger.error("%s | error=%s", message, error)
     else:
-        preview_logger.info(message)
+        show_logger.info(message)
+
+
+def _show_logger(show_name: str) -> logging.Logger | None:
+    """Return a file-backed logger for show-specific activity."""
+
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", show_name).strip("._-")
+    if not safe_name:
+        safe_name = "unknown-show"
+
+    with _preview_log_lock:
+        existing = _show_loggers.get(safe_name)
+        if existing is not None:
+            return existing
+
+        try:
+            SHOW_LOG_DIR.mkdir(parents=True, exist_ok=True)
+            log_path = SHOW_LOG_DIR / f"{safe_name}.log"
+            handler = logging.FileHandler(log_path, mode="w")
+        except OSError as exc:  # pragma: no cover - filesystem errors are environment-specific
+            logger.warning("Unable to write show log for %s: %s", show_name, exc)
+            return None
+
+        handler.setLevel(logging.INFO)
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+        )
+
+        show_logger = logging.getLogger(f"tcm.show.{safe_name}")
+        for existing_handler in list(show_logger.handlers):
+            show_logger.removeHandler(existing_handler)
+            try:
+                existing_handler.close()
+            except Exception:  # pragma: no cover - defensive cleanup
+                pass
+        show_logger.setLevel(logging.INFO)
+        show_logger.addHandler(handler)
+        show_logger.propagate = False
+        show_logger._configured = True  # type: ignore[attr-defined]
+        _show_loggers[safe_name] = show_logger
+        show_logger.info("Show logging initialized for %s", show_name)
+        return show_logger
+
+
+class _ShowLogForwardingHandler(logging.Handler):
+    """Forward all active show-context records to that show's file logger."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if record.name.startswith("tcm.show."):
+            return
+
+        show_name = _active_show_log.get()
+        if not show_name:
+            return
+
+        show_logger = _show_logger(show_name)
+        if show_logger is None:
+            return
+
+        forwarded_record = logging.makeLogRecord(record.__dict__.copy())
+        show_logger.handle(forwarded_record)
+
+
+class _MainLogScopeFilter(logging.Filter):
+    """Suppress nested show-scope logs from main handlers."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not _suppress_main_logs.get():
+            return True
+
+        return bool(getattr(record, "show_top_level", False))
+
+
+_MAIN_LOG_SCOPE_FILTER = _MainLogScopeFilter()
+
+
+def _ensure_main_log_scope_filters() -> None:
+    """Install main-log suppression filters on non-forwarding root handlers."""
+
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers:
+        if isinstance(handler, _ShowLogForwardingHandler):
+            continue
+
+        if _MAIN_LOG_SCOPE_FILTER not in handler.filters:
+            handler.addFilter(_MAIN_LOG_SCOPE_FILTER)
+
+
+def _ensure_show_log_forwarder() -> None:
+    """Attach a root handler that mirrors logs into active show logs."""
+
+    global _show_log_forwarder_configured
+    with _show_log_forwarder_lock:
+        if _show_log_forwarder_configured:
+            return
+
+        root_logger = logging.getLogger()
+        root_logger.addHandler(_ShowLogForwardingHandler())
+        _show_log_forwarder_configured = True
+
+
+@contextmanager
+def _show_log_scope(show_name: str):
+    """Scope log forwarding for a specific show."""
+
+    _ensure_show_log_forwarder()
+    _ensure_main_log_scope_filters()
+    token = _active_show_log.set(show_name)
+    suppress_token = _suppress_main_logs.set(True)
+    try:
+        yield
+    finally:
+        _suppress_main_logs.reset(suppress_token)
+        _active_show_log.reset(token)
 
 
 def preview_logger() -> logging.Logger | None:
@@ -165,8 +292,8 @@ def _log_preview_cache_decision(
 ) -> None:
     """Emit structured cache decisions to the preview log."""
 
-    preview_log = _preview_logger()
-    if preview_log is None:
+    show_log = _show_logger(show_name)
+    if show_log is None:
         return
 
     episode_label = preview_episode_key or "random"
@@ -176,7 +303,7 @@ def _log_preview_cache_decision(
         if value is not None and value != ""
     )
     suffix = f" | {extras}" if extras else ""
-    preview_log.info(
+    show_log.info(
         "Preview cache decision | show=%s | episode=%s | key=%s | decision=%s%s",
         show_name,
         episode_label,
@@ -1117,91 +1244,98 @@ def get_or_generate_preview(
 ) -> tuple[str, str]:
     """Return a cached preview or generate and cache a new one."""
 
-    preloaded_show: Show | None = None
-
-    def _load_show() -> Show:
-        nonlocal preloaded_show
-        if preloaded_show is None:
-            preloaded_show = _load_show_for_preview(context, tv_manager, show_name, series_config)
-        return preloaded_show
-
-    cache_key = _preview_cache_key(
+    logger.info(
+        "Working on show %s (web UI preview request)",
         show_name,
-        series_config,
-        preview_episode_key=preview_episode_key,
+        extra={"show_top_level": True},
     )
-    if not force:
-        with _preview_cache_lock:
-            cached = _preview_cache.get(cache_key)
-        if cached is not None:
-            if not _generated_preview_superseded(
-                _load_show,
-                cached,
-                prefer_existing=prefer_existing,
-                preview_episode_key=preview_episode_key,
-                show_name=show_name,
-                cache_key=cache_key,
-                origin="memory-cache",
-            ):
-                _log_preview_event(
-                    show_name,
-                    cached.source_path,
-                    status="success",
+
+    with _show_log_scope(show_name):
+        preloaded_show: Show | None = None
+
+        def _load_show() -> Show:
+            nonlocal preloaded_show
+            if preloaded_show is None:
+                preloaded_show = _load_show_for_preview(context, tv_manager, show_name, series_config)
+            return preloaded_show
+
+        cache_key = _preview_cache_key(
+            show_name,
+            series_config,
+            preview_episode_key=preview_episode_key,
+        )
+        if not force:
+            with _preview_cache_lock:
+                cached = _preview_cache.get(cache_key)
+            if cached is not None:
+                if not _generated_preview_superseded(
+                    _load_show,
+                    cached,
+                    prefer_existing=prefer_existing,
+                    preview_episode_key=preview_episode_key,
+                    show_name=show_name,
+                    cache_key=cache_key,
                     origin="memory-cache",
-                    episode_key=preview_episode_key,
-                    cached=True,
-                    existing_source=cached.existing_source,
-                )
-                return cached.mime, cached.data
+                ):
+                    _log_preview_event(
+                        show_name,
+                        cached.source_path,
+                        status="success",
+                        origin="memory-cache",
+                        episode_key=preview_episode_key,
+                        cached=True,
+                        existing_source=cached.existing_source,
+                    )
+                    return cached.mime, cached.data
 
-    try:
-        show = preloaded_show or _load_show_for_preview(
-            context, tv_manager, show_name, series_config
-        )
-
-        preview_from_source = (
-            _preview_from_existing_sources(show, preview_episode_key)
-            if prefer_existing
-            else None
-        )
-        if preview_from_source is not None:
-            payload = preview_from_source
-            preview_origin = "existing-source"
-        else:
-            payload = generate_preview(
-                context,
-                tv_manager,
-                show_name,
-                series_config,
-                preferred_episode_key=preview_episode_key,
-                preloaded_show=show,
+        try:
+            show = preloaded_show or _load_show_for_preview(
+                context, tv_manager, show_name, series_config
             )
-            preview_origin = "generated"
-    except Exception as exc:  # pylint: disable=broad-except
+
+            preview_from_source = (
+                _preview_from_existing_sources(show, preview_episode_key)
+                if prefer_existing
+                else None
+            )
+            if preview_from_source is not None:
+                payload = preview_from_source
+                preview_origin = "existing-source"
+            else:
+                payload = generate_preview(
+                    context,
+                    tv_manager,
+                    show_name,
+                    series_config,
+                    preferred_episode_key=preview_episode_key,
+                    preloaded_show=show,
+                )
+                preview_origin = "generated"
+        except Exception as exc:  # pylint: disable=broad-except
+            _log_preview_event(
+                show_name,
+                None,
+                status="failure",
+                episode_key=preview_episode_key,
+                error=str(exc),
+            )
+            raise
+
+        with _preview_cache_lock:
+            _preview_cache[cache_key] = payload
+
         _log_preview_event(
             show_name,
-            None,
-            status="failure",
+            payload.source_path,
+            status="success",
+            origin=preview_origin,
             episode_key=preview_episode_key,
-            error=str(exc),
+            cached=False,
+            persistent=False,
+            existing_source=payload.existing_source,
         )
-        raise
 
-    with _preview_cache_lock:
-        _preview_cache[cache_key] = payload
-
-    _log_preview_event(
-        show_name,
-        payload.source_path,
-        status="success",
-        origin=preview_origin,
-        episode_key=preview_episode_key,
-        cached=False,
-        persistent=False,
-        existing_source=payload.existing_source,
-    )
-
-    return payload.mime, payload.data
+        return payload.mime, payload.data
 
 
 def generate_preview(
@@ -1369,40 +1503,46 @@ def run_builder_for_series(
 ) -> None:
     """Run the builder pipeline for a single series."""
 
-    config = _prepare_series_context(tv_manager, series_name, series_config)
+    with _show_log_scope(series_name):
+        logger.info(
+            "Working on show %s (build)",
+            series_name,
+            extra={"show_top_level": True},
+        )
+        config = _prepare_series_context(tv_manager, series_name, series_config)
 
-    runtime_config = merge_series_configuration(
-        context, tv_manager, series_name, config
-    )
+        runtime_config = merge_series_configuration(
+            context, tv_manager, series_name, config
+        )
 
-    show = Show(
-        series_name,
-        runtime_config,
-        context.preference_parser.source_directory,
-        context.preference_parser,
-    )
+        show = Show(
+            series_name,
+            runtime_config,
+            context.preference_parser.source_directory,
+            context.preference_parser,
+        )
 
-    if not show.valid:
-        raise RuntimeError("Series configuration is invalid; check required fields")
+        if not show.valid:
+            raise RuntimeError("Series configuration is invalid; check required fields")
 
-    # Avoid a circular import at module load time by importing tautulli lazily.
-    from . import tautulli
+        # Avoid a circular import at module load time by importing tautulli lazily.
+        from . import tautulli
 
-    tautulli.refresh_watch_state_for_series(context, tv_manager, series_name)
+        tautulli.refresh_watch_state_for_series(context, tv_manager, series_name)
 
-    def _run(manager: Manager) -> None:
-        _maybe_sync_series_files(manager, force=force_sync)
-        manager.shows = [show]
-        manager.archives = []
+        def _run(manager: Manager) -> None:
+            _maybe_sync_series_files(manager, force=force_sync)
+            manager.shows = [show]
+            manager.archives = []
 
-        if manager.preferences.create_archive and show.archive:
-            manager.archives = [
-                ShowArchive(manager.preferences.archive_directory, show)
-            ]
+            if manager.preferences.create_archive and show.archive:
+                manager.archives = [
+                    ShowArchive(manager.preferences.archive_directory, show)
+                ]
 
-        manager._Manager__run(serial=True)  # pylint: disable=protected-access
+            manager._Manager__run(serial=True)  # pylint: disable=protected-access
 
-    _run_manager_job(_run, assume_locked=assume_locked)
+        _run_manager_job(_run, assume_locked=assume_locked)
 
 
 def download_logo_for_series(
@@ -1417,56 +1557,62 @@ def download_logo_for_series(
 ) -> None:
     """Ensure the specified series has an up-to-date logo on disk."""
 
-    config = _prepare_series_context(tv_manager, series_name, series_config)
-
-    runtime_config = merge_series_configuration(
-        context,
-        tv_manager,
-        series_name,
-        config,
-    )
-
-    show = Show(
-        series_name,
-        runtime_config,
-        context.preference_parser.source_directory,
-        context.preference_parser,
-    )
-
-    if not show.valid:
-        raise RuntimeError("Series configuration is invalid; check required fields")
-
-    safe_series_dir = CleanPath.sanitize_name(series_name)
-    logo_path = (
-        context.preference_parser.source_directory / safe_series_dir / "logo.png"
-    )
-
-    def _run(manager: Manager) -> None:
-        _maybe_sync_series_files(manager, force=force_sync)
-        show.assign_interfaces(
-            manager.emby_interface,
-            manager.jellyfin_interface,
-            manager.plex_interface,
-            manager.sonarr_interfaces,
-            manager.tvdb_interface,
-            manager.tmdb_interface,
+    with _show_log_scope(series_name):
+        logger.info(
+            "Working on show %s (logo download)",
+            series_name,
+            extra={"show_top_level": True},
         )
-        show.download_logo()
+        config = _prepare_series_context(tv_manager, series_name, series_config)
 
-    attempts = 0
-    while True:
-        try:
-            _run_manager_job(_run)
-            return
-        except ActionInProgressError:
-            attempts += 1
-            if attempts > max_wait_attempts:
-                raise
+        runtime_config = merge_series_configuration(
+            context,
+            tv_manager,
+            series_name,
+            config,
+        )
 
-            time.sleep(wait_interval)
+        show = Show(
+            series_name,
+            runtime_config,
+            context.preference_parser.source_directory,
+            context.preference_parser,
+        )
 
-            if not _action_lock.locked() and logo_path.exists() and logo_path.is_file():
+        if not show.valid:
+            raise RuntimeError("Series configuration is invalid; check required fields")
+
+        safe_series_dir = CleanPath.sanitize_name(series_name)
+        logo_path = (
+            context.preference_parser.source_directory / safe_series_dir / "logo.png"
+        )
+
+        def _run(manager: Manager) -> None:
+            _maybe_sync_series_files(manager, force=force_sync)
+            show.assign_interfaces(
+                manager.emby_interface,
+                manager.jellyfin_interface,
+                manager.plex_interface,
+                manager.sonarr_interfaces,
+                manager.tvdb_interface,
+                manager.tmdb_interface,
+            )
+            show.download_logo()
+
+        attempts = 0
+        while True:
+            try:
+                _run_manager_job(_run)
                 return
+            except ActionInProgressError:
+                attempts += 1
+                if attempts > max_wait_attempts:
+                    raise
+
+                time.sleep(wait_interval)
+
+                if not _action_lock.locked() and logo_path.exists() and logo_path.is_file():
+                    return
 
 
 def run_asset_downloads_for_series(
@@ -1479,41 +1625,47 @@ def run_asset_downloads_for_series(
 ) -> None:
     """Download logos and sources for a single series."""
 
-    config = _prepare_series_context(tv_manager, series_name, series_config)
-    runtime_config = merge_series_configuration(
-        context, tv_manager, series_name, config
-    )
+    with _show_log_scope(series_name):
+        logger.info(
+            "Working on show %s (asset downloads)",
+            series_name,
+            extra={"show_top_level": True},
+        )
+        config = _prepare_series_context(tv_manager, series_name, series_config)
+        runtime_config = merge_series_configuration(
+            context, tv_manager, series_name, config
+        )
 
-    show = Show(
-        series_name,
-        runtime_config,
-        context.preference_parser.source_directory,
-        context.preference_parser,
-    )
+        show = Show(
+            series_name,
+            runtime_config,
+            context.preference_parser.source_directory,
+            context.preference_parser,
+        )
 
-    if not show.valid:
-        raise RuntimeError("Series configuration is invalid; check required fields")
+        if not show.valid:
+            raise RuntimeError("Series configuration is invalid; check required fields")
 
-    def _run(manager: Manager) -> None:
-        _maybe_sync_series_files(manager, force=force_sync)
-        manager.shows = [show]
-        manager.archives = []
+        def _run(manager: Manager) -> None:
+            _maybe_sync_series_files(manager, force=force_sync)
+            manager.shows = [show]
+            manager.archives = []
 
-        if manager.preferences.create_archive and show.archive:
-            manager.archives = [
-                ShowArchive(manager.preferences.archive_directory, show)
-            ]
+            if manager.preferences.create_archive and show.archive:
+                manager.archives = [
+                    ShowArchive(manager.preferences.archive_directory, show)
+                ]
 
-        manager.assign_interfaces()
-        manager.set_show_ids()
-        manager.read_show_source()
-        manager.add_new_episodes()
-        manager.set_episode_ids()
-        manager.add_translations()
-        manager.download_logos()
-        manager.select_source_images()
+            manager.assign_interfaces()
+            manager.set_show_ids()
+            manager.read_show_source()
+            manager.add_new_episodes()
+            manager.set_episode_ids()
+            manager.add_translations()
+            manager.download_logos()
+            manager.select_source_images()
 
-    _run_manager_job(_run)
+        _run_manager_job(_run)
 
 
 def _run_fixer_command(
@@ -1582,10 +1734,16 @@ def revert_series_cards(
 ) -> None:
     """Invoke fixer.py to revert cards for a single series."""
 
-    args = _build_fixer_arguments(
-        tv_manager, series_name, series_config, "--revert-series"
-    )
-    _run_fixer_command(args)
+    with _show_log_scope(series_name):
+        logger.info(
+            "Working on show %s (revert cards)",
+            series_name,
+            extra={"show_top_level": True},
+        )
+        args = _build_fixer_arguments(
+            tv_manager, series_name, series_config, "--revert-series"
+        )
+        _run_fixer_command(args)
 
 
 def forget_series_cards(
@@ -1595,10 +1753,16 @@ def forget_series_cards(
 ) -> None:
     """Invoke fixer.py to forget previously loaded cards for a series."""
 
-    args = _build_fixer_arguments(
-        tv_manager, series_name, series_config, "--forget-cards"
-    )
-    _run_fixer_command(args)
+    with _show_log_scope(series_name):
+        logger.info(
+            "Working on show %s (forget cards)",
+            series_name,
+            extra={"show_top_level": True},
+        )
+        args = _build_fixer_arguments(
+            tv_manager, series_name, series_config, "--forget-cards"
+        )
+        _run_fixer_command(args)
 
 
 def delete_series_cards(
@@ -1611,47 +1775,53 @@ def delete_series_cards(
 ) -> None:
     """Delete generated cards for a single series using fixer.py."""
 
-    config = _prepare_series_context(tv_manager, series_name, series_config)
-    card_directory = config.get("card_directory")
-    if not card_directory:
-        library_name = config.get("library")
-        library_config = tv_manager.load().get("libraries", {}).get(library_name)
+    with _show_log_scope(series_name):
+        logger.info(
+            "Working on show %s (delete cards)",
+            series_name,
+            extra={"show_top_level": True},
+        )
+        config = _prepare_series_context(tv_manager, series_name, series_config)
+        card_directory = config.get("card_directory")
+        if not card_directory:
+            library_name = config.get("library")
+            library_config = tv_manager.load().get("libraries", {}).get(library_name)
 
-        library_path = None
-        if isinstance(library_config, dict):
-            library_path = library_config.get("path")
-        elif isinstance(library_config, str):
-            library_path = library_config
+            library_path = None
+            if isinstance(library_config, dict):
+                library_path = library_config.get("path")
+            elif isinstance(library_config, str):
+                library_path = library_config
 
-        if library_path:
-            card_directory = str(
-                CleanPath(library_path) / CleanPath.sanitize_name(series_name)
-            )
+            if library_path:
+                card_directory = str(
+                    CleanPath(library_path) / CleanPath.sanitize_name(series_name)
+                )
 
-    if not card_directory:
-        raise ValueError("Series must specify a card_directory to delete cards")
+        if not card_directory:
+            raise ValueError("Series must specify a card_directory to delete cards")
 
-    target = CleanPath(card_directory).sanitize()
-    if not target.is_absolute():
-        target = (context.preference_parser.source_directory / target).resolve()
+        target = CleanPath(card_directory).sanitize()
+        if not target.is_absolute():
+            target = (context.preference_parser.source_directory / target).resolve()
 
-    extension = getattr(
-        context.preference_parser,
-        "card_extension",
-        TitleCard.DEFAULT_CARD_EXTENSION,
-    )
+        extension = getattr(
+            context.preference_parser,
+            "card_extension",
+            TitleCard.DEFAULT_CARD_EXTENSION,
+        )
 
-    fixer_script = Path(__file__).resolve().parent.parent / "fixer.py"
-    args = [
-        sys.executable,
-        str(fixer_script),
-        "--delete-cards",
-        str(target),
-        "--delete-extension",
-        extension,
-    ]
+        fixer_script = Path(__file__).resolve().parent.parent / "fixer.py"
+        args = [
+            sys.executable,
+            str(fixer_script),
+            "--delete-cards",
+            str(target),
+            "--delete-extension",
+            extension,
+        ]
 
-    _run_fixer_command(args, input_text="Y\n", assume_locked=assume_locked)
+        _run_fixer_command(args, input_text="Y\n", assume_locked=assume_locked)
 
 
 def run_fresh_build_for_series(
@@ -1662,34 +1832,40 @@ def run_fresh_build_for_series(
 ) -> None:
     """Delete, forget, revert, and rebuild cards for a single series."""
 
-    if not _action_lock.acquire(blocking=False):
-        raise ActionInProgressError("Another task is already running")
+    with _show_log_scope(series_name):
+        logger.info(
+            "Working on show %s (fresh build)",
+            series_name,
+            extra={"show_top_level": True},
+        )
+        if not _action_lock.acquire(blocking=False):
+            raise ActionInProgressError("Another task is already running")
 
-    try:
-        delete_series_cards(
-            context,
-            tv_manager,
-            series_name,
-            series_config,
-            assume_locked=True,
-        )
-        forget_args = _build_fixer_arguments(
-            tv_manager, series_name, series_config, "--forget-cards"
-        )
-        _run_fixer_command(forget_args, assume_locked=True)
-        revert_args = _build_fixer_arguments(
-            tv_manager, series_name, series_config, "--revert-series"
-        )
-        _run_fixer_command(revert_args, assume_locked=True)
-        run_builder_for_series(
-            context,
-            tv_manager,
-            series_name,
-            series_config,
-            assume_locked=True,
-        )
-    finally:
-        _action_lock.release()
+        try:
+            delete_series_cards(
+                context,
+                tv_manager,
+                series_name,
+                series_config,
+                assume_locked=True,
+            )
+            forget_args = _build_fixer_arguments(
+                tv_manager, series_name, series_config, "--forget-cards"
+            )
+            _run_fixer_command(forget_args, assume_locked=True)
+            revert_args = _build_fixer_arguments(
+                tv_manager, series_name, series_config, "--revert-series"
+            )
+            _run_fixer_command(revert_args, assume_locked=True)
+            run_builder_for_series(
+                context,
+                tv_manager,
+                series_name,
+                series_config,
+                assume_locked=True,
+            )
+        finally:
+            _action_lock.release()
 
 
 def _run_manager_job(
