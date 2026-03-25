@@ -2,6 +2,7 @@ import os
 import time
 import logging
 import re
+import base64
 from types import SimpleNamespace
 
 import pytest
@@ -436,3 +437,40 @@ def test_generate_preview_raises_when_no_episode_sources_exist(tmp_path) -> None
             preferred_episode_key=episode.episode_info.key,
             preloaded_show=show,
         )
+
+
+def test_get_or_generate_preview_falls_back_to_existing_card_when_generation_has_no_sources(
+    monkeypatch, tmp_path
+) -> None:
+    services._preview_cache.clear()
+
+    destination = tmp_path / "existing-card.jpg"
+    destination.write_bytes(b"existing")
+    missing_source = tmp_path / "missing-source.jpg"
+    episode = _StubPreviewEpisode("1-1", missing_source, destination)
+    show = SimpleNamespace(
+        episodes={episode.episode_info.key: episode},
+        media_directory=None,
+    )
+
+    monkeypatch.setattr(services, "_load_show_for_preview", lambda *_args, **_kwargs: show)
+
+    def _raise_missing_sources(*_args, **_kwargs):
+        raise RuntimeError(
+            "Episode source image is missing after sync; online sources may not provide artwork"
+        )
+
+    monkeypatch.setattr(services, "generate_preview", _raise_missing_sources)
+
+    mime, data = services.get_or_generate_preview(
+        context=SimpleNamespace(),
+        tv_manager=SimpleNamespace(),
+        show_name="Demo",
+        series_config={},
+        force=True,
+        preview_episode_key=episode.episode_info.key,
+        prefer_existing=False,
+    )
+
+    assert mime == "image/jpeg"
+    assert base64.b64decode(data) == b"existing"

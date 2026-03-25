@@ -1305,15 +1305,36 @@ def get_or_generate_preview(
                 payload = preview_from_source
                 preview_origin = "existing-source"
             else:
-                payload = generate_preview(
-                    context,
-                    tv_manager,
-                    show_name,
-                    series_config,
-                    preferred_episode_key=preview_episode_key,
-                    preloaded_show=show,
-                )
-                preview_origin = "generated"
+                try:
+                    payload = generate_preview(
+                        context,
+                        tv_manager,
+                        show_name,
+                        series_config,
+                        preferred_episode_key=preview_episode_key,
+                        preloaded_show=show,
+                    )
+                    preview_origin = "generated"
+                except RuntimeError as exc:
+                    if "Episode source image is missing after sync" not in str(exc):
+                        raise
+
+                    fallback_payload = _preview_from_existing_sources(
+                        show,
+                        preview_episode_key,
+                    )
+                    if fallback_payload is None:
+                        raise
+
+                    _log_preview_cache_decision(
+                        show_name,
+                        cache_key,
+                        preview_episode_key=preview_episode_key,
+                        decision="fallback-existing-source",
+                        details={"reason": "generation-missing-source"},
+                    )
+                    payload = fallback_payload
+                    preview_origin = "existing-source-fallback"
         except Exception as exc:  # pylint: disable=broad-except
             _log_preview_event(
                 show_name,
