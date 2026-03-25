@@ -108,7 +108,7 @@ def _preview_logger() -> logging.Logger | None:
             logger.warning("Unable to write preview log to %s: %s", PREVIEW_LOG_FILE, exc)
             return None
 
-        handler.setLevel(logging.INFO)
+        handler.setLevel(logging.DEBUG)
         handler.setFormatter(
             logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
         )
@@ -183,7 +183,7 @@ def _show_logger(show_name: str) -> logging.Logger | None:
             logger.warning("Unable to write show log for %s: %s", show_name, exc)
             return None
 
-        handler.setLevel(logging.INFO)
+        handler.setLevel(logging.DEBUG)
         handler.setFormatter(
             logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
         )
@@ -195,7 +195,7 @@ def _show_logger(show_name: str) -> logging.Logger | None:
                 existing_handler.close()
             except Exception:  # pragma: no cover - defensive cleanup
                 pass
-        show_logger.setLevel(logging.INFO)
+        show_logger.setLevel(logging.DEBUG)
         show_logger.addHandler(handler)
         show_logger.propagate = False
         show_logger._configured = True  # type: ignore[attr-defined]
@@ -240,12 +240,15 @@ def _ensure_main_log_scope_filters() -> None:
     """Install main-log suppression filters on non-forwarding root handlers."""
 
     root_logger = logging.getLogger()
-    for handler in root_logger.handlers:
-        if isinstance(handler, _ShowLogForwardingHandler):
-            continue
+    tcm_logger = logging.getLogger("tcm")
 
-        if _MAIN_LOG_SCOPE_FILTER not in handler.filters:
-            handler.addFilter(_MAIN_LOG_SCOPE_FILTER)
+    for logger_instance in (root_logger, tcm_logger):
+        for handler in logger_instance.handlers:
+            if isinstance(handler, _ShowLogForwardingHandler):
+                continue
+
+            if _MAIN_LOG_SCOPE_FILTER not in handler.filters:
+                handler.addFilter(_MAIN_LOG_SCOPE_FILTER)
 
 
 def _ensure_show_log_forwarder() -> None:

@@ -219,6 +219,16 @@ def test_show_log_scope_forwards_non_preview_activity(monkeypatch, tmp_path) -> 
     assert "Manager step complete" in log_path.read_text()
 
 
+def test_show_log_scope_captures_debug_activity(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(services, "SHOW_LOG_DIR", tmp_path)
+    services._show_loggers.clear()
+
+    show_logger = services._show_logger("Demo Show")
+    assert show_logger is not None
+    assert show_logger.level == logging.DEBUG
+    assert any(handler.level == logging.DEBUG for handler in show_logger.handlers)
+
+
 def test_show_log_file_is_overwritten_on_start(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(services, "SHOW_LOG_DIR", tmp_path)
     services._show_loggers.clear()
@@ -248,3 +258,33 @@ def test_main_logs_only_keep_top_level_messages_in_show_scope(caplog, monkeypatc
 
     assert "top level" in caplog.text
     assert "nested detail" not in caplog.text
+
+
+def test_show_scope_suppresses_nested_messages_from_tcm_handlers(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(services, "SHOW_LOG_DIR", tmp_path)
+    services._show_loggers.clear()
+
+    tcm_logger = logging.getLogger("tcm")
+    original_level = tcm_logger.level
+
+    captured: list[str] = []
+
+    class _CaptureHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            captured.append(record.getMessage())
+
+    handler = _CaptureHandler()
+    handler.setLevel(logging.INFO)
+    tcm_logger.addHandler(handler)
+    tcm_logger.setLevel(logging.INFO)
+
+    try:
+        with services._show_log_scope("Demo Show"):
+            tcm_logger.info("nested tcm detail")
+            tcm_logger.info("top level tcm", extra={"show_top_level": True})
+    finally:
+        tcm_logger.removeHandler(handler)
+        tcm_logger.setLevel(original_level)
+
+    assert "top level tcm" in captured
+    assert "nested tcm detail" not in captured
