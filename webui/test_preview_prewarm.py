@@ -288,3 +288,151 @@ def test_show_scope_suppresses_nested_messages_from_tcm_handlers(monkeypatch, tm
 
     assert "top level tcm" in captured
     assert "nested tcm detail" not in captured
+
+
+class _StubPreviewEpisodeInfo:
+    def __init__(self, key: str) -> None:
+        self.key = key
+
+
+class _StubPreviewEpisode:
+    def __init__(self, key: str, source, destination) -> None:
+        self.episode_info = _StubPreviewEpisodeInfo(key)
+        self.source = source
+        self.destination = destination
+        self.extra_characteristics = {}
+
+
+class _StubPreviewFont:
+    attributes = {}
+
+    @staticmethod
+    def validate_title(title: str) -> tuple[str, bool]:
+        return title, True
+
+
+class _StubPreviewProfile:
+    font = _StubPreviewFont()
+
+
+class _StubPreviewCardClass:
+    TITLE_CHARACTERISTICS = {}
+
+
+class _StubPreviewTitleCard:
+    def __init__(self, episode, *_args, **_kwargs) -> None:
+        self.episode = episode
+        self.converted_title = "Preview Title"
+
+    def create(self, overwrite: bool = True) -> bool:
+        _ = overwrite
+        self.episode.destination.write_bytes(b"preview")
+        return True
+
+
+class _SelectSourceRecorder:
+    def __init__(self, fallback_episode, available_source) -> None:
+        self.fallback_episode = fallback_episode
+        self.available_source = available_source
+        self.calls: list[str] = []
+
+    def __call__(self, select_only=None) -> None:
+        if select_only is None:
+            self.calls.append("all")
+            self.fallback_episode.source = self.available_source
+            return
+        key = getattr(getattr(select_only, "episode_info", None), "key", "unknown")
+        self.calls.append(key)
+
+
+def test_generate_preview_falls_back_when_preferred_episode_source_is_missing(monkeypatch, tmp_path) -> None:
+    missing_source = tmp_path / "missing-source.jpg"
+    available_source = tmp_path / "available-source.jpg"
+    available_source.write_bytes(b"src")
+    destination = tmp_path / "preview.jpg"
+
+    preferred = _StubPreviewEpisode("1-1", missing_source, destination)
+    fallback = _StubPreviewEpisode("1-2", available_source, destination)
+
+    show = SimpleNamespace(
+        episodes={preferred.episode_info.key: preferred, fallback.episode_info.key: fallback},
+        extras={},
+        profile=_StubPreviewProfile(),
+        card_class=_StubPreviewCardClass(),
+        image_magick=SimpleNamespace(),
+        font=_StubPreviewFont(),
+        select_source_images=lambda select_only: None,
+    )
+
+    monkeypatch.setattr(services, "TitleCard", _StubPreviewTitleCard)
+
+    payload = services.generate_preview(
+        context=SimpleNamespace(),
+        tv_manager=SimpleNamespace(),
+        show_name="Demo",
+        series_config={},
+        preferred_episode_key=preferred.episode_info.key,
+        preloaded_show=show,
+    )
+
+    assert payload.mime == "image/jpeg"
+    assert destination.exists()
+
+
+def test_generate_preview_runs_full_sync_before_failing_or_succeeding(monkeypatch, tmp_path) -> None:
+    missing_source = tmp_path / "missing-source.jpg"
+    delayed_source = tmp_path / "delayed-source.jpg"
+    delayed_source.write_bytes(b"src")
+    destination = tmp_path / "preview.jpg"
+
+    preferred = _StubPreviewEpisode("1-1", missing_source, destination)
+    fallback = _StubPreviewEpisode("1-2", missing_source, destination)
+    recorder = _SelectSourceRecorder(fallback, delayed_source)
+
+    show = SimpleNamespace(
+        episodes={preferred.episode_info.key: preferred, fallback.episode_info.key: fallback},
+        extras={},
+        profile=_StubPreviewProfile(),
+        card_class=_StubPreviewCardClass(),
+        image_magick=SimpleNamespace(),
+        font=_StubPreviewFont(),
+        select_source_images=recorder,
+    )
+
+    monkeypatch.setattr(services, "TitleCard", _StubPreviewTitleCard)
+
+    payload = services.generate_preview(
+        context=SimpleNamespace(),
+        tv_manager=SimpleNamespace(),
+        show_name="Demo",
+        series_config={},
+        preferred_episode_key=preferred.episode_info.key,
+        preloaded_show=show,
+    )
+
+    assert payload.mime == "image/jpeg"
+    assert "all" in recorder.calls
+
+
+def test_generate_preview_raises_when_no_episode_sources_exist(tmp_path) -> None:
+    missing_source = tmp_path / "missing-source.jpg"
+    destination = tmp_path / "preview.jpg"
+    episode = _StubPreviewEpisode("1-1", missing_source, destination)
+
+    show = SimpleNamespace(
+        episodes={episode.episode_info.key: episode},
+        select_source_images=lambda select_only=None: None,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Episode source image is missing after sync; online sources may not provide artwork",
+    ):
+        services.generate_preview(
+            context=SimpleNamespace(),
+            tv_manager=SimpleNamespace(),
+            show_name="Demo",
+            series_config={},
+            preferred_episode_key=episode.episode_info.key,
+            preloaded_show=show,
+        )

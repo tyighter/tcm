@@ -1359,17 +1359,53 @@ def generate_preview(
         series_config,
     )
 
-    episode = (
-        show.episodes.get(preferred_episode_key)
-        if preferred_episode_key
-        else None
-    )
-    if episode is None:
-        episode = random.choice(list(show.episodes.values()))
-    show.select_source_images(select_only=episode)
+    episodes = list(show.episodes.values())
+    if not episodes:
+        raise RuntimeError("Show has no episodes available for preview generation")
 
-    if not episode.source.exists():
-        raise RuntimeError("Episode source image is missing; run sync first")
+    preferred_episode = show.episodes.get(preferred_episode_key) if preferred_episode_key else None
+    candidate_episodes = (
+        [preferred_episode, *[candidate for candidate in episodes if candidate is not preferred_episode]]
+        if preferred_episode is not None
+        else [random.choice(episodes)]
+    )
+
+    if preferred_episode is None:
+        candidate_episodes.extend(
+            candidate for candidate in episodes if candidate is not candidate_episodes[0]
+        )
+
+    def _resolve_episode_with_source() -> Show | None:
+        for candidate in candidate_episodes:
+            show.select_source_images(select_only=candidate)
+            source_path = getattr(candidate, "source", None)
+            if source_path is not None and source_path.exists():
+                return candidate
+        return None
+
+    episode = _resolve_episode_with_source()
+    if episode is None:
+        logger.info(
+            "Preview source missing for %s; running full source image sync before failing",
+            show_name,
+        )
+        show.select_source_images()
+        episode = _resolve_episode_with_source()
+
+    if episode is None:
+        attempted_episode_keys = [
+            getattr(getattr(candidate, "episode_info", None), "key", "unknown")
+            for candidate in candidate_episodes
+        ]
+        logger.error(
+            "Unable to generate preview for %s; source images unavailable after sync "
+            "(attempted_episodes=%s). Online sources may not have episode artwork.",
+            show_name,
+            attempted_episode_keys,
+        )
+        raise RuntimeError(
+            "Episode source image is missing after sync; online sources may not provide artwork"
+        )
 
     if episode.destination is None:
         raise RuntimeError("Episode destination is not set; configure a library path")
