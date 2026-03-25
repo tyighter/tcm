@@ -1,5 +1,7 @@
 import os
 import time
+import logging
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -147,3 +149,102 @@ def test_preview_cache_freshness_depends_on_source_mtime_and_age(monkeypatch, tm
 
     assert not services.preview_cache_is_fresh("Show", {"library": "TV"}, max_age_ms=1000)
     services.invalidate_preview_cache("Show")
+
+
+def test_preview_logs_are_written_to_per_show_files(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(services, "SHOW_LOG_DIR", tmp_path)
+    services._show_loggers.clear()
+
+    services._log_preview_event(
+        "Demo Show (2024)",
+        "generated-preview.jpg",
+        status="success",
+        origin="generated",
+        episode_key="1-2",
+    )
+    services._log_preview_cache_decision(
+        "Demo Show (2024)",
+        "demo-key",
+        preview_episode_key="1-2",
+        decision="cache-hit",
+    )
+
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", "Demo Show (2024)").strip("._-")
+    log_path = tmp_path / f"{safe_name}.log"
+    assert log_path.exists()
+    log_output = log_path.read_text()
+    assert "Preview success | origin=generated | show=Demo Show (2024)" in log_output
+    assert "Preview cache decision | show=Demo Show (2024)" in log_output
+
+
+def test_preview_request_logs_top_level_show_message(caplog, monkeypatch) -> None:
+    cache_key = services.preview_cache_key("Demo Show", {"library": "TV"})
+    _cache_preview_payload(
+        cache_key,
+        services.PreviewPayload(
+            mime="image/jpeg",
+            data="cached",
+            source_path=None,
+            existing_source=True,
+            cached_at=time.time(),
+            source_mtime=None,
+        ),
+    )
+    monkeypatch.setattr(services, "_show_logger", lambda *_args, **_kwargs: None)
+    caplog.set_level(logging.INFO, logger=services.logger.name)
+
+    mime, data = services.get_or_generate_preview(
+        context=SimpleNamespace(),
+        tv_manager=SimpleNamespace(),
+        show_name="Demo Show",
+        series_config={"library": "TV"},
+    )
+
+    assert (mime, data) == ("image/jpeg", "cached")
+    assert "Working on show Demo Show (web UI preview request)" in caplog.text
+    services.invalidate_preview_cache("Demo Show")
+
+
+def test_show_log_scope_forwards_non_preview_activity(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(services, "SHOW_LOG_DIR", tmp_path)
+    services._show_loggers.clear()
+    services.logger.setLevel(logging.INFO)
+
+    with services._show_log_scope("Demo Show"):
+        services.logger.info("Manager step complete")
+
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", "Demo Show").strip("._-")
+    log_path = tmp_path / f"{safe_name}.log"
+    assert log_path.exists()
+    assert "Manager step complete" in log_path.read_text()
+
+
+def test_show_log_file_is_overwritten_on_start(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(services, "SHOW_LOG_DIR", tmp_path)
+    services._show_loggers.clear()
+    services.logger.setLevel(logging.INFO)
+
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", "Demo Show").strip("._-")
+    log_path = tmp_path / f"{safe_name}.log"
+    log_path.write_text("old log line")
+
+    with services._show_log_scope("Demo Show"):
+        services.logger.info("new log line")
+
+    contents = log_path.read_text()
+    assert "new log line" in contents
+    assert "old log line" not in contents
+
+
+def test_main_logs_only_keep_top_level_messages_in_show_scope(caplog, monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(services, "SHOW_LOG_DIR", tmp_path)
+    services._show_loggers.clear()
+    services.logger.setLevel(logging.INFO)
+    caplog.set_level(logging.INFO)
+
+    with services._show_log_scope("Demo Show"):
+        services.logger.info("nested detail")
+        services.logger.info("top level", extra={"show_top_level": True})
+
+    assert "top level" in caplog.text
+    assert "nested detail" not in caplog.text
