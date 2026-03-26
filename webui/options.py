@@ -12,6 +12,50 @@ from .option_schema import build_card_type_option_schema, option_metadata_for_ke
 
 STYLE_CHOICES = ["unique", "blur", "grayscale", "blur grayscale"]
 
+SERIES_FIELD_DESCRIPTIONS = {
+    "library": "Choose which media library this series belongs to when importing and syncing.",
+    "card_type": "Select the card design template used to render this series.",
+    "episode_number_text_format": "Controls the pattern used for episode index text (for example, 'EPISODE 5').",
+    "episode_number_text_case": "Sets uppercase/lowercase rules for episode index text, not the episode title.",
+    "episode_data_source": "Selects where season and episode metadata is pulled from for this entry.",
+    "watched_style": "Visual style applied to cards for watched episodes.",
+    "unwatched_style": "Visual style applied to cards for unwatched episodes.",
+    "tmdb_id": "TMDb series ID used to fetch metadata and artwork for this show.",
+    "tvdb_id": "TVDb series ID used to fetch metadata and artwork for this show.",
+    "imdb_id": "IMDb series ID used when matching and syncing metadata.",
+    "tvrage_id": "Legacy TVRage ID used for compatibility with older metadata sources.",
+    "emby_id": "Emby library item ID used to map this series to Emby.",
+    "jellyfin_id": "Jellyfin library item ID used to map this series to Jellyfin.",
+    "sonarr_id": "Sonarr series ID used for Sonarr syncing and lookups.",
+    "refresh_titles": "When enabled, refreshes episode titles from the configured metadata source.",
+    "sync_specials": "Includes season 0/special episodes during metadata sync and card generation.",
+    "sonarr_sync": "Enable automatic metadata syncing for this series from Sonarr.",
+    "tmdb_sync": "Enable automatic metadata syncing for this series from TMDb.",
+    "tmdb_skip_localized_images": "If enabled, ignores localized TMDb images and prefers primary artwork.",
+    "archive": "Creates an archive copy of generated cards for this series.",
+    "archive_all_variations": "Archives all generated style variations instead of only the active output.",
+    "archive_name": "Folder name used when saving archived cards for this series.",
+    "library_override": "Overrides the default media directory path used to find this series.",
+    "filename_format": "Template used to build output filenames for generated cards.",
+    "image_source_priority": "Comma-separated source priority order used when selecting episode images.",
+    "translation": "List of title translations to generate in additional languages.",
+    "font.file": "Font file used for episode title text (the main title on each card).",
+    "font.size": "Episode title text size scale as a percentage of the card type default.",
+    "font.color": "Episode title text color.",
+    "font.case": "Uppercase/lowercase rules for episode title text only.",
+    "font.vertical_shift": "Moves episode title text up or down in pixels.",
+    "font.interline_spacing": "Vertical spacing between wrapped episode title lines.",
+    "font.interword_spacing": "Additional spacing between words in episode title text.",
+    "font.kerning": "Character spacing scale for episode title text.",
+    "font.stroke_width": "Outline width around episode title text.",
+    "font.validate": "Validates that the selected episode title font can render required characters.",
+    "font.replacements": "Character replacement map applied before rendering episode title text.",
+    "extras": "Card-type-specific advanced options for this series.",
+    "seasons.hide": "Controls whether season labels are hidden on generated cards.",
+    "seasons.titles": "Custom display title for each season number.",
+    "episode_ranges": "Maps named ranges to groups of episode numbers for batch styling.",
+}
+
 SERIES_FIELD_TEMPLATE = [
     {
         "id": "library",
@@ -291,6 +335,10 @@ def build_series_fields(libraries: dict[str, Any]) -> list[dict[str, Any]]:
 
     for field in SERIES_FIELD_TEMPLATE:
         filled = dict(field)
+        filled["description"] = SERIES_FIELD_DESCRIPTIONS.get(
+            field["id"],
+            f"Configure {field['label'].lower()} for this series.",
+        )
         if field["id"] == "library":
             filled["choices"] = library_choices
         elif field["id"] == "card_type":
