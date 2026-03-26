@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import mimetypes
+import os
 import re
 from cgi import FieldStorage
 from http import HTTPStatus
@@ -567,6 +568,105 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         except json.JSONDecodeError as exc:
             raise ValueError("Invalid JSON payload") from exc
 
+    def _validate_preferences_path(self, raw_value: Any, *, expect_file: bool) -> dict[str, Any]:
+        value = str(raw_value or "")
+        trimmed = value.strip()
+        messages: list[str] = []
+        path: Path | None = None
+
+        if not trimmed:
+            messages.append("This path is required.")
+            return {"value": value, "normalized": "", "valid": False, "messages": messages}
+
+        if value != trimmed:
+            messages.append("Remove leading/trailing spaces from the path.")
+
+        if re.search(r"[\r\n\t]", trimmed):
+            messages.append("Path cannot include tabs or line breaks.")
+
+        if "://" in trimmed:
+            messages.append("Use a local filesystem path, not a URL.")
+
+        if re.search(r'[<>|*"\\0]', trimmed):
+            messages.append("Path includes characters that are usually invalid in filesystem paths.")
+
+        try:
+            path = Path(trimmed).expanduser()
+        except (RuntimeError, OSError, ValueError):
+            messages.append("Unable to parse this path.")
+
+        if path is not None:
+            exists = path.exists()
+            if not exists:
+                messages.append("Path does not exist on the server.")
+            elif expect_file and not path.is_file():
+                messages.append("Path must point to a file.")
+            elif not expect_file and not path.is_dir():
+                messages.append("Path must point to a directory.")
+
+            if exists:
+                readable = os.access(path, os.R_OK)
+                if not readable:
+                    messages.append("Path is not readable by the application user.")
+
+                if not expect_file and not os.access(path, os.X_OK):
+                    messages.append("Directory is not accessible (missing execute permission).")
+
+        return {
+            "value": value,
+            "normalized": path.as_posix() if path else trimmed,
+            "valid": len(messages) == 0,
+            "messages": messages,
+        }
+
+    def _validate_preferences_paths_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        source_result = self._validate_preferences_path(payload.get("source"), expect_file=False)
+        series_result = self._validate_preferences_path(payload.get("series"), expect_file=True)
+        valid = source_result["valid"] and series_result["valid"]
+        response: dict[str, Any] = {
+            "valid": valid,
+            "fields": {
+                "source": source_result,
+                "series": series_result,
+            },
+            "messages": [],
+        }
+
+        if not valid:
+            response["messages"] = [
+                "Update the highlighted paths so they exist and are readable, then try again."
+            ]
+
+        return response
+
+    def _plex_connection_status(self) -> dict[str, Any]:
+        if not self.context.preference_parser.use_plex:
+            return {"connected": False, "configured": False, "message": "Plex is disabled in preferences."}
+
+        try:
+            plex = self.context.get_plex_interface()
+            plex.get_library_names()
+        except Exception as exc:  # pylint: disable=broad-except
+            return {"connected": False, "configured": True, "message": str(exc)}
+
+        return {"connected": True, "configured": True, "message": "Connected."}
+
+    def _tautulli_connection_status(self) -> dict[str, Any]:
+        settings = TautulliSettings.from_settings()
+        if settings is None:
+            return {
+                "connected": False,
+                "configured": False,
+                "message": "Tautulli URL/API key are not configured.",
+            }
+
+        try:
+            fetch_users(settings)
+        except Exception as exc:  # pylint: disable=broad-except
+            return {"connected": False, "configured": True, "message": str(exc)}
+
+        return {"connected": True, "configured": True, "message": "Connected."}
+
     def _run_manager_action(self, action: Callable[[], None], *, context: str | None = None) -> None:
         if context:
             logger.info("Running action: %s", context)
@@ -858,6 +958,15 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             self._json_response(settings)
             return
 
+        if parsed.path == "/api/services/status":
+            self._json_response(
+                {
+                    "plex": self._plex_connection_status(),
+                    "tautulli": self._tautulli_connection_status(),
+                }
+            )
+            return
+
         if parsed.path == "/api/backups":
             params = parse_qs(parsed.query)
             requested = self._resolve_backup_path(params.get("path", [""])[0])
@@ -976,8 +1085,66 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 self._error(str(exc))
                 return
 
+            if isinstance(payload, dict):
+                preferences_payload = payload.get("preferences")
+                if isinstance(preferences_payload, dict):
+                    webui_payload = preferences_payload.get("webui")
+                    setup_complete_requested = (
+                        isinstance(webui_payload, dict)
+                        and bool(webui_payload.get("setup_complete"))
+                    )
+                    if setup_complete_requested:
+                        options_payload = preferences_payload.get("options")
+                        if not isinstance(options_payload, dict):
+                            self._json_response(
+                                {
+                                    "valid": False,
+                                    "messages": [
+                                        "Cannot complete setup until source and series paths are provided."
+                                    ],
+                                    "fields": {
+                                        "source": {
+                                            "valid": False,
+                                            "messages": ["This path is required."],
+                                        },
+                                        "series": {
+                                            "valid": False,
+                                            "messages": ["This path is required."],
+                                        },
+                                    },
+                                },
+                                status=HTTPStatus.BAD_REQUEST,
+                            )
+                            return
+
+                        path_validation = self._validate_preferences_paths_payload(
+                            {
+                                "source": options_payload.get("source"),
+                                "series": options_payload.get("series"),
+                            }
+                        )
+                        if not path_validation["valid"]:
+                            self._json_response(path_validation, status=HTTPStatus.BAD_REQUEST)
+                            return
+
             updated = save_settings(payload, self.context.preference_file)
             self._json_response(updated)
+            return
+
+        if parsed.path == "/api/validate/preferences-paths":
+            try:
+                payload = self._parse_json()
+            except ValueError as exc:
+                self._error(str(exc))
+                return
+
+            if not isinstance(payload, dict):
+                self._error("Invalid payload", status=HTTPStatus.BAD_REQUEST)
+                return
+
+            result = self._validate_preferences_paths_payload(payload)
+            status = HTTPStatus.OK if result["valid"] else HTTPStatus.BAD_REQUEST
+            self._json_response(result, status=status)
             return
 
         if parsed.path == "/api/backups/restore":
