@@ -22,6 +22,14 @@ _DEFAULT_SETTINGS = {
 }
 
 
+class SettingsPersistenceError(RuntimeError):
+    """Raised when UI settings could not be persisted to disk."""
+
+    def __init__(self, message: str, *, remediation: str) -> None:
+        super().__init__(message)
+        self.remediation = remediation
+
+
 def _merged_settings(data: dict[str, Any] | None) -> dict[str, Any]:
     merged = deepcopy(_DEFAULT_SETTINGS)
     if not isinstance(data, dict):
@@ -118,8 +126,13 @@ def _save_preferences(preference_file: Path, updates: dict[str, Any]) -> dict[st
     try:
         preference_file.parent.mkdir(parents=True, exist_ok=True)
         preference_file.write_text(safe_dump(merged, sort_keys=False))
-    except OSError:
-        return merged
+    except OSError as exc:
+        raise SettingsPersistenceError(
+            f"Unable to write preferences file at {preference_file}: {exc}",
+            remediation=(
+                "Check that the preferences path exists and is writable, then retry saving settings."
+            ),
+        ) from exc
 
     return merged
 
@@ -179,9 +192,10 @@ def save_settings(payload: Dict[str, Any], preference_file: Path | None = None) 
     try:
         SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
         SETTINGS_FILE.write_text(json.dumps(settings, indent=2, sort_keys=True))
-    except OSError:
-        # If the settings cannot be saved, return the in-memory representation
-        # so the caller can at least continue using the updated values.
-        return settings
+    except OSError as exc:
+        raise SettingsPersistenceError(
+            f"Unable to write UI settings file at {SETTINGS_FILE}: {exc}",
+            remediation="Ensure /config is writable and has free space, then retry.",
+        ) from exc
 
-    return settings
+    return {**settings, "_persisted": True}

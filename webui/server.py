@@ -52,7 +52,7 @@ from .services import (
     _load_show_for_preview,
 )
 from .tv_data import TvYamlManager, _to_builtin, start_daily_tv_yaml_backup
-from .user_settings import load_settings, save_settings
+from .user_settings import SettingsPersistenceError, load_settings, save_settings
 from .tautulli import (
     TautulliSettings,
     fetch_users,
@@ -1127,7 +1127,18 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                             self._json_response(path_validation, status=HTTPStatus.BAD_REQUEST)
                             return
 
-            updated = save_settings(payload, self.context.preference_file)
+            try:
+                updated = save_settings(payload, self.context.preference_file)
+            except SettingsPersistenceError as exc:
+                self._json_response(
+                    {
+                        "error": str(exc),
+                        "remediation": exc.remediation,
+                        "persisted": False,
+                    },
+                    status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                )
+                return
             self._json_response(updated)
             return
 

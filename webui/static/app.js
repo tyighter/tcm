@@ -742,12 +742,27 @@ async function saveSettings(payload) {
     body: JSON.stringify(payload),
   });
 
+  const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || 'Unable to save settings');
+    const remediation =
+      typeof data.remediation === 'string' && data.remediation.trim()
+        ? ` ${data.remediation.trim()}`
+        : '';
+    const error = new Error(
+      `${data.error || 'Unable to save settings'}${remediation}`.trim()
+    );
+    error.didPersist = data.persisted !== true;
+    throw error;
   }
 
-  const data = await response.json();
+  if (data && data._persisted === false) {
+    const error = new Error(
+      'Settings update was accepted but not persisted. Verify filesystem permissions and retry.'
+    );
+    error.didPersist = false;
+    throw error;
+  }
+
   state.settings = data || state.settings;
   return data;
 }
@@ -5699,8 +5714,14 @@ function openSettingsModal() {
       showToast('Settings updated');
       await refreshConnectionStatusLights();
     } catch (error) {
-      status.textContent = error.message;
-      showToast(error.message, 'error');
+      const failedToPersist = error && error.didPersist === true;
+      if (failedToPersist) {
+        status.textContent = `⚠ Save failed to persist: ${error.message}`;
+        showToast(`⚠ Save failed to persist: ${error.message}`, 'error-critical');
+      } else {
+        status.textContent = error.message;
+        showToast(error.message, 'error');
+      }
     } finally {
       saveButton.disabled = false;
     }
