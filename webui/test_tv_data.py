@@ -170,3 +170,31 @@ def test_atomic_write_respects_executable_permissions(tmp_path: Path) -> None:
     manager.write({"libraries": {}, "series": []})
 
     assert (tv_file.stat().st_mode & 0o777) == 0o777
+
+
+def test_backup_and_convert_legacy_keys_creates_backup_and_updates_series(tmp_path: Path) -> None:
+    tv_file = tmp_path / "tv.yml"
+    tv_file.write_text(
+        """libraries: {}
+series:
+  "Demo Show (2024)":
+    episode_text_case: title
+    extras:
+      title_text_margin: 12
+"""
+    )
+
+    manager = TvYamlManager(tv_file)
+
+    backup_path, updated_series = manager.backup_and_convert_legacy_keys()
+
+    assert backup_path == tmp_path / "tv-backup.yml"
+    assert backup_path.exists()
+    assert updated_series == 1
+
+    converted = manager.load()
+    series_config = converted["series"]["Demo Show (2024)"]
+    assert series_config["episode_number_text_case"] == "title"
+    assert series_config["episode_text_case"] == "title"
+    assert series_config["extras"]["episode_title_text_horizontal_offset"] == 12
+    assert series_config["extras"]["title_text_margin"] == 12

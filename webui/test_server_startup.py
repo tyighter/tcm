@@ -248,6 +248,26 @@ def test_api_preview_static_falls_back_to_generated_preview(monkeypatch) -> None
     assert generated["prefer_existing"] is True
 
 
+def test_api_convert_legacy_tv_yaml_returns_backup_and_config() -> None:
+    class _RecordingTvManager:
+        def backup_and_convert_legacy_keys(self):
+            return Path("/config/tv-backup.yml"), 2
+
+        def as_payload(self) -> dict:
+            return {"libraries": {}, "series": [{"name": "Demo Show (2024)", "config": {}}]}
+
+    handler = _build_post_handler("/api/tv/convert-legacy", _RecordingTvManager(), {})
+
+    handler.do_POST()
+
+    assert handler.status == HTTPStatus.OK
+    payload = json.loads(handler.wfile.getvalue())
+    assert payload["status"] == "ok"
+    assert payload["backupPath"] == "/config/tv-backup.yml"
+    assert payload["updatedSeries"] == 2
+    assert "config" in payload
+
+
 def test_ensure_preference_file_generates_defaults(tmp_path) -> None:
     preference_file = tmp_path / "preferences.yml"
 

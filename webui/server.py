@@ -1008,6 +1008,24 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if parsed.path == "/api/tv/convert-legacy":
+            try:
+                backup_path, updated_series = self.tv_manager.backup_and_convert_legacy_keys()
+                config = self.tv_manager.as_payload()
+            except Exception as exc:  # pylint: disable=broad-except
+                self._error(str(exc), status=HTTPStatus.BAD_REQUEST)
+                return
+
+            self._json_response(
+                {
+                    "status": "ok",
+                    "backupPath": backup_path.as_posix(),
+                    "updatedSeries": updated_series,
+                    "config": config,
+                }
+            )
+            return
+
         if parsed.path == "/api/client-log":
             try:
                 payload = self._parse_json()

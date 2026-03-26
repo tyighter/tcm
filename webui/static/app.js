@@ -712,6 +712,21 @@ async function saveSettings(payload) {
   return data;
 }
 
+async function convertLegacyTvYaml() {
+  const response = await fetch('/api/tv/convert-legacy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || 'Unable to convert tv.yml');
+  }
+
+  return response.json();
+}
+
 function setSearchVisibility(isVisible) {
   if (!dom.header) {
     return;
@@ -5361,7 +5376,35 @@ function openSettingsModal() {
     openRecentsModal();
   });
 
-  quickActionsButtons.append(unmatchedButton, recentsButton);
+  const convertLegacyButton = document.createElement('button');
+  convertLegacyButton.type = 'button';
+  convertLegacyButton.innerHTML = `
+    <span class="material-symbols-rounded" aria-hidden="true">sync_alt</span>
+    <span>Convert legacy tv.yml</span>
+  `;
+  convertLegacyButton.addEventListener('click', async () => {
+    convertLegacyButton.disabled = true;
+    status.textContent = 'Converting legacy tv.yml keys...';
+
+    try {
+      const result = await convertLegacyTvYaml();
+      await loadConfiguration();
+      renderEntries();
+      showToast('Converted tv.yml to canonical keys');
+
+      const updatedSeries = Number(result?.updatedSeries || 0);
+      const backupPath = result?.backupPath || 'tv-backup.yml';
+      status.textContent = `Converted ${updatedSeries} series. Backup saved to ${backupPath}.`;
+    } catch (error) {
+      const message = error?.message || 'Unable to convert tv.yml';
+      status.textContent = message;
+      showToast(message, 'error');
+    } finally {
+      convertLegacyButton.disabled = false;
+    }
+  });
+
+  quickActionsButtons.append(unmatchedButton, recentsButton, convertLegacyButton);
   quickActions.append(quickActionsHeader, quickActionsButtons);
 
   const tautulliSection = document.createElement('div');

@@ -136,31 +136,39 @@ class TitleCard:
     _SIGNATURE_CACHE: dict[type, inspect.Signature] = {}
 
 
-    _CANONICAL_TEXT_ALIASES: dict[str, str] = {
-        'episode_title_text': 'title_text',
-        'episode_number_text': 'episode_text',
-        'episode_title_text_format': 'title_text_format',
-        'episode_number_text_format': 'episode_text_format',
-        'episode_number_text_case': 'episode_text_case',
-        'episode_number_text_font_file': 'episode_text_font',
-        'episode_number_text_font_size': 'episode_text_font_size',
-        'episode_number_text_size': 'episode_text_font_size',
-        'episode_number_text_vertical_shift': 'episode_text_vertical_shift',
-        'episode_number_text_stroke_color': 'episode_text_stroke_color',
-        'episode_number_text_stroke_width': 'episode_text_stroke_width',
-        'episode_title_text_stroke_color': 'episode_title_stroke_color',
-        'episode_title_text_stroke_width': 'episode_title_stroke_width',
-        'episode_title_text_horizontal_offset': 'title_text_margin',
-        'episode_title_text_margin': 'title_text_line_end_offset',
-        'episode_title_text_font_file': 'font_file',
-        'episode_title_text_size': 'font_size',
-        'episode_title_text_color': 'font_color',
-        'episode_title_text_case': 'font_case',
-        'episode_title_text_vertical_shift': 'font_vertical_shift',
-        'episode_title_text_line_spacing': 'font_interline_spacing',
-        'episode_title_text_word_spacing': 'font_interword_spacing',
-        'episode_title_text_kerning': 'font_kerning',
+    _CANONICAL_TEXT_ALIASES: dict[str, tuple[str, ...]] = {
+        'episode_title_text': ('title_text',),
+        'episode_number_text': ('episode_text',),
+        'episode_title_text_format': ('title_text_format',),
+        'episode_number_text_format': ('episode_text_format',),
+        'episode_number_text_case': ('episode_text_case',),
+        'episode_number_text_font_file': ('episode_text_font',),
+        'episode_number_text_font_size': ('episode_text_font_size',),
+        'episode_number_text_size': ('episode_text_font_size',),
+        'episode_number_text_vertical_shift': ('episode_text_vertical_shift',),
+        'episode_number_text_stroke_color': (
+            'episode_text_stroke_color',
+            'episode_stroke_color',
+        ),
+        'episode_number_text_stroke_width': ('episode_text_stroke_width',),
+        'episode_title_text_stroke_color': (
+            'episode_title_stroke_color',
+            'stroke_color',
+        ),
+        'episode_title_text_stroke_width': ('episode_title_stroke_width',),
+        'episode_title_text_horizontal_offset': ('title_text_margin',),
+        'episode_title_text_margin': ('title_text_line_end_offset',),
+        'episode_title_text_font_file': ('font_file',),
+        'episode_title_text_size': ('font_size',),
+        'episode_title_text_color': ('font_color',),
+        'episode_title_text_case': ('font_case',),
+        'episode_title_text_vertical_shift': ('font_vertical_shift',),
+        'episode_title_text_line_spacing': ('font_interline_spacing',),
+        'episode_title_text_word_spacing': ('font_interword_spacing',),
+        'episode_title_text_kerning': ('font_kerning',),
     }
+
+    _LOGGED_ALIAS_WARNINGS: set[tuple[str, str, str]] = set()
 
 
     def __init__(self,
@@ -249,14 +257,70 @@ class TitleCard:
         self.file = episode.destination
 
     @classmethod
+    def normalize_option_keys(cls,
+            config_dict: dict[str, Any],
+            *,
+            scope: str = 'configuration',
+        ) -> dict[str, Any]:
+        """
+        Normalize option aliases so canonical keys always exist.
+
+        Canonical keys always win over legacy aliases. If only a legacy
+        key exists, a canonical key is synthesized and a deprecation
+        warning is logged once per alias+scope pair.
+        """
+
+        normalized = dict(config_dict)
+
+        for canonical_key, legacy_keys in cls._CANONICAL_TEXT_ALIASES.items():
+            present_legacy = [key for key in legacy_keys if key in normalized]
+            if canonical_key in normalized:
+                for legacy_key in present_legacy:
+                    cache_key = ('both', scope, f'{legacy_key}->{canonical_key}')
+                    if cache_key in cls._LOGGED_ALIAS_WARNINGS:
+                        continue
+                    cls._LOGGED_ALIAS_WARNINGS.add(cache_key)
+                    log.warning(
+                        'Both legacy "%s" and canonical "%s" were provided in %s; '
+                        'using canonical key.',
+                        legacy_key,
+                        canonical_key,
+                        scope,
+                    )
+                continue
+
+            if not present_legacy:
+                continue
+
+            chosen_legacy = present_legacy[0]
+            normalized[canonical_key] = normalized[chosen_legacy]
+
+            cache_key = ('deprecated', scope, f'{chosen_legacy}->{canonical_key}')
+            if cache_key in cls._LOGGED_ALIAS_WARNINGS:
+                continue
+            cls._LOGGED_ALIAS_WARNINGS.add(cache_key)
+            log.warning(
+                'Deprecated option key "%s" found in %s; use "%s" instead '
+                '(migration: %s -> %s).',
+                chosen_legacy,
+                scope,
+                canonical_key,
+                chosen_legacy,
+                canonical_key,
+            )
+
+        return normalized
+
+    @classmethod
     def _normalize_text_option_aliases(cls, extras: dict[str, Any]) -> dict[str, Any]:
         """Map canonical text option names to current constructor argument names."""
 
-        normalized = dict(extras)
+        normalized = cls.normalize_option_keys(extras, scope='card extras')
 
-        for key, legacy in cls._CANONICAL_TEXT_ALIASES.items():
-            if key in normalized and legacy not in normalized:
-                normalized[legacy] = normalized[key]
+        for key, legacy_keys in cls._CANONICAL_TEXT_ALIASES.items():
+            for legacy_key in legacy_keys:
+                if key in normalized and legacy_key not in normalized:
+                    normalized[legacy_key] = normalized[key]
 
         for key, value in list(normalized.items()):
             if key.startswith('episode_number_text_') and key not in cls._CANONICAL_TEXT_ALIASES:

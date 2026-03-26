@@ -17,6 +17,7 @@ from typing import Any
 
 from modules.CleanPath import CleanPath
 from modules.Show import Show
+from modules.TitleCard import TitleCard
 
 from ruamel.yaml import YAML
 from ruamel.yaml.composer import ComposerError
@@ -249,6 +250,54 @@ class TvYamlManager:
         shutil.copy2(candidate, self.file_path)
         self.invalidate()
         return candidate
+
+    def backup_and_convert_legacy_keys(self) -> tuple[Path, int]:
+        """
+        Backup ``tv.yml`` and convert legacy option keys to canonical keys.
+
+        Returns:
+            Tuple of ``(backup_path, updated_series_count)``.
+        """
+
+        if not self.file_path.exists():
+            raise ValueError(f"tv.yml not found: {self.file_path}")
+
+        backup_path = self.file_path.with_name("tv-backup.yml")
+
+        with self.priority_write():
+            shutil.copy2(self.file_path, backup_path)
+
+            data = self.load()
+            series = data.get("series", CommentedMap())
+            updated_series = 0
+
+            for name, raw_config in list(series.items()):
+                if not isinstance(raw_config, dict):
+                    continue
+
+                config = _to_builtin(raw_config)
+                normalized = TitleCard.normalize_option_keys(
+                    config,
+                    scope=f'legacy conversion series "{name}"',
+                )
+
+                extras = normalized.get("extras")
+                if isinstance(extras, dict):
+                    normalized["extras"] = TitleCard.normalize_option_keys(
+                        extras,
+                        scope=f'legacy conversion extras "{name}"',
+                    )
+
+                if normalized == config:
+                    continue
+
+                series[name] = _to_commented(normalized)
+                updated_series += 1
+
+            if updated_series > 0:
+                self._write_locked(data)
+
+        return backup_path, updated_series
 
     def invalidate(self) -> None:
         """Drop the cached YAML data so it is reloaded on next access."""
