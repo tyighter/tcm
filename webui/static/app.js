@@ -1941,7 +1941,7 @@ function textInput(entry, field, value) {
       input.value = normalized ?? '';
     });
   }
-  if (field.id === 'episode_text_format') {
+  if (field.id === 'episode_number_text_format') {
     enableEpisodeTextFormatHelper(input);
   }
   return input;
@@ -3613,8 +3613,8 @@ function createIdentifierInput(entry, field, value, onChange) {
 const BASICS_FIELDS = new Set([
   'library',
   'card_type',
-  'episode_text_format',
-  'episode_text_case',
+  'episode_number_text_format',
+  'episode_number_text_case',
   'episode_data_source',
   'watched_style',
   'unwatched_style',
@@ -3642,8 +3642,8 @@ function isIdentifierValueSet(value) {
 const PREVIEW_NEUTRAL_FIELDS = new Set(['library', ...ID_FIELDS]);
 const PREVIEW_FORCE_FIELDS = new Set([
   'card_type',
-  'episode_text_case',
-  'episode_text_format',
+  'episode_number_text_case',
+  'episode_number_text_format',
   'extras',
 ]);
 
@@ -3680,8 +3680,8 @@ const FIELD_GROUP_DEFINITIONS = [
 const FIELD_DISPLAY_ORDER = [
   'library',
   'card_type',
-  'episode_text_format',
-  'episode_text_case',
+  'episode_number_text_format',
+  'episode_number_text_case',
   'episode_data_source',
   'watched_style',
   'unwatched_style',

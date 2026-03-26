@@ -54,42 +54,42 @@ def _merge_aliases(*groups: Iterable[str]) -> list[str]:
 
 COMMON_OPTION_SCHEMA: dict[str, OptionMetadata] = {
     "episode_text_font": {
-        "canonical_key": "episode_index_text_font_file",
+        "canonical_key": "episode_number_text_font_file",
         "legacy_keys": ["episode_text_font"],
         "label": "Episode Number Font",
         "description": "Font file used for episode index text.",
         "category": "Episode Number Text",
     },
     "episode_text_case": {
-        "canonical_key": "episode_index_text_case",
+        "canonical_key": "episode_number_text_case",
         "legacy_keys": ["episode_text_case"],
         "label": "Episode Number Case",
         "description": "Character casing applied to episode index text.",
         "category": "Episode Number Text",
     },
     "episode_text_font_size": {
-        "canonical_key": "episode_index_text_font_size",
+        "canonical_key": "episode_number_text_size",
         "legacy_keys": ["episode_text_font_size"],
-        "label": "Episode Number Font Size",
-        "description": "Font size modifier for episode index text.",
+        "label": "Episode Number Size",
+        "description": "Size modifier for episode number text.",
         "category": "Episode Number Text",
     },
     "episode_text_vertical_shift": {
-        "canonical_key": "episode_index_text_vertical_shift",
+        "canonical_key": "episode_number_text_vertical_shift",
         "legacy_keys": ["episode_text_vertical_shift"],
         "label": "Episode Number Vertical Shift",
         "description": "Vertical pixel shift applied to episode index text.",
         "category": "Episode Number Text",
     },
     "episode_text_stroke_color": {
-        "canonical_key": "episode_index_text_stroke_color",
+        "canonical_key": "episode_number_text_stroke_color",
         "legacy_keys": ["episode_text_stroke_color", "episode_stroke_color"],
         "label": "Episode Number Stroke Color",
         "description": "Stroke color used around episode index text.",
         "category": "Episode Number Text",
     },
     "episode_text_stroke_width": {
-        "canonical_key": "episode_index_text_stroke_width",
+        "canonical_key": "episode_number_text_stroke_width",
         "legacy_keys": ["episode_text_stroke_width"],
         "label": "Episode Number Stroke Width",
         "description": "Stroke width used around episode index text.",
@@ -112,35 +112,35 @@ COMMON_OPTION_SCHEMA: dict[str, OptionMetadata] = {
     "title_text_margin": {
         "canonical_key": "episode_title_text_horizontal_offset",
         "legacy_keys": ["title_text_margin"],
-        "label": "Title Text Horizontal Offset",
+        "label": "Episode Title Horizontal Offset",
         "description": "Horizontal offset applied to episode title text.",
         "category": "Episode Title Text",
     },
     "title_text_line_end_offset": {
         "canonical_key": "episode_title_text_margin",
         "legacy_keys": ["title_text_line_end_offset"],
-        "label": "Title Text Margin",
+        "label": "Episode Title Margin",
         "description": "Additional right-side margin reserved for episode title text.",
         "category": "Episode Title Text",
     },
 }
 
 
-_PREFIX_RULES: tuple[tuple[str, str, str], ...] = (
-    ("font_", "Font", "Font controls for episode title text."),
-    ("episode_text_", "Episode Number Text", "Controls for episode index text."),
-    ("title_text", "Episode Title Text", "Controls for episode title text."),
-    ("season_text_", "Episode Number Text", "Controls for season/index text rendering."),
-    ("border_", "Borders", "Controls border styling."),
-    ("line_", "Layout", "Controls line placement and styling."),
-    ("shape_", "Layout", "Controls shape placement and styling."),
-    ("graph_", "Layout", "Controls graph styling and geometry."),
-    ("background", "Background", "Controls background appearance."),
-    ("overlay_", "Background", "Controls color overlays and blending."),
-    ("banner_", "Layout", "Controls banner styling and placement."),
-    ("text_box_", "Layout", "Controls text box styling and layout."),
-    ("frame_", "Borders", "Controls frame/border presentation."),
-    ("box_", "Layout", "Controls card box geometry and styling."),
+_PREFIX_RULES: tuple[tuple[str, str, str, str | None], ...] = (
+    ("font_", "Episode Title Text", "Controls for episode title text.", None),
+    ("episode_text_", "Episode Number Text", "Controls for episode index text.", "episode_number_text_"),
+    ("title_text", "Episode Title Text", "Controls for episode title text.", "episode_title_text"),
+    ("season_text_", "Episode Number Text", "Controls for season/index text rendering.", None),
+    ("border_", "Borders", "Controls border styling.", None),
+    ("line_", "Layout", "Controls line placement and styling.", None),
+    ("shape_", "Layout", "Controls shape placement and styling.", None),
+    ("graph_", "Layout", "Controls graph styling and geometry.", None),
+    ("background", "Background", "Controls background appearance.", None),
+    ("overlay_", "Background", "Controls color overlays and blending.", None),
+    ("banner_", "Layout", "Controls banner styling and placement.", None),
+    ("text_box_", "Layout", "Controls text box styling and layout.", None),
+    ("frame_", "Borders", "Controls frame/border presentation.", None),
+    ("box_", "Layout", "Controls card box geometry and styling.", None),
 )
 
 
@@ -155,10 +155,18 @@ def option_metadata_for_key(raw_key: str) -> OptionMetadata:
             "category": common["category"],
         }
 
-    for prefix, category, category_description in _PREFIX_RULES:
+    for prefix, category, category_description, canonical_prefix in _PREFIX_RULES:
         if raw_key.startswith(prefix):
+            canonical_key = raw_key
+            if canonical_prefix:
+                if prefix.endswith("_"):
+                    suffix = raw_key[len(prefix):]
+                    canonical_key = f"{canonical_prefix}{suffix}"
+                else:
+                    suffix = raw_key[len(prefix):]
+                    canonical_key = f"{canonical_prefix}{suffix}"
             return {
-                "canonical_key": raw_key,
+                "canonical_key": canonical_key,
                 "legacy_keys": [raw_key],
                 "label": _titleize(raw_key),
                 "description": f"{category_description} ({raw_key}).",

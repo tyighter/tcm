@@ -381,10 +381,16 @@ class Show(YamlReader):
             self.episode_text_format = self.card_class.EPISODE_TEXT_FORMAT
             self.episode_text_case = self.card_class.DEFAULT_FONT_CASE
 
-        if (value := self.get('episode_text_format', type_=str)) is not None:
+        value = self.get('episode_number_text_format', type_=str)
+        if value is None:
+            value = self.get('episode_text_format', type_=str)
+        if value is not None:
             self.episode_text_format = value
 
-        if (value := self.get('episode_text_case', type_=self.TYPE_LOWER_STR)) is not None:
+        value = self.get('episode_number_text_case', type_=self.TYPE_LOWER_STR)
+        if value is None:
+            value = self.get('episode_text_case', type_=self.TYPE_LOWER_STR)
+        if value is not None:
             if value in self.card_class.CASE_FUNCTIONS:
                 self.episode_text_case = value
             else:
