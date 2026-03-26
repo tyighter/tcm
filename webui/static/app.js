@@ -72,6 +72,7 @@ const PREVIEW_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 12;
 const LOGO_DB_STORE = 'logos';
 const DEFAULT_BACKUP_DIRECTORY = '/config/backups';
 const FONT_EXTENSIONS = ['.ttf', '.otf', '.woff', '.woff2', '.ttc'];
+const DESTRUCTIVE_ACTION_UNDO_WINDOW_MS = 9000;
 const ONBOARDING_STEP_ORDER = [
   'set_preferences',
   'add_first_series',
@@ -132,6 +133,8 @@ const entryPreviewHoverImage = document.createElement('img');
 entryPreviewHoverImage.alt = 'Entry preview';
 entryPreviewHoverElement.appendChild(entryPreviewHoverImage);
 document.body.appendChild(entryPreviewHoverElement);
+
+const pendingDestructiveActions = new Map();
 
 function makeValidationIssue(severity, message) {
   return { severity, message };
@@ -1289,12 +1292,17 @@ function openEntryActionsModal(entry, entryPayload) {
     'Restore cards back to the last saved set',
     'history',
     () =>
-      triggerServerAction(
-        revertButton,
-        '/api/actions/revert-series',
-        `Reverted cards for ${entry.name}`,
-        { workingLabel: 'Reverting...', refresh: false, payload: entryPayload() }
-      )
+      queueDestructiveAction({
+        key: `revert-series:${entry.id}`,
+        label: `Queued “Revert cards” for ${entry.name}`,
+        onCommit: () =>
+          triggerServerAction(
+            revertButton,
+            '/api/actions/revert-series',
+            `Reverted cards for ${entry.name}`,
+            { workingLabel: 'Reverting...', refresh: false, payload: entryPayload() }
+          ),
+      })
   );
 
   const forgetButton = createActionButton(
@@ -1302,12 +1310,17 @@ function openEntryActionsModal(entry, entryPayload) {
     'Clear loaded cards and metadata cache',
     'layers_clear',
     () =>
-      triggerServerAction(
-        forgetButton,
-        '/api/actions/forget-cards',
-        `Forgot loaded cards for ${entry.name}`,
-        { workingLabel: 'Forgetting...', refresh: false, payload: entryPayload() }
-      )
+      queueDestructiveAction({
+        key: `forget-cards:${entry.id}`,
+        label: `Queued “Forget cards” for ${entry.name}`,
+        onCommit: () =>
+          triggerServerAction(
+            forgetButton,
+            '/api/actions/forget-cards',
+            `Forgot loaded cards for ${entry.name}`,
+            { workingLabel: 'Forgetting...', refresh: false, payload: entryPayload() }
+          ),
+      })
   );
 
   const deleteButton = createActionButton(
@@ -1315,12 +1328,17 @@ function openEntryActionsModal(entry, entryPayload) {
     'Remove generated cards for this series',
     'delete_forever',
     () =>
-      triggerServerAction(
-        deleteButton,
-        '/api/actions/delete-series-cards',
-        `Deleted cards for ${entry.name}`,
-        { workingLabel: 'Deleting...', refresh: false, payload: entryPayload() }
-      ),
+      queueDestructiveAction({
+        key: `delete-series-cards:${entry.id}`,
+        label: `Queued “Delete cards” for ${entry.name}`,
+        onCommit: () =>
+          triggerServerAction(
+            deleteButton,
+            '/api/actions/delete-series-cards',
+            `Deleted cards for ${entry.name}`,
+            { workingLabel: 'Deleting...', refresh: false, payload: entryPayload() }
+          ),
+      }),
     'danger'
   );
 
@@ -1329,17 +1347,22 @@ function openEntryActionsModal(entry, entryPayload) {
     'Delete, forget, and rebuild every card for this series',
     'autorenew',
     () =>
-      triggerServerAction(
-        freshBuildButton,
-        '/api/actions/fresh-build-series',
-        `Fresh build complete for ${entry.name}`,
-        {
-          workingLabel: 'Fresh building...',
-          refresh: false,
-          payload: entryPayload(),
-          onSuccess: () => refreshEntryPreviews([entry]),
-        }
-      ),
+      queueDestructiveAction({
+        key: `fresh-build-series:${entry.id}`,
+        label: `Queued “Fresh Build” for ${entry.name}`,
+        onCommit: () =>
+          triggerServerAction(
+            freshBuildButton,
+            '/api/actions/fresh-build-series',
+            `Fresh build complete for ${entry.name}`,
+            {
+              workingLabel: 'Fresh building...',
+              refresh: false,
+              payload: entryPayload(),
+              onSuccess: () => refreshEntryPreviews([entry]),
+            }
+          ),
+      }),
     'danger'
   );
 
@@ -5199,16 +5222,43 @@ async function openPreview(entry) {
 }
 
 function removeEntry(entry) {
-  if (!confirm(`Remove "${entry.name}"?`)) {
+  if (!entry) {
     return;
   }
-  state.entries = state.entries.filter((item) => item !== entry);
-  state.collapsedEntries.delete(entry.id);
-  state.logoBackgrounds.delete(entry.name);
-  void clearLogoCacheEntry(entry);
-  persistLogoBackgroundPreferences();
+
+  const existingIndex = state.entries.indexOf(entry);
+  if (existingIndex === -1) {
+    return;
+  }
+
+  state.entries = [
+    ...state.entries.slice(0, existingIndex),
+    ...state.entries.slice(existingIndex + 1),
+  ];
   refreshDirtyState();
   renderEntries();
+
+  queueDestructiveAction({
+    key: `remove-entry:${entry.id}`,
+    label: `Removed "${entry.name}"`,
+    onUndo: () => {
+      state.entries = [
+        ...state.entries.slice(0, existingIndex),
+        entry,
+        ...state.entries.slice(existingIndex),
+      ];
+      refreshDirtyState();
+      renderEntries();
+    },
+    onCommit: async () => {
+      state.collapsedEntries.delete(entry.id);
+      state.logoBackgrounds.delete(entry.name);
+      await clearLogoCacheEntry(entry);
+      persistLogoBackgroundPreferences();
+      refreshDirtyState();
+      renderEntries();
+    },
+  });
 }
 
 // -----------------------------------------------------------------------------
@@ -7472,13 +7522,102 @@ document.addEventListener('keydown', trapModalFocus, true);
 // -----------------------------------------------------------------------------
 // Toast notifications
 // -----------------------------------------------------------------------------
-function showToast(message, type = 'info') {
+function showToast(message, type = 'info', options = {}) {
+  const { duration = 4500, actionLabel = '', onAction } = options;
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  toast.textContent = message || '';
+
+  const messageElement = document.createElement('span');
+  messageElement.className = 'toast__message';
+  messageElement.textContent = message || '';
+  toast.appendChild(messageElement);
+
+  if (actionLabel && typeof onAction === 'function') {
+    const actionButton = document.createElement('button');
+    actionButton.type = 'button';
+    actionButton.className = 'toast__action';
+    actionButton.textContent = actionLabel;
+    actionButton.addEventListener('click', () => onAction());
+    toast.appendChild(actionButton);
+  }
+
   toastContainer.appendChild(toast);
-  setTimeout(() => toast.remove(), 4500);
+  if (duration > 0) {
+    setTimeout(() => toast.remove(), duration);
+  }
   return toast;
+}
+
+function queueDestructiveAction({
+  key,
+  label,
+  undoLabel = 'Undo',
+  undoWindowMs = DESTRUCTIVE_ACTION_UNDO_WINDOW_MS,
+  onCommit,
+  onUndo,
+}) {
+  if (!key || typeof onCommit !== 'function') {
+    return false;
+  }
+  if (pendingDestructiveActions.has(key)) {
+    showToast('Action already queued. Use Undo from the existing toast to cancel.', 'info');
+    return false;
+  }
+
+  const pending = {
+    key,
+    committed: false,
+    canceled: false,
+    timerId: null,
+    toast: null,
+  };
+
+  const clearPending = () => {
+    if (pending.timerId) {
+      clearTimeout(pending.timerId);
+      pending.timerId = null;
+    }
+    if (pending.toast) {
+      pending.toast.remove();
+      pending.toast = null;
+    }
+    pendingDestructiveActions.delete(key);
+  };
+
+  const undo = () => {
+    if (!pendingDestructiveActions.has(key) || pending.committed) {
+      return;
+    }
+    pending.canceled = true;
+    clearPending();
+    if (typeof onUndo === 'function') {
+      onUndo();
+    }
+    showToast(`${label} canceled.`, 'info');
+  };
+
+  pending.toast = showToast(`${label}.`, 'info', {
+    duration: undoWindowMs,
+    actionLabel: undoLabel,
+    onAction: undo,
+  });
+
+  pending.timerId = setTimeout(async () => {
+    if (pending.canceled) {
+      return;
+    }
+    pending.committed = true;
+    clearPending();
+    try {
+      await onCommit();
+    } catch (error) {
+      console.error('Failed to finalize destructive action', { key, error });
+      showToast(error?.message || 'Unable to complete action.', 'error');
+    }
+  }, undoWindowMs);
+
+  pendingDestructiveActions.set(key, pending);
+  return true;
 }
 
 async function triggerServerAction(
