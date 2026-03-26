@@ -1157,6 +1157,143 @@ function setSearchVisibility(isVisible) {
   }
 }
 
+function isTextEditingElement(target) {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  if (target instanceof HTMLTextAreaElement) {
+    return true;
+  }
+  if (target instanceof HTMLInputElement) {
+    const type = (target.type || 'text').toLowerCase();
+    return !['button', 'checkbox', 'color', 'file', 'hidden', 'radio', 'range', 'reset', 'submit'].includes(type);
+  }
+  if (target instanceof HTMLElement && target.isContentEditable) {
+    return true;
+  }
+  const editableParent = target.closest('textarea, input, [contenteditable="true"]');
+  return Boolean(editableParent);
+}
+
+function focusSearchField() {
+  if (!dom.search) {
+    return;
+  }
+  setSearchVisibility(true);
+  dom.search.focus();
+  dom.search.select();
+}
+
+function commandDefinitions() {
+  return [
+    {
+      id: 'save',
+      label: 'Save configuration',
+      shortcuts: ['Ctrl/Cmd+S'],
+      run: () => saveConfiguration(),
+    },
+    {
+      id: 'search',
+      label: 'Focus search',
+      shortcuts: ['/', 'Ctrl/Cmd+K'],
+      run: () => focusSearchField(),
+    },
+    {
+      id: 'add',
+      label: 'Add entry',
+      shortcuts: ['A'],
+      run: () => openAddEntryModal(),
+    },
+    {
+      id: 'settings',
+      label: 'Open settings',
+      shortcuts: ['S', 'Ctrl/Cmd+,'],
+      run: () => openSettingsModal(),
+    },
+  ];
+}
+
+function openCommandPaletteModal() {
+  const modal = buildModal('Command palette');
+  addFloatingCloseButton(modal, 'Close command palette');
+
+  const intro = document.createElement('p');
+  intro.className = 'helper-text';
+  intro.textContent = 'Run an action quickly with keyboard shortcuts.';
+
+  const list = document.createElement('div');
+  list.className = 'modal-section';
+
+  commandDefinitions().forEach((command) => {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'search-result';
+    row.addEventListener('click', () => {
+      closeModal(modal.element);
+      command.run();
+    });
+
+    const summary = document.createElement('div');
+    summary.className = 'search-result-summary';
+    summary.innerHTML = `<h3>${command.label}</h3><p class="helper-text">${command.shortcuts.join(' · ')}</p>`;
+
+    row.appendChild(summary);
+    list.appendChild(row);
+  });
+
+  modal.content.append(intro, list);
+  modal.footer.append(closeButton(() => closeModal(modal.element)));
+}
+
+function handleKeyboardShortcuts(event) {
+  if (event.defaultPrevented) {
+    return;
+  }
+
+  const hasModifier = event.ctrlKey || event.metaKey;
+  const normalizedKey = typeof event.key === 'string' ? event.key.toLowerCase() : '';
+  const isTyping = isTextEditingElement(event.target);
+
+  if (isTyping) {
+    return;
+  }
+
+  if (hasModifier && normalizedKey === 's') {
+    event.preventDefault();
+    saveConfiguration();
+    return;
+  }
+
+  if (hasModifier && normalizedKey === 'k') {
+    event.preventDefault();
+    focusSearchField();
+    return;
+  }
+
+  if (hasModifier && normalizedKey === ',') {
+    event.preventDefault();
+    openSettingsModal();
+    return;
+  }
+
+  if (normalizedKey === '/') {
+    event.preventDefault();
+    focusSearchField();
+    return;
+  }
+
+  if (normalizedKey === 'a') {
+    event.preventDefault();
+    openAddEntryModal();
+    return;
+  }
+
+  if (normalizedKey === 's') {
+    event.preventDefault();
+    openSettingsModal();
+  }
+}
+
 function registerEvents() {
   if (dom.search) {
     dom.search.addEventListener('input', (event) => {
@@ -1230,6 +1367,8 @@ function registerEvents() {
   if (dom.settings) {
     dom.settings.addEventListener('click', () => openSettingsModal());
   }
+
+  document.addEventListener('keydown', handleKeyboardShortcuts);
 }
 
 function openEntryActionsModal(entry, entryPayload) {
@@ -5947,8 +6086,41 @@ function openSettingsModal() {
     }
   });
 
-  quickActionsButtons.append(unmatchedButton, recentsButton, convertLegacyButton);
+  const commandPaletteButton = document.createElement('button');
+  commandPaletteButton.type = 'button';
+  commandPaletteButton.innerHTML = `
+    <span class="material-symbols-rounded" aria-hidden="true">keyboard_command_key</span>
+    <span>Command palette</span>
+  `;
+  commandPaletteButton.addEventListener('click', () => openCommandPaletteModal());
+
+  quickActionsButtons.append(
+    unmatchedButton,
+    recentsButton,
+    convertLegacyButton,
+    commandPaletteButton,
+  );
   quickActions.append(quickActionsHeader, quickActionsButtons);
+
+  const shortcutsSection = document.createElement('div');
+  shortcutsSection.className = 'modal-section modal-section--muted';
+  const shortcutsHeader = document.createElement('div');
+  shortcutsHeader.className = 'modal-section__header';
+  const shortcutsTitle = document.createElement('h3');
+  shortcutsTitle.textContent = 'Keyboard shortcuts';
+  const shortcutsIntro = document.createElement('p');
+  shortcutsIntro.className = 'helper-text';
+  shortcutsIntro.textContent = 'Shortcuts are disabled while typing in text fields.';
+  shortcutsHeader.append(shortcutsTitle, shortcutsIntro);
+
+  const shortcutsList = document.createElement('ul');
+  shortcutsList.className = 'helper-text';
+  commandDefinitions().forEach((command) => {
+    const item = document.createElement('li');
+    item.textContent = `${command.label}: ${command.shortcuts.join(' or ')}`;
+    shortcutsList.appendChild(item);
+  });
+  shortcutsSection.append(shortcutsHeader, shortcutsList);
 
   const tautulliSection = document.createElement('div');
   tautulliSection.className = 'modal-section';
@@ -6248,7 +6420,7 @@ function openSettingsModal() {
   tautulliSection.append(tautulliHeader, tautulliControls, userStatus);
   preferencesSection.prepend(preferencesHeader);
 
-  modal.content.append(quickActions, tautulliSection, syncSection, preferencesSection, status);
+  modal.content.append(quickActions, shortcutsSection, tautulliSection, syncSection, preferencesSection, status);
   modal.footer.append(saveButton, closeButton(() => closeModal(modal.element)));
 }
 
