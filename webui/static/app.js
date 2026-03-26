@@ -44,6 +44,7 @@ const dom = {
   recents: document.getElementById('open-recents'),
   settings: document.getElementById('open-settings'),
   modals: document.getElementById('modals'),
+  optionInfoTemplate: document.getElementById('option-info-template'),
 };
 
 const toastContainer = document.createElement('div');
@@ -1820,7 +1821,7 @@ function renderFieldRow(entry, field, value) {
   row.className = 'field-row';
 
   const label = document.createElement('label');
-  label.textContent = field.label;
+  label.appendChild(buildOptionLabel(field.label, field.description));
 
   const controls = document.createElement('div');
   controls.className = 'field-controls';
@@ -1899,6 +1900,44 @@ function renderFieldRow(entry, field, value) {
   }
   row.append(label, controls);
   return row;
+}
+
+function buildOptionLabel(labelText, description) {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'option-label';
+
+  const text = document.createElement('span');
+  text.textContent = labelText || '';
+  wrapper.appendChild(text);
+
+  if (!description) {
+    return wrapper;
+  }
+
+  const infoIcon = createOptionInfoIcon(description, labelText);
+  wrapper.appendChild(infoIcon);
+  return wrapper;
+}
+
+function createOptionInfoIcon(description, labelText) {
+  const titleText = labelText ? `${labelText}: ${description}` : description;
+  const template = dom.optionInfoTemplate;
+  const fromTemplate =
+    template && template.content?.firstElementChild
+      ? template.content.firstElementChild.cloneNode(true)
+      : null;
+
+  const icon = fromTemplate || document.createElement('span');
+  icon.classList.add('option-info');
+  icon.setAttribute('aria-hidden', 'false');
+  icon.setAttribute('title', titleText);
+  icon.setAttribute('aria-label', titleText);
+  if (!fromTemplate) {
+    icon.classList.add('material-symbols-rounded');
+    icon.setAttribute('aria-hidden', 'false');
+    icon.textContent = 'info';
+  }
+  return icon;
 }
 
 // -----------------------------------------------------------------------------
@@ -3366,7 +3405,8 @@ function extrasEditor(entry, field, value) {
 
       const title = document.createElement('div');
       title.className = 'extra-card__title';
-      title.textContent = definition?.label || formatExtraLabel(row.key);
+      const optionLabel = definition?.label || formatExtraLabel(row.key);
+      title.appendChild(buildOptionLabel(optionLabel, definition?.description));
       header.appendChild(title);
 
       if (definition) {

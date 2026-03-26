@@ -1068,6 +1068,19 @@ button:disabled:hover {
   color: var(--muted);
 }
 
+.option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.option-info {
+  font-size: 1rem;
+  color: rgba(183, 198, 218, 0.85);
+  cursor: help;
+  user-select: none;
+}
+
 
 .field-row select,
 .field-row input,

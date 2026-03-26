@@ -70,8 +70,8 @@ COMMON_OPTION_SCHEMA: dict[str, OptionMetadata] = {
     "episode_text_font_size": {
         "canonical_key": "episode_number_text_size",
         "legacy_keys": ["episode_text_font_size"],
-        "label": "Episode Number Size",
-        "description": "Size modifier for episode number text.",
+        "label": "Episode Number Text Size",
+        "description": "Scales the index text (for example, 'EPISODE 5'), not the episode title.",
         "category": "Episode Number Text",
     },
     "episode_text_vertical_shift": {
@@ -120,7 +120,7 @@ COMMON_OPTION_SCHEMA: dict[str, OptionMetadata] = {
         "canonical_key": "episode_title_text_margin",
         "legacy_keys": ["title_text_line_end_offset"],
         "label": "Episode Title Margin",
-        "description": "Additional right-side margin reserved for episode title text.",
+        "description": "Horizontal spacing used only for episode title text wrapping.",
         "category": "Episode Title Text",
     },
 }
