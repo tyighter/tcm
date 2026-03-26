@@ -39,3 +39,31 @@ def test_save_settings_raises_when_web_settings_write_fails(tmp_path, monkeypatc
     assert str(Path("/config")) not in str(exc_info.value)
     assert "Unable to write UI settings file" in str(exc_info.value)
     assert "writable" in exc_info.value.remediation
+
+
+def test_onboarding_settings_are_merged_and_saved(tmp_path, monkeypatch) -> None:
+    settings_file = tmp_path / "web-settings.json"
+    preference_file = tmp_path / "preferences.yml"
+    monkeypatch.setattr(user_settings, "SETTINGS_FILE", settings_file)
+
+    loaded = user_settings.load_settings(preference_file)
+    assert loaded["onboarding"]["dismissed"] is False
+    assert loaded["onboarding"]["completed_steps"]["run_build"] is False
+
+    saved = user_settings.save_settings(
+        {
+            "onboarding": {
+                "dismissed": True,
+                "completed_steps": {
+                    "add_first_series": True,
+                    "save_config": True,
+                },
+            }
+        },
+        preference_file,
+    )
+
+    assert saved["onboarding"]["dismissed"] is True
+    assert saved["onboarding"]["completed_steps"]["add_first_series"] is True
+    assert saved["onboarding"]["completed_steps"]["save_config"] is True
+    assert saved["onboarding"]["completed_steps"]["run_build"] is False
