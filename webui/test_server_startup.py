@@ -268,6 +268,36 @@ def test_api_convert_legacy_tv_yaml_returns_backup_and_config() -> None:
     assert "config" in payload
 
 
+def test_api_meta_includes_canonical_extras_and_field_descriptions() -> None:
+    class _TvManager:
+        def as_payload(self) -> dict:
+            return {
+                "libraries": {"TV Shows": "/library/tv"},
+                "series": [{"name": "Demo Show (2024)", "config": {}}],
+            }
+
+    handler = _build_handler("/api/meta", _TvManager())
+
+    handler.do_GET()
+
+    assert handler.status == HTTPStatus.OK
+    payload = json.loads(handler.wfile.getvalue())
+
+    fields = payload["fields"]
+    assert fields
+    assert all(field.get("description") for field in fields)
+
+    card_type_field = next(field for field in fields if field["id"] == "card_type")
+    assert "card design template" in card_type_field["description"].lower()
+
+    extras = payload["cardTypeExtras"]
+    assert extras
+    flattened = [entry for definitions in extras.values() for entry in definitions]
+    episode_case = next(entry for entry in flattened if entry["key"] == "episode_text_case")
+    assert episode_case["canonicalKey"] == "episode_number_text_case"
+    assert episode_case["description"]
+
+
 def test_ensure_preference_file_generates_defaults(tmp_path) -> None:
     preference_file = tmp_path / "preferences.yml"
 
