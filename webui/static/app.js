@@ -7,6 +7,8 @@ const state = {
   pendingEntryId: null,
   collapsedEntries: new Set(),
   lastSavedEntries: new Map(),
+  lastSavedEntryOrder: [],
+  isDirty: false,
   logoCache: {},
   cardTypeExtras: {},
   logoBackgrounds: new Map(),
@@ -40,6 +42,7 @@ const dom = {
   expandAll: document.getElementById('expand-all-entries'),
   collapseAll: document.getElementById('collapse-all-entries'),
   runBuilder: document.getElementById('run-builder'),
+  dirtyIndicator: document.getElementById('dirty-indicator'),
   unmatchedIssues: document.getElementById('unmatched-issues'),
   recents: document.getElementById('open-recents'),
   settings: document.getElementById('open-settings'),
@@ -778,7 +781,11 @@ function registerEvents() {
   }
 
   if (dom.runBuilder) {
-    dom.runBuilder.addEventListener('click', () =>
+    dom.runBuilder.addEventListener('click', () => {
+      if (state.isDirty) {
+        showToast('You have unsaved changes. Save before building.', 'warning');
+        return;
+      }
       triggerServerAction(
         dom.runBuilder,
         '/api/actions/build',
@@ -788,8 +795,8 @@ function registerEvents() {
           refresh: true,
           onSuccess: () => refreshEntryPreviews(),
         }
-      )
-    );
+      );
+    });
   }
 
   if (dom.unmatchedIssues) {
@@ -930,6 +937,7 @@ function openEntryActionsModal(entry, entryPayload) {
 // Rendering
 // -----------------------------------------------------------------------------
 function renderEntries() {
+  refreshDirtyState();
   dom.entries.innerHTML = '';
 
   const filtered = state.entries.filter((entry) =>
@@ -3577,11 +3585,13 @@ function updateField(entry, field, value) {
   }
   setValue(entry.config, field.path, value);
   handleEntryConfigChange(entry, field);
+  refreshDirtyState();
 }
 
 function removeField(entry, field) {
   deleteValue(entry.config, field.path);
   handleEntryConfigChange(entry, field);
+  refreshDirtyState();
   renderEntries();
 }
 
@@ -3631,6 +3641,7 @@ function applyIdentifierValue(entry, field, rawValue) {
   if (value === '') {
     deleteValue(entry.config, field.path);
     handleEntryConfigChange(entry, field);
+    refreshDirtyState();
     return;
   }
 
@@ -3641,6 +3652,7 @@ function applyIdentifierValue(entry, field, rawValue) {
     setValue(entry.config, field.path, value);
   }
   handleEntryConfigChange(entry, field);
+  refreshDirtyState();
 }
 
 function createIdentifierInput(entry, field, value, onChange) {
@@ -4711,10 +4723,10 @@ function removeEntry(entry) {
   }
   state.entries = state.entries.filter((item) => item !== entry);
   state.collapsedEntries.delete(entry.id);
-  state.lastSavedEntries.delete(entry.id);
   state.logoBackgrounds.delete(entry.name);
   void clearLogoCacheEntry(entry);
   persistLogoBackgroundPreferences();
+  refreshDirtyState();
   renderEntries();
 }
 
@@ -5945,6 +5957,7 @@ function openAddEntryModal() {
     setEntryCollapsed(newEntry.id, false);
     state.pendingEntryId = newEntry.id;
     sortEntries();
+    refreshDirtyState();
 
     closeModal(modal.element);
     renderEntries();
@@ -6060,6 +6073,46 @@ function syncSavedEntrySnapshots() {
   state.lastSavedEntries = new Map(
     state.entries.map((entry) => [entry.id, snapshotEntry(entry)])
   );
+  state.lastSavedEntryOrder = state.entries.map((entry) => entry.id);
+}
+
+function computeDirtyState() {
+  const currentOrder = state.entries.map((entry) => entry.id);
+  if (state.lastSavedEntryOrder.length !== currentOrder.length) {
+    return true;
+  }
+
+  if (state.lastSavedEntryOrder.some((id, index) => id !== currentOrder[index])) {
+    return true;
+  }
+
+  const savedIds = new Set(state.lastSavedEntries.keys());
+  if (savedIds.size !== currentOrder.length) {
+    return true;
+  }
+
+  if (currentOrder.some((id) => !savedIds.has(id))) {
+    return true;
+  }
+
+  return state.entries.some((entry) => hasEntryChangedSinceLastSave(entry));
+}
+
+function setDirtyState(isDirty) {
+  state.isDirty = Boolean(isDirty);
+  if (dom.dirtyIndicator) {
+    dom.dirtyIndicator.hidden = !state.isDirty;
+  }
+  if (dom.runBuilder) {
+    dom.runBuilder.disabled = state.isDirty;
+    dom.runBuilder.title = state.isDirty
+      ? 'Save configuration before building.'
+      : '';
+  }
+}
+
+function refreshDirtyState() {
+  setDirtyState(computeDirtyState());
 }
 
 let cacheDbPromise = null;
@@ -6396,6 +6449,8 @@ async function saveConfiguration() {
         recordEntrySaveSnapshot(entry);
       })
     );
+    syncSavedEntrySnapshots();
+    refreshDirtyState();
     requestEntryPreviews(changedEntries);
   } catch (error) {
     const message = error?.message || 'Unable to save configuration';
@@ -6408,6 +6463,14 @@ async function saveConfiguration() {
     }
   }
 }
+
+window.addEventListener('beforeunload', (event) => {
+  if (!state.isDirty) {
+    return;
+  }
+  event.preventDefault();
+  event.returnValue = '';
+});
 
 function sortEntries() {
   state.entries.sort((a, b) =>
