@@ -104,6 +104,77 @@ button {
   font-size: 0.86rem;
 }
 
+.save-status-panel {
+  margin: 0.5rem 0.65rem 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(35, 35, 39, 0.92), rgba(24, 24, 28, 0.96));
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  gap: 0.45rem;
+}
+
+.save-status-panel--success {
+  border-color: rgba(49, 196, 109, 0.6);
+}
+
+.save-status-panel--warning {
+  border-color: rgba(229, 160, 13, 0.7);
+}
+
+.save-status-panel--error {
+  border-color: rgba(227, 107, 107, 0.72);
+}
+
+.save-status-panel__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.save-status-panel__title {
+  font-size: 0.96rem;
+}
+
+.save-status-panel__dismiss {
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.save-status-panel__timestamp,
+.save-status-panel__summary {
+  margin: 0;
+}
+
+.save-status-panel__timestamp {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.save-status-panel__summary {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.save-status-panel__details summary,
+.save-status-panel__archive summary {
+  cursor: pointer;
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.save-status-panel__list {
+  margin: 0.45rem 0 0;
+  padding-left: 1.05rem;
+  display: grid;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
 
 .header-actions {
   display: flex;

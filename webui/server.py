@@ -700,6 +700,70 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         return False
 
+    def _build_config_save_details(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Build structured save diagnostics for /api/config responses."""
+
+        series_entries = payload.get("series") if isinstance(payload, dict) else None
+        entries = series_entries if isinstance(series_entries, list) else []
+
+        warnings: list[str] = []
+        failed_entries: list[dict[str, Any]] = []
+        seen_names: set[str] = set()
+
+        for index, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                failed_entries.append(
+                    {
+                        "index": index,
+                        "name": None,
+                        "reason": "Entry is not an object.",
+                    }
+                )
+                continue
+
+            name = str(entry.get("name") or "").strip()
+            if not name:
+                failed_entries.append(
+                    {
+                        "index": index,
+                        "name": None,
+                        "reason": "Entry name is missing.",
+                    }
+                )
+            else:
+                key = name.casefold()
+                if key in seen_names:
+                    warnings.append(f"Duplicate series name detected: {name}")
+                seen_names.add(key)
+
+            config = entry.get("config")
+            if not isinstance(config, dict):
+                failed_entries.append(
+                    {
+                        "index": index,
+                        "name": name or None,
+                        "reason": "Entry config must be an object.",
+                    }
+                )
+
+        unique_failed_entry_indexes = {
+            int(item["index"])
+            for item in failed_entries
+            if isinstance(item.get("index"), int)
+        }
+
+        details: dict[str, Any] = {
+            "saved_entries_count": max(len(entries) - len(unique_failed_entry_indexes), 0),
+            "requested_entries_count": len(entries),
+            "validation_warnings": warnings,
+            "failed_entries": failed_entries,
+            "has_warnings": bool(warnings),
+            "has_failures": bool(failed_entries),
+            "saved_at": time.time(),
+        }
+
+        return details
+
     def _backfill_episode_rating_keys_async(self) -> None:
         def _task() -> None:
             try:
@@ -1073,7 +1137,12 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 self._error(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
                 return
 
-            self._json_response({"status": "ok"})
+            self._json_response(
+                {
+                    "status": "ok",
+                    "details": self._build_config_save_details(payload),
+                }
+            )
             if backfill_episode_keys:
                 self._backfill_episode_rating_keys_async()
             return
