@@ -8,6 +8,7 @@ from modules.PreferenceParser import PreferenceParser
 from modules.StyleSet import StyleSet
 from modules.TitleCard import TitleCard
 from .card_type_images import load_card_type_thumbnails, slugify_card_type
+from .option_schema import build_card_type_option_schema, option_metadata_for_key
 
 STYLE_CHOICES = ["unique", "blur", "grayscale", "blur grayscale"]
 
@@ -318,20 +319,6 @@ def build_series_fields(libraries: dict[str, Any]) -> list[dict[str, Any]]:
     return fields
 
 
-_EXTRA_LABEL_OVERRIDES = {
-    "title_text_line_end_offset": "Title Text Margin",
-    "title_text_margin": "Title Text Horizontal Offset",
-}
-
-
-def _format_extra_label(key: str) -> str:
-    if key in _EXTRA_LABEL_OVERRIDES:
-        return _EXTRA_LABEL_OVERRIDES[key]
-
-    parts = [part.capitalize() for part in key.split('_') if part]
-    return ' '.join(parts) or 'Custom extra'
-
-
 def _literal_choices(annotation: Any) -> list[str]:
     origin = get_origin(annotation)
     if origin is Literal:
@@ -373,9 +360,14 @@ def _build_extra_definition(
         *,
         expected_type: str | None = None,
     ) -> dict[str, Any]:
+    metadata = option_metadata_for_key(name)
     definition: dict[str, Any] = {
         "key": name,
-        "label": _format_extra_label(name),
+        "canonicalKey": metadata["canonical_key"],
+        "legacyKeys": metadata["legacy_keys"],
+        "label": metadata["label"],
+        "description": metadata["description"],
+        "category": metadata["category"],
     }
 
     expected_type_label = expected_type or _expected_type_label(param)
@@ -444,6 +436,7 @@ def build_card_type_extras() -> dict[str, list[dict[str, Any]]]:
         },
     }
 
+    option_schema = build_card_type_option_schema()
     extras: dict[str, list[dict[str, Any]]] = {}
     for identifier, card_type in TitleCard.BUILTIN_CARD_TYPES.items():
         parameters = list(inspect.signature(card_type.__init__).parameters.values())[1:]
@@ -452,7 +445,13 @@ def build_card_type_extras() -> dict[str, list[dict[str, Any]]]:
         for parameter in parameters:
             if parameter.name in base_parameters:
                 continue
+            metadata = option_schema.get(parameter.name)
             definitions[parameter.name] = _build_extra_definition(parameter.name, parameter)
+            if metadata:
+                definitions[parameter.name].setdefault("canonicalKey", metadata["canonical_key"])
+                definitions[parameter.name].setdefault("legacyKeys", metadata["legacy_keys"])
+                definitions[parameter.name].setdefault("description", metadata["description"])
+                definitions[parameter.name].setdefault("category", metadata["category"])
 
         for key, options in universal_extras.items():
             definition = definitions.setdefault(
