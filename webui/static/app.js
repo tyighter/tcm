@@ -30,6 +30,8 @@ const state = {
 };
 
 let saveInProgress = false;
+let saveStatusPanel = null;
+let saveStatusArchive = [];
 
 const dom = {
   entries: document.getElementById('entries'),
@@ -6805,6 +6807,142 @@ function setSaveButtonState(isSaving) {
   }
 }
 
+function formatSaveTimestamp(timestamp) {
+  const resolved =
+    Number.isFinite(Number(timestamp)) && Number(timestamp) > 0
+      ? new Date(Number(timestamp) * 1000)
+      : new Date();
+  return resolved.toLocaleString();
+}
+
+function normalizeSaveDetails(details, fallbackEntryCount) {
+  const payload = details && typeof details === 'object' ? details : {};
+  const failedEntries = Array.isArray(payload.failed_entries) ? payload.failed_entries : [];
+  const validationWarnings = Array.isArray(payload.validation_warnings)
+    ? payload.validation_warnings
+    : [];
+  const requestedEntriesCount = Number.isFinite(Number(payload.requested_entries_count))
+    ? Number(payload.requested_entries_count)
+    : fallbackEntryCount;
+  const savedEntriesCount = Number.isFinite(Number(payload.saved_entries_count))
+    ? Number(payload.saved_entries_count)
+    : Math.max(requestedEntriesCount - failedEntries.length, 0);
+  const timestamp = Number.isFinite(Number(payload.saved_at))
+    ? Number(payload.saved_at)
+    : Date.now() / 1000;
+
+  return {
+    timestamp,
+    requestedEntriesCount,
+    savedEntriesCount,
+    validationWarnings,
+    failedEntries,
+    hasWarnings: payload.has_warnings === true || validationWarnings.length > 0,
+    hasFailures: payload.has_failures === true || failedEntries.length > 0,
+  };
+}
+
+function summarizeSave(details) {
+  const warningCount = details.validationWarnings.length;
+  const failureCount = details.failedEntries.length;
+  if (failureCount > 0) {
+    return `Saved ${details.savedEntriesCount}/${details.requestedEntriesCount} entries • ${failureCount} failed • ${warningCount} warning${warningCount === 1 ? '' : 's'}`;
+  }
+  if (warningCount > 0) {
+    return `Saved ${details.savedEntriesCount} entries with ${warningCount} warning${warningCount === 1 ? '' : 's'}`;
+  }
+  return `Saved ${details.savedEntriesCount} entries successfully`;
+}
+
+function dismissSaveStatusPanel() {
+  if (saveStatusPanel) {
+    saveStatusPanel.remove();
+    saveStatusPanel = null;
+  }
+}
+
+function renderSaveStatusPanel(result, { archiveCurrent = false } = {}) {
+  if (!dom.header) {
+    return;
+  }
+
+  if (archiveCurrent && saveStatusPanel?.dataset?.statusSummary) {
+    saveStatusArchive.unshift({
+      summary: saveStatusPanel.dataset.statusSummary,
+      timestamp: saveStatusPanel.dataset.statusTimestamp || '',
+    });
+    saveStatusArchive = saveStatusArchive.slice(0, 5);
+  }
+
+  dismissSaveStatusPanel();
+
+  const panel = document.createElement('section');
+  panel.className = `save-status-panel save-status-panel--${result.type || 'info'}`;
+  panel.setAttribute('role', 'status');
+  panel.dataset.statusSummary = result.summary || '';
+  panel.dataset.statusTimestamp = result.timestampLabel || '';
+
+  const topRow = document.createElement('div');
+  topRow.className = 'save-status-panel__top';
+
+  const title = document.createElement('strong');
+  title.className = 'save-status-panel__title';
+  title.textContent = result.title || 'Save status';
+
+  const dismissButton = document.createElement('button');
+  dismissButton.type = 'button';
+  dismissButton.className = 'save-status-panel__dismiss';
+  dismissButton.setAttribute('aria-label', 'Dismiss save status');
+  dismissButton.textContent = 'Dismiss';
+  dismissButton.addEventListener('click', dismissSaveStatusPanel);
+  topRow.append(title, dismissButton);
+
+  const timestampLine = document.createElement('p');
+  timestampLine.className = 'save-status-panel__timestamp';
+  timestampLine.textContent = result.timestampLabel || '';
+
+  const summary = document.createElement('p');
+  summary.className = 'save-status-panel__summary';
+  summary.textContent = result.summary || '';
+
+  const details = document.createElement('details');
+  details.className = 'save-status-panel__details';
+  const detailsSummary = document.createElement('summary');
+  detailsSummary.textContent = 'Details';
+  details.appendChild(detailsSummary);
+
+  const list = document.createElement('ul');
+  list.className = 'save-status-panel__list';
+  (result.detailLines || []).forEach((line) => {
+    const item = document.createElement('li');
+    item.textContent = line;
+    list.appendChild(item);
+  });
+  details.appendChild(list);
+
+  if (saveStatusArchive.length > 0) {
+    const archive = document.createElement('details');
+    archive.className = 'save-status-panel__archive';
+    const archiveSummary = document.createElement('summary');
+    archiveSummary.textContent = `Recent save history (${saveStatusArchive.length})`;
+    archive.appendChild(archiveSummary);
+    const archiveList = document.createElement('ul');
+    archiveList.className = 'save-status-panel__list';
+    saveStatusArchive.forEach((entry) => {
+      const item = document.createElement('li');
+      item.textContent = `${entry.timestamp}: ${entry.summary}`;
+      archiveList.appendChild(item);
+    });
+    archive.appendChild(archiveList);
+    panel.append(topRow, timestampLine, summary, details, archive);
+  } else {
+    panel.append(topRow, timestampLine, summary, details);
+  }
+
+  dom.header.insertAdjacentElement('afterend', panel);
+  saveStatusPanel = panel;
+}
+
 async function saveConfiguration() {
   if (saveInProgress) {
     showToast('Save already in progress...', 'info');
@@ -6839,7 +6977,38 @@ async function saveConfiguration() {
       throw new Error(data.error || 'Failed to save configuration');
     }
 
-    showToast('Configuration saved', 'success');
+    const data = await response.json().catch(() => ({}));
+    const details = normalizeSaveDetails(data?.details, state.entries.length);
+    const summary = summarizeSave(details);
+    const timestampLabel = formatSaveTimestamp(details.timestamp);
+    const detailLines = [
+      `Requested entries: ${details.requestedEntriesCount}`,
+      `Saved entries: ${details.savedEntriesCount}`,
+      `Warnings: ${details.validationWarnings.length}`,
+      `Failed entries: ${details.failedEntries.length}`,
+      ...details.validationWarnings.map((warning) => `Warning: ${warning}`),
+      ...details.failedEntries.map((entry, index) => {
+        const label = entry?.name ? `${entry.name}` : `Entry #${(entry?.index ?? index) + 1}`;
+        const reason = entry?.reason || 'Unknown failure';
+        return `Failed ${label}: ${reason}`;
+      }),
+    ];
+
+    renderSaveStatusPanel(
+      {
+        type: details.hasFailures ? 'error' : details.hasWarnings ? 'warning' : 'success',
+        title: details.hasFailures ? 'Saved with failures' : 'Configuration saved',
+        timestampLabel,
+        summary,
+        detailLines,
+      },
+      { archiveCurrent: details.hasFailures === false }
+    );
+
+    showToast(
+      details.hasFailures ? 'Configuration saved with issues' : 'Configuration saved',
+      details.hasFailures ? 'error' : details.hasWarnings ? 'info' : 'success'
+    );
     markOnboardingStepComplete('save_config');
 
     await Promise.all(
@@ -6853,6 +7022,13 @@ async function saveConfiguration() {
     requestEntryPreviews(changedEntries);
   } catch (error) {
     const message = error?.message || 'Unable to save configuration';
+    renderSaveStatusPanel({
+      type: 'error',
+      title: 'Save failed',
+      timestampLabel: formatSaveTimestamp(Date.now() / 1000),
+      summary: message,
+      detailLines: ['The configuration was not persisted. Review the error and try again.'],
+    });
     showToast(message, 'error');
   } finally {
     saveInProgress = false;
