@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from webui import server, services
+from modules.TitleCard import TitleCard
 
 
 def _cache_preview_payload(key: str, payload: services.PreviewPayload) -> None:
@@ -331,6 +332,14 @@ class _StubPreviewTitleCard:
         return True
 
 
+class _CapturingPreviewTitleCard(_StubPreviewTitleCard):
+    last_kwargs = None
+
+    def __init__(self, episode, *_args, **kwargs) -> None:
+        super().__init__(episode, *_args, **kwargs)
+        _CapturingPreviewTitleCard.last_kwargs = kwargs
+
+
 class _SelectSourceRecorder:
     def __init__(self, fallback_episode, available_source) -> None:
         self.fallback_episode = fallback_episode
@@ -413,6 +422,80 @@ def test_generate_preview_runs_full_sync_before_failing_or_succeeding(monkeypatc
 
     assert payload.mime == "image/jpeg"
     assert "all" in recorder.calls
+
+
+def test_generate_preview_normalizes_legacy_extra_keys(monkeypatch, tmp_path) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_bytes(b"src")
+    destination = tmp_path / "preview.jpg"
+    episode = _StubPreviewEpisode("1-1", source, destination)
+
+    show = SimpleNamespace(
+        episodes={episode.episode_info.key: episode},
+        extras={"episode_text_case": "title"},
+        profile=_StubPreviewProfile(),
+        card_class=_StubPreviewCardClass(),
+        image_magick=SimpleNamespace(),
+        font=_StubPreviewFont(),
+        select_source_images=lambda select_only=None: None,
+    )
+
+    _CapturingPreviewTitleCard.last_kwargs = None
+    monkeypatch.setattr(services, "TitleCard", _CapturingPreviewTitleCard)
+
+    services.generate_preview(
+        context=SimpleNamespace(),
+        tv_manager=SimpleNamespace(),
+        show_name="Demo",
+        series_config={},
+        preferred_episode_key=episode.episode_info.key,
+        preloaded_show=show,
+    )
+
+    kwargs = _CapturingPreviewTitleCard.last_kwargs
+    assert kwargs is not None
+    assert kwargs["episode_number_text_case"] == "title"
+    assert kwargs["episode_text_case"] == "title"
+
+
+def test_normalize_option_keys_prefers_canonical_and_warns_once(monkeypatch) -> None:
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        "modules.TitleCard.log.warning",
+        lambda message, *args: warnings.append(message % args),
+    )
+    TitleCard._LOGGED_ALIAS_WARNINGS.clear()
+
+    config = {
+        "episode_number_text_case": "title",
+        "episode_text_case": "upper",
+    }
+    normalized = TitleCard.normalize_option_keys(config, scope="test scope")
+    normalized_again = TitleCard.normalize_option_keys(config, scope="test scope")
+
+    assert normalized["episode_number_text_case"] == "title"
+    assert normalized_again["episode_number_text_case"] == "title"
+    assert len(warnings) == 1
+    assert "episode_text_case" in warnings[0]
+    assert "episode_number_text_case" in warnings[0]
+
+
+def test_normalize_option_keys_promotes_legacy_with_deprecation_warning(monkeypatch) -> None:
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        "modules.TitleCard.log.warning",
+        lambda message, *args: warnings.append(message % args),
+    )
+    TitleCard._LOGGED_ALIAS_WARNINGS.clear()
+
+    normalized = TitleCard.normalize_option_keys(
+        {"title_text_margin": 15},
+        scope="test extras",
+    )
+
+    assert normalized["episode_title_text_horizontal_offset"] == 15
+    assert len(warnings) == 1
+    assert "title_text_margin -> episode_title_text_horizontal_offset" in warnings[0]
 
 
 def test_generate_preview_raises_when_no_episode_sources_exist(tmp_path) -> None:

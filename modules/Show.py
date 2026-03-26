@@ -336,6 +336,10 @@ class Show(YamlReader):
         Parse the Show's YAML and update this object's attributes. Error
         on any invalid attributes.
         """
+        self._base_yaml = TitleCard.normalize_option_keys(
+            self._base_yaml,
+            scope=f'series "{self.series_info.full_name}"',
+        )
 
         if (value := self.get('library', type_=dict)) is not None:
             self.library_name: str = value['name']
@@ -382,14 +386,10 @@ class Show(YamlReader):
             self.episode_text_case = self.card_class.DEFAULT_FONT_CASE
 
         value = self.get('episode_number_text_format', type_=str)
-        if value is None:
-            value = self.get('episode_text_format', type_=str)
         if value is not None:
             self.episode_text_format = value
 
         value = self.get('episode_number_text_case', type_=self.TYPE_LOWER_STR)
-        if value is None:
-            value = self.get('episode_text_case', type_=self.TYPE_LOWER_STR)
         if value is not None:
             if value in self.card_class.CASE_FUNCTIONS:
                 self.episode_text_case = value

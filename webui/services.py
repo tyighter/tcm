@@ -1024,11 +1024,18 @@ def _load_show_for_preview(
     *,
     force_sync: bool = False,
 ) -> Show:
+    from modules.TitleCard import TitleCard as CoreTitleCard
+
+    normalized_config = CoreTitleCard.normalize_option_keys(
+        series_config,
+        scope=f'preview series "{show_name}"',
+    )
+
     runtime_config = merge_series_configuration(
         context,
         tv_manager,
         show_name,
-        series_config,
+        normalized_config,
     )
 
     show = Show(
@@ -1431,7 +1438,12 @@ def generate_preview(
     if episode.destination is None:
         raise RuntimeError("Episode destination is not set; configure a library path")
 
-    extras = {**show.extras, **episode.extra_characteristics}
+    from modules.TitleCard import TitleCard as CoreTitleCard
+
+    extras = CoreTitleCard.normalize_option_keys(
+        {**show.extras, **episode.extra_characteristics},
+        scope=f'preview extras "{show_name}"',
+    )
     wrapping_extras = {**show.profile.font.attributes, **extras}
 
     if hasattr(show.card_class, "adjust_title_characteristics"):
