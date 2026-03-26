@@ -48,6 +48,7 @@ const dom = {
   unmatchedIssues: document.getElementById('unmatched-issues'),
   recents: document.getElementById('open-recents'),
   settings: document.getElementById('open-settings'),
+  onboarding: document.getElementById('onboarding-layer'),
   modals: document.getElementById('modals'),
   optionInfoTemplate: document.getElementById('option-info-template'),
 };
@@ -65,6 +66,13 @@ const PREVIEW_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 12;
 const LOGO_DB_STORE = 'logos';
 const DEFAULT_BACKUP_DIRECTORY = '/config/backups';
 const FONT_EXTENSIONS = ['.ttf', '.otf', '.woff', '.woff2', '.ttc'];
+const ONBOARDING_STEP_ORDER = [
+  'set_preferences',
+  'add_first_series',
+  'preview_card',
+  'save_config',
+  'run_build',
+];
 
 const EPISODE_TEXT_FORMAT_GROUPS = [
   {
@@ -547,6 +555,12 @@ async function init() {
     await loadMetadata();
     await loadSettings();
     await loadConfiguration();
+    if (!isSetupIncomplete()) {
+      markOnboardingStepComplete('set_preferences');
+    }
+    if (state.entries.length > 0) {
+      markOnboardingStepComplete('add_first_series');
+    }
     registerEvents();
     setSearchVisibility(false);
     renderEntries();
@@ -780,6 +794,174 @@ async function saveSettings(payload) {
   return data;
 }
 
+function onboardingState() {
+  if (!state.settings || typeof state.settings !== 'object') {
+    state.settings = {};
+  }
+  if (!state.settings.onboarding || typeof state.settings.onboarding !== 'object') {
+    state.settings.onboarding = {};
+  }
+  if (!state.settings.onboarding.completed_steps) {
+    state.settings.onboarding.completed_steps = {};
+  }
+
+  ONBOARDING_STEP_ORDER.forEach((step) => {
+    if (typeof state.settings.onboarding.completed_steps[step] !== 'boolean') {
+      state.settings.onboarding.completed_steps[step] = false;
+    }
+  });
+
+  if (typeof state.settings.onboarding.dismissed !== 'boolean') {
+    state.settings.onboarding.dismissed = false;
+  }
+
+  return state.settings.onboarding;
+}
+
+async function persistOnboardingState() {
+  const onboarding = onboardingState();
+  try {
+    await saveSettings({
+      onboarding: {
+        dismissed: onboarding.dismissed,
+        completed_steps: onboarding.completed_steps,
+      },
+    });
+  } catch (error) {
+    console.warn('Unable to persist onboarding state', error);
+  }
+}
+
+function markOnboardingStepComplete(step) {
+  if (!ONBOARDING_STEP_ORDER.includes(step)) {
+    return;
+  }
+  const onboarding = onboardingState();
+  if (onboarding.completed_steps[step]) {
+    return;
+  }
+  onboarding.completed_steps[step] = true;
+  void persistOnboardingState();
+  renderOnboardingPanel();
+}
+
+function isSetupIncomplete() {
+  if (state.settings?.preference_setup_required === true) {
+    return true;
+  }
+
+  const setupComplete = state.settings?.preferences?.webui?.setup_complete;
+  return setupComplete === false;
+}
+
+function linkChecklistAction(step) {
+  if (step === 'set_preferences') {
+    openSettingsModal();
+    return;
+  }
+
+  if (step === 'add_first_series') {
+    dom.addEntry?.click();
+    return;
+  }
+
+  if (step === 'preview_card') {
+    const firstEntry = state.entries[0];
+    if (!firstEntry) {
+      showToast('Add a series entry first so you can generate a preview.', 'info');
+      return;
+    }
+    openPreview(firstEntry);
+    return;
+  }
+
+  if (step === 'save_config') {
+    void saveConfiguration();
+    return;
+  }
+
+  if (step === 'run_build') {
+    dom.runBuilder?.click();
+  }
+}
+
+function renderOnboardingPanel() {
+  if (!dom.onboarding) {
+    return;
+  }
+
+  const onboarding = onboardingState();
+  onboarding.completed_steps.set_preferences = !isSetupIncomplete();
+  onboarding.completed_steps.add_first_series = state.entries.length > 0;
+
+  const showOnboarding = isSetupIncomplete() || state.entries.length === 0;
+  dom.onboarding.hidden = !showOnboarding || onboarding.dismissed;
+  dom.onboarding.innerHTML = '';
+
+  if (dom.onboarding.hidden) {
+    return;
+  }
+
+  const panel = document.createElement('section');
+  panel.className = 'onboarding-panel';
+  panel.setAttribute('aria-label', 'Getting started checklist');
+
+  const title = document.createElement('h2');
+  title.textContent = 'Get started in 5 quick steps';
+
+  const helper = document.createElement('p');
+  helper.className = 'helper-text';
+  helper.textContent =
+    'Complete setup and generate your first title cards using the checklist below.';
+
+  const list = document.createElement('ol');
+  list.className = 'onboarding-checklist';
+
+  const steps = [
+    { key: 'set_preferences', label: 'Set preferences', action: 'Open settings' },
+    { key: 'add_first_series', label: 'Add first series', action: 'Add entry' },
+    { key: 'preview_card', label: 'Preview card', action: 'Open preview' },
+    { key: 'save_config', label: 'Save config', action: 'Save config' },
+    { key: 'run_build', label: 'Run build', action: 'Run build' },
+  ];
+
+  steps.forEach((step) => {
+    const item = document.createElement('li');
+    item.className = 'onboarding-step';
+    item.classList.toggle('onboarding-step--complete', onboarding.completed_steps[step.key] === true);
+
+    const status = document.createElement('span');
+    status.className = 'onboarding-step__status';
+    status.textContent = onboarding.completed_steps[step.key] ? 'Done' : 'Pending';
+
+    const text = document.createElement('span');
+    text.className = 'onboarding-step__label';
+    text.textContent = step.label;
+
+    const actionButton = document.createElement('button');
+    actionButton.type = 'button';
+    actionButton.className = 'onboarding-step__action';
+    actionButton.textContent = step.action;
+    actionButton.addEventListener('click', () => linkChecklistAction(step.key));
+
+    item.append(status, text, actionButton);
+    list.appendChild(item);
+  });
+
+  const dismiss = document.createElement('button');
+  dismiss.type = 'button';
+  dismiss.className = 'onboarding-dismiss';
+  dismiss.textContent = 'Dismiss checklist';
+  dismiss.addEventListener('click', () => {
+    onboarding.dismissed = true;
+    dom.onboarding.hidden = true;
+    void persistOnboardingState();
+  });
+
+  panel.append(title, helper, list, dismiss);
+  dom.onboarding.appendChild(panel);
+}
+
 async function convertLegacyTvYaml() {
   const response = await fetch('/api/tv/convert-legacy', {
     method: 'POST',
@@ -858,7 +1040,10 @@ function registerEvents() {
         {
           workingLabel: 'Building...',
           refresh: true,
-          onSuccess: () => refreshEntryPreviews(),
+          onSuccess: () => {
+            markOnboardingStepComplete('run_build');
+            refreshEntryPreviews();
+          },
         }
       );
     });
@@ -1003,6 +1188,7 @@ function openEntryActionsModal(entry, entryPayload) {
 // -----------------------------------------------------------------------------
 function renderEntries() {
   refreshDirtyState();
+  renderOnboardingPanel();
   dom.entries.innerHTML = '';
 
   const filtered = state.entries.filter((entry) =>
@@ -1012,8 +1198,13 @@ function renderEntries() {
   if (filtered.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty-entries';
-    empty.innerHTML =
-      '<p>No series match the search. Use "Add entry" to create one.</p>';
+    if (state.entries.length === 0) {
+      empty.innerHTML =
+        '<p>No series entries yet.</p><p class="helper-text">Start by adding your first series, then preview and save before running a build.</p>';
+    } else {
+      empty.innerHTML =
+        '<p>No series match the search.</p><p class="helper-text">Try another filter or use "Add entry" to create one.</p>';
+    }
     dom.entries.appendChild(empty);
     return;
   }
@@ -4704,6 +4895,7 @@ async function openPreview(entry) {
       if (entry.previewRequestId !== requestId) {
         return;
       }
+      markOnboardingStepComplete('preview_card');
       entry.previewSrc = src;
       entry.previewError = null;
       entry.previewLoading = false;
@@ -5996,6 +6188,7 @@ function openPreferenceWizardModal() {
       state.settings.preference_setup_required = false;
       status.textContent = 'Preferences saved.';
       showToast('Preferences saved');
+      markOnboardingStepComplete('set_preferences');
       closeModal(modal.element);
       await loadConfiguration();
       renderEntries();
@@ -6158,6 +6351,7 @@ function openAddEntryModal() {
     };
     initializeEntryPreviewState(newEntry);
     state.entries.push(newEntry);
+    markOnboardingStepComplete('add_first_series');
     setEntryCollapsed(newEntry.id, false);
     state.pendingEntryId = newEntry.id;
     sortEntries();
@@ -6646,6 +6840,7 @@ async function saveConfiguration() {
     }
 
     showToast('Configuration saved', 'success');
+    markOnboardingStepComplete('save_config');
 
     await Promise.all(
       changedEntries.map(async (entry) => {

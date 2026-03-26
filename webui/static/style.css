@@ -2288,6 +2288,71 @@ fieldset legend {
   border-radius: 16px;
 }
 
+.onboarding-layer {
+  margin-bottom: 1rem;
+}
+
+.onboarding-panel {
+  border: 1px solid rgba(229, 160, 13, 0.35);
+  background: linear-gradient(180deg, rgba(229, 160, 13, 0.16), rgba(20, 20, 24, 0.94));
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.onboarding-panel h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1.15rem;
+}
+
+.onboarding-checklist {
+  list-style: none;
+  margin: 0.9rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.onboarding-step {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(18, 18, 21, 0.68);
+}
+
+.onboarding-step--complete {
+  border-color: rgba(49, 196, 109, 0.55);
+  background: rgba(49, 196, 109, 0.08);
+}
+
+.onboarding-step__status {
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.onboarding-step--complete .onboarding-step__status {
+  color: #8de4b0;
+}
+
+.onboarding-step__label {
+  font-weight: 600;
+}
+
+.onboarding-step__action {
+  font-size: 0.82rem;
+  padding: 0.34rem 0.55rem;
+}
+
+.onboarding-dismiss {
+  font-size: 0.84rem;
+}
+
 @media (max-width: 900px) {
   .field-row {
     grid-template-columns: 1fr;

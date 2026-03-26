@@ -18,6 +18,16 @@ _DEFAULT_SETTINGS = {
     },
     "series_sync_interval_seconds": 45,
     "preview_cache_sweep_interval_seconds": 900,
+    "onboarding": {
+        "dismissed": False,
+        "completed_steps": {
+            "set_preferences": False,
+            "add_first_series": False,
+            "preview_card": False,
+            "save_config": False,
+            "run_build": False,
+        },
+    },
     "preferences": {},
 }
 
@@ -51,6 +61,21 @@ def _merged_settings(data: dict[str, Any] | None) -> dict[str, Any]:
     sweep_interval = data.get("preview_cache_sweep_interval_seconds")
     if isinstance(sweep_interval, (int, float)):
         merged["preview_cache_sweep_interval_seconds"] = max(0, int(sweep_interval))
+
+    onboarding = data.get("onboarding")
+    if isinstance(onboarding, dict):
+        merged["onboarding"]["dismissed"] = bool(
+            onboarding.get("dismissed", merged["onboarding"]["dismissed"])
+        )
+        completed_steps = onboarding.get("completed_steps")
+        if isinstance(completed_steps, dict):
+            for step in merged["onboarding"]["completed_steps"]:
+                merged["onboarding"]["completed_steps"][step] = bool(
+                    completed_steps.get(
+                        step,
+                        merged["onboarding"]["completed_steps"][step],
+                    )
+                )
 
     return merged
 
@@ -188,6 +213,22 @@ def save_settings(payload: Dict[str, Any], preference_file: Path | None = None) 
         preferences = _load_preferences(preference_file)
 
     settings["preferences"] = preferences
+
+    onboarding_payload = payload.get("onboarding")
+    if isinstance(onboarding_payload, dict):
+        settings["onboarding"]["dismissed"] = bool(
+            onboarding_payload.get("dismissed", settings["onboarding"]["dismissed"])
+        )
+
+        completed_steps_payload = onboarding_payload.get("completed_steps")
+        if isinstance(completed_steps_payload, dict):
+            for step in settings["onboarding"]["completed_steps"]:
+                settings["onboarding"]["completed_steps"][step] = bool(
+                    completed_steps_payload.get(
+                        step,
+                        settings["onboarding"]["completed_steps"][step],
+                    )
+                )
 
     try:
         SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
