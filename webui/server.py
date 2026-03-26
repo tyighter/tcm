@@ -708,6 +708,8 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         warnings: list[str] = []
         failed_entries: list[dict[str, Any]] = []
+        validation_errors: list[dict[str, Any]] = []
+        validation_warnings: list[dict[str, Any]] = []
         seen_names: set[str] = set()
 
         for index, entry in enumerate(entries):
@@ -745,6 +747,100 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                         "reason": "Entry config must be an object.",
                     }
                 )
+                continue
+
+            media_directory = str(config.get("media_directory") or "").strip()
+            if "\0" in media_directory:
+                validation_errors.append(
+                    {
+                        "index": index,
+                        "name": name or None,
+                        "field": "library_override",
+                        "message": "Path cannot include null characters.",
+                        "severity": "error",
+                    }
+                )
+
+            font_file = str((config.get("font") or {}).get("file") or "").strip()
+            if "\0" in font_file:
+                validation_errors.append(
+                    {
+                        "index": index,
+                        "name": name or None,
+                        "field": "font.file",
+                        "message": "Path cannot include null characters.",
+                        "severity": "error",
+                    }
+                )
+
+            archive_name = str(config.get("archive_name") or "")
+            if archive_name and archive_name.strip() == "":
+                validation_errors.append(
+                    {
+                        "index": index,
+                        "name": name or None,
+                        "field": "archive_name",
+                        "message": "Archive name is required.",
+                        "severity": "error",
+                    }
+                )
+
+            for numeric_id_field in ("tmdb_id", "tvdb_id", "tvrage_id", "sonarr_id"):
+                numeric_id_value = str(config.get(numeric_id_field) or "").strip()
+                if not numeric_id_value:
+                    continue
+                if not numeric_id_value.isdigit() or int(numeric_id_value) <= 0:
+                    validation_errors.append(
+                        {
+                            "index": index,
+                            "name": name or None,
+                            "field": numeric_id_field,
+                            "message": "ID must be a positive integer.",
+                            "severity": "error",
+                        }
+                    )
+
+            imdb_id = str(config.get("imdb_id") or "").strip()
+            if imdb_id and not re.fullmatch(r"tt\d{5,}", imdb_id):
+                validation_errors.append(
+                    {
+                        "index": index,
+                        "name": name or None,
+                        "field": "imdb_id",
+                        "message": "IMDb IDs should look like tt1234567.",
+                        "severity": "error",
+                    }
+                )
+
+            for field_name, field_value in config.items():
+                if not isinstance(field_name, str):
+                    continue
+                if not (field_name.endswith("_url") or field_name == "url"):
+                    continue
+                url_value = str(field_value or "").strip()
+                if not url_value:
+                    continue
+                if not re.match(r"^https?://", url_value):
+                    validation_warnings.append(
+                        {
+                            "index": index,
+                            "name": name or None,
+                            "field": field_name,
+                            "message": "Prefer an http:// or https:// URL.",
+                            "severity": "warning",
+                        }
+                    )
+
+            if re.search(r"\(\d+\)\s*$", name) and not re.search(r"\((19|20)\d{2}\)\s*$", name):
+                validation_warnings.append(
+                    {
+                        "index": index,
+                        "name": name or None,
+                        "field": "name",
+                        "message": "Use a 4-digit year like “Series Name (2024)”.",
+                        "severity": "warning",
+                    }
+                )
 
         unique_failed_entry_indexes = {
             int(item["index"])
@@ -756,9 +852,12 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             "saved_entries_count": max(len(entries) - len(unique_failed_entry_indexes), 0),
             "requested_entries_count": len(entries),
             "validation_warnings": warnings,
+            "validation_errors": validation_errors,
+            "field_validation_warnings": validation_warnings,
             "failed_entries": failed_entries,
-            "has_warnings": bool(warnings),
-            "has_failures": bool(failed_entries),
+            "has_warnings": bool(warnings) or bool(validation_warnings),
+            "has_errors": bool(validation_errors),
+            "has_failures": bool(failed_entries) or bool(validation_errors),
             "saved_at": time.time(),
         }
 
@@ -1123,6 +1222,18 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 self._error(str(exc))
                 return
 
+            validation_details = self._build_config_save_details(payload)
+            if validation_details.get("has_errors") is True:
+                self._json_response(
+                    {
+                        "status": "error",
+                        "error": "Configuration validation failed.",
+                        "details": validation_details,
+                    },
+                    status=HTTPStatus.BAD_REQUEST,
+                )
+                return
+
             backfill_episode_keys = self._should_backfill_episode_rating_keys(payload)
 
             try:
@@ -1140,7 +1251,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             self._json_response(
                 {
                     "status": "ok",
-                    "details": self._build_config_save_details(payload),
+                    "details": validation_details,
                 }
             )
             if backfill_episode_keys:

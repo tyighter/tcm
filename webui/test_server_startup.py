@@ -221,6 +221,46 @@ def test_api_settings_returns_non_2xx_when_settings_persistence_fails(monkeypatc
     assert "Ensure /config is writable" in payload["remediation"]
 
 
+def test_api_config_rejects_hard_validation_errors() -> None:
+    class _RecordingTvManager:
+        def __init__(self) -> None:
+            self.write_calls = 0
+
+        @contextmanager
+        def priority_write(self):
+            yield
+
+        def backup_on_save(self) -> None:
+            return
+
+        def write(self, payload: dict) -> None:
+            self.write_calls += 1
+
+    payload = {
+        "series": [
+            {
+                "name": "Example (99)",
+                "config": {
+                    "tmdb_id": "abc",
+                    "imdb_id": "bad",
+                    "media_directory": "bad\u0000path",
+                },
+            }
+        ]
+    }
+    tv_manager = _RecordingTvManager()
+    handler = _build_post_handler("/api/config", tv_manager, payload)
+
+    handler.do_POST()
+
+    assert handler.status == HTTPStatus.BAD_REQUEST
+    body = json.loads(handler.wfile.getvalue())
+    assert body["status"] == "error"
+    assert body["details"]["has_errors"] is True
+    assert body["details"]["validation_errors"]
+    assert tv_manager.write_calls == 0
+
+
 def test_api_preview_generates_card(monkeypatch) -> None:
     generated: dict[str, object] = {}
 

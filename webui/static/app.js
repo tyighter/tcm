@@ -27,11 +27,15 @@ const state = {
       verify_ssl: true,
     },
   },
+  validationIssues: new Map(),
 };
 
 let saveInProgress = false;
 let saveStatusPanel = null;
 let saveStatusArchive = [];
+
+const VALIDATION_SEVERITY_ERROR = 'error';
+const VALIDATION_SEVERITY_WARNING = 'warning';
 
 const dom = {
   entries: document.getElementById('entries'),
@@ -128,6 +132,167 @@ const entryPreviewHoverImage = document.createElement('img');
 entryPreviewHoverImage.alt = 'Entry preview';
 entryPreviewHoverElement.appendChild(entryPreviewHoverImage);
 document.body.appendChild(entryPreviewHoverElement);
+
+function makeValidationIssue(severity, message) {
+  return { severity, message };
+}
+
+function validationStateKey(entryId, fieldId) {
+  return `${entryId || 'global'}::${fieldId || 'unknown'}`;
+}
+
+function setValidationIssue(entryId, fieldId, issue) {
+  const key = validationStateKey(entryId, fieldId);
+  if (!issue) {
+    state.validationIssues.delete(key);
+  } else {
+    state.validationIssues.set(key, issue);
+  }
+  updateSaveButtonDisabledState();
+}
+
+function hasHardValidationErrors() {
+  return [...state.validationIssues.values()].some(
+    (issue) => issue && issue.severity === VALIDATION_SEVERITY_ERROR
+  );
+}
+
+function updateSaveButtonDisabledState() {
+  if (!dom.save) {
+    return;
+  }
+  dom.save.disabled = saveInProgress || hasHardValidationErrors();
+}
+
+function validatePathField(rawValue) {
+  const value = String(rawValue ?? '').trim();
+  if (!value) {
+    return [];
+  }
+  if (/[\0]/u.test(value)) {
+    return [makeValidationIssue(VALIDATION_SEVERITY_ERROR, 'Path cannot include null characters.')];
+  }
+  if (/\s$/u.test(String(rawValue ?? ''))) {
+    return [
+      makeValidationIssue(
+        VALIDATION_SEVERITY_WARNING,
+        'Path has trailing whitespace and may not resolve as expected.'
+      ),
+    ];
+  }
+  return [];
+}
+
+function validateYearSuffix(name) {
+  const value = String(name ?? '').trim();
+  if (!value) {
+    return [makeValidationIssue(VALIDATION_SEVERITY_ERROR, 'Series name is required.')];
+  }
+  if (/\(\d+\)\s*$/u.test(value) && !/\((19|20)\d{2}\)\s*$/u.test(value)) {
+    return [
+      makeValidationIssue(
+        VALIDATION_SEVERITY_WARNING,
+        'Use a 4-digit year like “Series Name (2024)”.'
+      ),
+    ];
+  }
+  return [];
+}
+
+function validateIdentifier(fieldId, rawValue) {
+  const value = String(rawValue ?? '').trim();
+  if (!value) {
+    return [];
+  }
+  if (fieldId === 'imdb_id') {
+    return /^tt\d{5,}$/u.test(value)
+      ? []
+      : [makeValidationIssue(VALIDATION_SEVERITY_ERROR, 'IMDb IDs should look like tt1234567.')];
+  }
+  if (/^-?\d+$/u.test(value) && Number(value) > 0) {
+    return [];
+  }
+  return [makeValidationIssue(VALIDATION_SEVERITY_ERROR, 'ID must be a positive integer.')];
+}
+
+function validateUrlField(rawValue) {
+  const value = String(rawValue ?? '').trim();
+  if (!value) {
+    return [];
+  }
+  try {
+    const parsed = new URL(value);
+    if (!/^https?:$/u.test(parsed.protocol)) {
+      return [makeValidationIssue(VALIDATION_SEVERITY_WARNING, 'Prefer an http:// or https:// URL.')];
+    }
+    return [];
+  } catch (_error) {
+    return [makeValidationIssue(VALIDATION_SEVERITY_ERROR, 'Enter a valid URL.')];
+  }
+}
+
+function validateRequiredString(rawValue, label) {
+  const value = String(rawValue ?? '').trim();
+  if (value) {
+    return [];
+  }
+  return [makeValidationIssue(VALIDATION_SEVERITY_ERROR, `${label || 'Value'} is required.`)];
+}
+
+function validatorsForField(field) {
+  if (!field?.id) {
+    return [];
+  }
+  if (field.id === 'library_override' || field.id === 'font.file') {
+    return [validatePathField];
+  }
+  if (field.id === 'archive_name') {
+    return [
+      (value) => validateRequiredString(value, 'Archive name'),
+      (value) => validatePathField(value),
+    ];
+  }
+  if (field.id.endsWith('_url') || field.id === 'url') {
+    return [validateUrlField];
+  }
+  if (ID_FIELDS.has(field.id)) {
+    return [(value) => validateIdentifier(field.id, value)];
+  }
+  return [];
+}
+
+function setInputValidationState(input, messageNode, issues) {
+  const [primaryIssue] = issues;
+  const hasError = Boolean(primaryIssue && primaryIssue.severity === VALIDATION_SEVERITY_ERROR);
+  input.classList.toggle('input-error', hasError);
+  messageNode.hidden = !primaryIssue;
+  messageNode.classList.toggle(
+    'field-validation__message--warning',
+    Boolean(primaryIssue && primaryIssue.severity === VALIDATION_SEVERITY_WARNING)
+  );
+  messageNode.textContent = primaryIssue ? primaryIssue.message : '';
+}
+
+function attachFieldValidation({
+  input,
+  messageNode,
+  entry,
+  fieldId,
+  validators,
+  getValue = () => input.value,
+}) {
+  const runValidation = () => {
+    const issues = validators.flatMap((validator) => validator(getValue()) || []);
+    setInputValidationState(input, messageNode, issues);
+    const blocking = issues.find((issue) => issue.severity === VALIDATION_SEVERITY_ERROR);
+    const warning = issues.find((issue) => issue.severity === VALIDATION_SEVERITY_WARNING);
+    setValidationIssue(entry?.id, fieldId, blocking || warning || null);
+  };
+
+  input.addEventListener('input', runValidation);
+  input.addEventListener('blur', runValidation);
+  runValidation();
+}
 
 function sanitizePathName(value) {
   const replacements = {
@@ -1189,6 +1354,8 @@ function openEntryActionsModal(entry, entryPayload) {
 // Rendering
 // -----------------------------------------------------------------------------
 function renderEntries() {
+  state.validationIssues.clear();
+  updateSaveButtonDisabledState();
   refreshDirtyState();
   renderOnboardingPanel();
   dom.entries.innerHTML = '';
@@ -1450,6 +1617,9 @@ function renderEntry(entry) {
   const titleInput = document.createElement('input');
   titleInput.type = 'text';
   titleInput.value = entry.name;
+  const titleValidation = document.createElement('p');
+  titleValidation.className = 'helper-text field-validation__message';
+  titleValidation.hidden = true;
   titleInput.addEventListener('input', (event) => {
     entry.name = event.target.value;
   });
@@ -1473,7 +1643,14 @@ function renderEntry(entry) {
 
   const titleContainer = document.createElement('div');
   titleContainer.className = 'entry-title';
-  titleContainer.appendChild(titleInput);
+  titleContainer.append(titleInput, titleValidation);
+  attachFieldValidation({
+    input: titleInput,
+    messageNode: titleValidation,
+    entry,
+    fieldId: '__entry_name__',
+    validators: [validateYearSuffix],
+  });
 
   summaryBody.append(titleContainer, media);
   summary.append(toggleButton, summaryBody);
@@ -2106,6 +2283,9 @@ function renderFieldRow(entry, field, value) {
 
   const controls = document.createElement('div');
   controls.className = 'field-controls';
+  const validationMessage = document.createElement('p');
+  validationMessage.className = 'helper-text field-validation__message';
+  validationMessage.hidden = true;
 
   const showRemoveButton =
     field.isExtra ||
@@ -2125,13 +2305,13 @@ function renderFieldRow(entry, field, value) {
 
   switch (field.type) {
     case 'text':
-      controls.appendChild(textInput(entry, field, value));
+      controls.appendChild(textInput(entry, field, value, validationMessage));
       break;
     case 'color':
       controls.appendChild(colorInput(entry, field, value));
       break;
     case 'number':
-      controls.appendChild(numberInput(entry, field, value));
+      controls.appendChild(numberInput(entry, field, value, validationMessage));
       break;
     case 'boolean':
       controls.appendChild(booleanSelect(entry, field, value));
@@ -2172,9 +2352,11 @@ function renderFieldRow(entry, field, value) {
       controls.appendChild(hideSeasonsSelect(entry, field, value));
       break;
     default:
-      controls.appendChild(textInput(entry, field, value));
+      controls.appendChild(textInput(entry, field, value, validationMessage));
       break;
   }
+
+  controls.appendChild(validationMessage);
 
   if (removeButton) {
     controls.appendChild(removeButton);
@@ -2242,7 +2424,7 @@ function normalizeFontSize(value) {
   return `${withoutPercent}%`;
 }
 
-function textInput(entry, field, value) {
+function textInput(entry, field, value, validationMessageNode = null) {
   const input = document.createElement('input');
   input.type = 'text';
   input.value = field.id === 'font.size' ? normalizeFontSize(value) ?? '' : value ?? '';
@@ -2263,6 +2445,18 @@ function textInput(entry, field, value) {
   }
   if (field.id === 'episode_number_text_format') {
     enableEpisodeTextFormatHelper(input);
+  }
+  if (validationMessageNode) {
+    const validators = validatorsForField(field);
+    if (validators.length > 0) {
+      attachFieldValidation({
+        input,
+        messageNode: validationMessageNode,
+        entry,
+        fieldId: field.id,
+        validators,
+      });
+    }
   }
   return input;
 }
@@ -2340,7 +2534,7 @@ function defaultValueForField(field) {
   }
 }
 
-function numberInput(entry, field, value) {
+function numberInput(entry, field, value, validationMessageNode = null) {
   const input = document.createElement('input');
   input.type = 'number';
   input.value = value ?? '';
@@ -2349,6 +2543,18 @@ function numberInput(entry, field, value) {
     const numeric = raw === '' ? undefined : Number(raw);
     updateField(entry, field, numeric);
   });
+  if (validationMessageNode) {
+    const validators = validatorsForField(field);
+    if (validators.length > 0) {
+      attachFieldValidation({
+        input,
+        messageNode: validationMessageNode,
+        entry,
+        fieldId: field.id,
+        validators,
+      });
+    }
+  }
   return input;
 }
 
@@ -3917,6 +4123,9 @@ function createIdentifierInput(entry, field, value, onChange) {
   const input = document.createElement('input');
   input.type = 'text';
   input.value = value ?? '';
+  const validationMessage = document.createElement('p');
+  validationMessage.className = 'helper-text field-validation__message';
+  validationMessage.hidden = true;
   if (field.type === 'number') {
     input.inputMode = 'numeric';
   }
@@ -3929,7 +4138,20 @@ function createIdentifierInput(entry, field, value, onChange) {
       onChange();
     }
   });
-  return input;
+  const validators = validatorsForField(field);
+  if (validators.length > 0) {
+    attachFieldValidation({
+      input,
+      messageNode: validationMessage,
+      entry,
+      fieldId: field.id,
+      validators,
+    });
+  }
+  const wrapper = document.createElement('div');
+  wrapper.className = 'field-validation';
+  wrapper.append(input, validationMessage);
+  return { input, wrapper };
 }
 
 // -----------------------------------------------------------------------------
@@ -4427,7 +4649,7 @@ function openIdentifierModal(entry) {
     controls.className = 'field-controls identifier-controls';
 
     const value = getValue(entry.config, field.path);
-    const input = createIdentifierInput(entry, field, value);
+    const { input, wrapper: inputWrapper } = createIdentifierInput(entry, field, value);
 
     const clearButton = document.createElement('button');
     clearButton.type = 'button';
@@ -4438,7 +4660,7 @@ function openIdentifierModal(entry) {
       applyIdentifierValue(entry, field, '');
     });
 
-    controls.append(input, clearButton);
+    controls.append(inputWrapper, clearButton);
     row.append(label, controls);
     list.append(row);
   });
@@ -6800,7 +7022,8 @@ function setSaveButtonState(isSaving) {
     return;
   }
 
-  dom.save.disabled = isSaving;
+  saveInProgress = isSaving;
+  updateSaveButtonDisabledState();
   const label = dom.save.querySelector('.button-label');
   if (label) {
     label.textContent = isSaving ? 'Saving...' : 'Save';
@@ -6821,6 +7044,10 @@ function normalizeSaveDetails(details, fallbackEntryCount) {
   const validationWarnings = Array.isArray(payload.validation_warnings)
     ? payload.validation_warnings
     : [];
+  const fieldValidationWarnings = Array.isArray(payload.field_validation_warnings)
+    ? payload.field_validation_warnings
+    : [];
+  const validationErrors = Array.isArray(payload.validation_errors) ? payload.validation_errors : [];
   const requestedEntriesCount = Number.isFinite(Number(payload.requested_entries_count))
     ? Number(payload.requested_entries_count)
     : fallbackEntryCount;
@@ -6835,10 +7062,16 @@ function normalizeSaveDetails(details, fallbackEntryCount) {
     timestamp,
     requestedEntriesCount,
     savedEntriesCount,
-    validationWarnings,
+    validationWarnings: [...validationWarnings, ...fieldValidationWarnings.map((item) => item.message)],
+    validationErrors,
     failedEntries,
-    hasWarnings: payload.has_warnings === true || validationWarnings.length > 0,
-    hasFailures: payload.has_failures === true || failedEntries.length > 0,
+    hasWarnings:
+      payload.has_warnings === true ||
+      validationWarnings.length > 0 ||
+      fieldValidationWarnings.length > 0,
+    hasErrors: payload.has_errors === true || validationErrors.length > 0,
+    hasFailures:
+      payload.has_failures === true || failedEntries.length > 0 || validationErrors.length > 0,
   };
 }
 
@@ -6948,8 +7181,11 @@ async function saveConfiguration() {
     showToast('Save already in progress...', 'info');
     return;
   }
+  if (hasHardValidationErrors()) {
+    showToast('Resolve validation errors before saving.', 'error');
+    return;
+  }
 
-  saveInProgress = true;
   setSaveButtonState(true);
   const savingToast = showToast('Saving configuration...', 'info');
 
@@ -6974,6 +7210,24 @@ async function saveConfiguration() {
 
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
+      if (data?.details) {
+        const details = normalizeSaveDetails(data.details, state.entries.length);
+        const validationLines = (details.validationErrors || []).map((issue) => {
+          const name = issue?.name || `Entry #${(issue?.index ?? 0) + 1}`;
+          const field = issue?.field ? `${issue.field}: ` : '';
+          return `Validation error (${name}) ${field}${issue?.message || 'Invalid value.'}`;
+        });
+        if (validationLines.length > 0) {
+          renderSaveStatusPanel({
+            type: 'error',
+            title: 'Save failed',
+            timestampLabel: formatSaveTimestamp(Date.now() / 1000),
+            summary: data.error || 'Configuration validation failed.',
+            detailLines: validationLines,
+          });
+          throw new Error(data.error || validationLines[0]);
+        }
+      }
       throw new Error(data.error || 'Failed to save configuration');
     }
 
@@ -7031,7 +7285,6 @@ async function saveConfiguration() {
     });
     showToast(message, 'error');
   } finally {
-    saveInProgress = false;
     setSaveButtonState(false);
     if (savingToast) {
       savingToast.remove();
