@@ -215,6 +215,19 @@ const hoverMediaQuery =
 
 let entryPreviewHoverVisible = false;
 let activeEpisodeTextInput = null;
+let modalIdCounter = 0;
+const activeModalStack = [];
+const MODAL_FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'area[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  'iframe',
+  '[tabindex]:not([tabindex="-1"])',
+  '[contenteditable="true"]',
+].join(', ');
 
 function canShowCardTypePreview() {
   if (!hoverMediaQuery) {
@@ -6673,15 +6686,22 @@ function sortEntries() {
 // Modal helpers
 // -----------------------------------------------------------------------------
 function buildModal(title) {
+  const previouslyFocused =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop';
 
   const modal = document.createElement('div');
   modal.className = 'modal';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.tabIndex = -1;
 
   const header = document.createElement('header');
   const heading = document.createElement('h2');
+  heading.id = `modal-title-${++modalIdCounter}`;
   heading.textContent = title;
+  modal.setAttribute('aria-labelledby', heading.id);
   header.appendChild(heading);
 
   const content = document.createElement('div');
@@ -6691,10 +6711,29 @@ function buildModal(title) {
   backdrop.appendChild(modal);
   dom.modals.appendChild(backdrop);
 
-  return { element: backdrop, modal, header, content, footer };
+  const modalParts = { element: backdrop, modal, header, content, footer };
+  addFloatingCloseButton(modalParts, 'Close dialog');
+
+  const context = {
+    element: backdrop,
+    modal,
+    previouslyFocused,
+    dismissible: true,
+  };
+  activeModalStack.push(context);
+  requestAnimationFrame(() => {
+    focusFirstModalElement(modal);
+  });
+
+  return modalParts;
 }
 
 function addFloatingCloseButton(modal, label = 'Close dialog') {
+  const existingButton = modal.modal.querySelector('.modal-close--floating');
+  if (existingButton) {
+    existingButton.setAttribute('aria-label', label);
+    return existingButton;
+  }
   const dismissButton = document.createElement('button');
   dismissButton.type = 'button';
   dismissButton.className = 'modal-close modal-close--floating';
@@ -6708,6 +6747,7 @@ function addFloatingCloseButton(modal, label = 'Close dialog') {
 
 function closeButton(onClick) {
   const button = document.createElement('button');
+  button.type = 'button';
   button.textContent = 'Close';
   button.addEventListener('click', onClick);
   return button;
@@ -6715,8 +6755,95 @@ function closeButton(onClick) {
 
 function closeModal(element) {
   hideCardTypePreview();
+  const modalIndex = activeModalStack.findIndex((context) => context.element === element);
+  const isTopModal = modalIndex === activeModalStack.length - 1;
+  const [closedContext] = modalIndex >= 0 ? activeModalStack.splice(modalIndex, 1) : [];
   element.remove();
+  if (!isTopModal) {
+    return;
+  }
+
+  const nextContext = activeModalStack[activeModalStack.length - 1];
+  if (nextContext) {
+    focusFirstModalElement(nextContext.modal);
+    return;
+  }
+
+  if (closedContext?.previouslyFocused && document.contains(closedContext.previouslyFocused)) {
+    closedContext.previouslyFocused.focus({ preventScroll: true });
+  }
 }
+
+function getFocusableModalElements(modalElement) {
+  if (!modalElement) {
+    return [];
+  }
+  return [...modalElement.querySelectorAll(MODAL_FOCUSABLE_SELECTOR)].filter(
+    (element) =>
+      element instanceof HTMLElement &&
+      !element.hasAttribute('disabled') &&
+      !element.getAttribute('aria-hidden') &&
+      element.getClientRects().length > 0
+  );
+}
+
+function focusFirstModalElement(modalElement) {
+  const focusable = getFocusableModalElements(modalElement);
+  if (focusable.length > 0) {
+    focusable[0].focus({ preventScroll: true });
+    return;
+  }
+  modalElement.focus({ preventScroll: true });
+}
+
+function trapModalFocus(event) {
+  const activeContext = activeModalStack[activeModalStack.length - 1];
+  if (!activeContext) {
+    return;
+  }
+
+  if (event.key === 'Escape' && activeContext.dismissible) {
+    event.preventDefault();
+    closeModal(activeContext.element);
+    return;
+  }
+
+  if (event.key !== 'Tab') {
+    return;
+  }
+
+  const focusable = getFocusableModalElements(activeContext.modal);
+  if (focusable.length === 0) {
+    event.preventDefault();
+    activeContext.modal.focus({ preventScroll: true });
+    return;
+  }
+
+  const firstFocusable = focusable[0];
+  const lastFocusable = focusable[focusable.length - 1];
+  const activeElement = document.activeElement;
+  const activeInsideModal =
+    activeElement instanceof HTMLElement && activeContext.modal.contains(activeElement);
+
+  if (!activeInsideModal) {
+    event.preventDefault();
+    (event.shiftKey ? lastFocusable : firstFocusable).focus({ preventScroll: true });
+    return;
+  }
+
+  if (event.shiftKey && activeElement === firstFocusable) {
+    event.preventDefault();
+    lastFocusable.focus({ preventScroll: true });
+    return;
+  }
+
+  if (!event.shiftKey && activeElement === lastFocusable) {
+    event.preventDefault();
+    firstFocusable.focus({ preventScroll: true });
+  }
+}
+
+document.addEventListener('keydown', trapModalFocus, true);
 
 // -----------------------------------------------------------------------------
 // Toast notifications
