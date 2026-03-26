@@ -55,5 +55,8 @@ Use `--preferences` to point at a custom preferences file and `--missing` to wri
 
 Sample configurations for preferences, TV sources, fonts, and thumbnails live in the `config/` directory. The container copies these into `/config` when they are missing so you can edit them in place.
 
+## Migration notes
+- Option rename/normalization reference: [`docs/option-rename-map.md`](docs/option-rename-map.md)
+
 ## Support and contributions
 Open issues or pull requests on GitHub, or join the community Discord. Sponsorship via GitHub Sponsors or BuyMeACoffee helps keep the project maintained.

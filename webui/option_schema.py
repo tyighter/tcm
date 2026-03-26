@@ -70,7 +70,7 @@ COMMON_OPTION_SCHEMA: dict[str, OptionMetadata] = {
     "episode_text_font_size": {
         "canonical_key": "episode_number_text_size",
         "legacy_keys": ["episode_text_font_size"],
-        "label": "Episode Number Text Size",
+        "label": "Episode Number Size",
         "description": "Scales the index text (for example, 'EPISODE 5'), not the episode title.",
         "category": "Episode Number Text",
     },
