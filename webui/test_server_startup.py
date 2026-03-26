@@ -104,6 +104,43 @@ def test_api_config_and_meta_return_error_on_invalid_tv_yaml(caplog) -> None:
         assert "bad yaml" in caplog.text
 
 
+def test_api_services_status_reports_connected(monkeypatch) -> None:
+    handler = _build_handler("/api/services/status", SimpleNamespace())
+    handler.context.get_plex_interface = lambda: SimpleNamespace(get_library_names=lambda: ["TV"])
+
+    monkeypatch.setattr(server.TautulliSettings, "from_settings", lambda: object())
+    monkeypatch.setattr(server, "fetch_users", lambda _settings: [{"id": "1", "name": "User"}])
+
+    handler.do_GET()
+
+    payload = json.loads(handler.wfile.getvalue())
+    assert handler.status == HTTPStatus.OK
+    assert payload["plex"]["connected"] is True
+    assert payload["tautulli"]["connected"] is True
+
+
+def test_api_services_status_reports_disconnected(monkeypatch) -> None:
+    handler = _build_handler("/api/services/status", SimpleNamespace())
+    handler.context.preference_parser.use_plex = True
+    handler.context.get_plex_interface = lambda: (_ for _ in ()).throw(RuntimeError("Plex down"))
+
+    monkeypatch.setattr(server.TautulliSettings, "from_settings", lambda: object())
+
+    def _raise_tautulli(_settings):
+        raise RuntimeError("Tautulli down")
+
+    monkeypatch.setattr(server, "fetch_users", _raise_tautulli)
+
+    handler.do_GET()
+
+    payload = json.loads(handler.wfile.getvalue())
+    assert handler.status == HTTPStatus.OK
+    assert payload["plex"]["connected"] is False
+    assert "Plex down" in payload["plex"]["message"]
+    assert payload["tautulli"]["connected"] is False
+    assert "Tautulli down" in payload["tautulli"]["message"]
+
+
 def test_save_config_backfills_episode_keys_async(monkeypatch) -> None:
     update_complete = Event()
     backfill_started = Event()

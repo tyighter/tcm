@@ -43,6 +43,8 @@ const dom = {
   collapseAll: document.getElementById('collapse-all-entries'),
   runBuilder: document.getElementById('run-builder'),
   dirtyIndicator: document.getElementById('dirty-indicator'),
+  plexStatusLight: document.getElementById('plex-status-light'),
+  tautulliStatusLight: document.getElementById('tautulli-status-light'),
   unmatchedIssues: document.getElementById('unmatched-issues'),
   recents: document.getElementById('open-recents'),
   settings: document.getElementById('open-settings'),
@@ -536,6 +538,7 @@ async function init() {
     setSearchVisibility(false);
     renderEntries();
     requestEntryPreviews(state.entries);
+    await refreshConnectionStatusLights();
     maybeOpenPreferenceWizard();
   } catch (error) {
     showToast(`Failed to load configuration: ${error.message}`, 'error');
@@ -566,6 +569,40 @@ async function loadSettings() {
     state.settings = data || state.settings;
   } catch (error) {
     console.warn('Unable to load settings', error);
+  }
+}
+
+function updateConnectionStatusLight(element, serviceName, connected) {
+  if (!element) {
+    return;
+  }
+
+  element.classList.remove('service-status-light--connected', 'service-status-light--disconnected');
+  const isConnected = connected === true;
+  element.classList.add(
+    isConnected ? 'service-status-light--connected' : 'service-status-light--disconnected'
+  );
+  const statusText = isConnected ? 'connected' : 'not connected';
+  element.setAttribute('aria-label', `${serviceName} ${statusText}`);
+  element.setAttribute('title', `${serviceName} ${statusText}`);
+}
+
+async function refreshConnectionStatusLights() {
+  try {
+    const response = await fetch('/api/services/status');
+    if (!response.ok) {
+      throw new Error('Unable to load service status');
+    }
+    const payload = await response.json();
+    updateConnectionStatusLight(dom.plexStatusLight, 'Plex', payload?.plex?.connected === true);
+    updateConnectionStatusLight(
+      dom.tautulliStatusLight,
+      'Tautulli',
+      payload?.tautulli?.connected === true
+    );
+  } catch (error) {
+    updateConnectionStatusLight(dom.plexStatusLight, 'Plex', false);
+    updateConnectionStatusLight(dom.tautulliStatusLight, 'Tautulli', false);
   }
 }
 
@@ -5660,6 +5697,7 @@ function openSettingsModal() {
       });
       status.textContent = 'Settings saved.';
       showToast('Settings updated');
+      await refreshConnectionStatusLights();
     } catch (error) {
       status.textContent = error.message;
       showToast(error.message, 'error');
@@ -5747,7 +5785,14 @@ function openPreferenceWizardModal() {
   const sourceInput = document.createElement('input');
   sourceInput.type = 'text';
   sourceInput.value = options.source || '/config/source/';
-  sourceField.append(sourceLabel, sourceInput);
+  const sourceHint = document.createElement('p');
+  sourceHint.className = 'helper-text preference-wizard__hint';
+  sourceHint.textContent =
+    'Path to source assets. Docker example: /config/source/. Local example: ./source/';
+  const sourceValidation = document.createElement('p');
+  sourceValidation.className = 'helper-text preference-wizard__validation';
+  sourceValidation.hidden = true;
+  sourceField.append(sourceLabel, sourceInput, sourceHint, sourceValidation);
 
   const seriesField = document.createElement('label');
   seriesField.className = 'modal-controls__field';
@@ -5757,31 +5802,152 @@ function openPreferenceWizardModal() {
   const seriesInput = document.createElement('input');
   seriesInput.type = 'text';
   seriesInput.value = options.series || '/config/tv.yml';
-  seriesField.append(seriesLabel, seriesInput);
+  const seriesHint = document.createElement('p');
+  seriesHint.className = 'helper-text preference-wizard__hint';
+  seriesHint.textContent =
+    'Path to tv.yml file. Docker example: /config/tv.yml. Local example: ./config/tv.yml';
+  const seriesValidation = document.createElement('p');
+  seriesValidation.className = 'helper-text preference-wizard__validation';
+  seriesValidation.hidden = true;
+  seriesField.append(seriesLabel, seriesInput, seriesHint, seriesValidation);
 
   form.append(sourceField, seriesField);
   modal.content.appendChild(form);
 
   const status = document.createElement('p');
-  status.className = 'helper-text';
+  status.className = 'helper-text preference-wizard__status';
   modal.content.appendChild(status);
+
+  const normalizePathInput = (value) => (value || '').toString();
+
+  const validatePathField = (rawValue, fieldType) => {
+    const value = normalizePathInput(rawValue);
+    const trimmed = value.trim();
+    const errors = [];
+
+    if (!trimmed) {
+      errors.push('This field is required.');
+      return errors;
+    }
+
+    if (value !== trimmed) {
+      errors.push('Remove leading/trailing spaces from this path.');
+    }
+
+    if (/\s{2,}/.test(trimmed)) {
+      errors.push('Avoid repeated spaces in file paths.');
+    }
+
+    if (/[\r\n\t]/.test(trimmed)) {
+      errors.push('Path cannot include tabs or new lines.');
+    }
+
+    if (trimmed.includes('://')) {
+      errors.push('Use a filesystem path, not a URL.');
+    }
+
+    if (/[<>|*"']/g.test(trimmed)) {
+      errors.push('Path contains characters that are usually invalid on filesystems.');
+    }
+
+    if (!trimmed.startsWith('/') && !trimmed.startsWith('./')) {
+      errors.push('Use an absolute path (/...) or a local relative path (./...).');
+    }
+
+    if (fieldType === 'series' && !/\.(ya?ml)$/i.test(trimmed)) {
+      errors.push('Series path should point to a .yml or .yaml file.');
+    }
+
+    return errors;
+  };
+
+  const setFieldValidationState = (input, validationNode, errors) => {
+    if (errors.length === 0) {
+      input.classList.remove('preference-wizard__input-error');
+      validationNode.hidden = true;
+      validationNode.textContent = '';
+      return;
+    }
+
+    input.classList.add('preference-wizard__input-error');
+    validationNode.hidden = false;
+    validationNode.textContent = errors[0];
+  };
+
+  const runClientValidation = () => {
+    const sourceErrors = validatePathField(sourceInput.value, 'source');
+    const seriesErrors = validatePathField(seriesInput.value, 'series');
+
+    setFieldValidationState(sourceInput, sourceValidation, sourceErrors);
+    setFieldValidationState(seriesInput, seriesValidation, seriesErrors);
+    saveButton.disabled = sourceErrors.length > 0 || seriesErrors.length > 0;
+
+    return {
+      sourceErrors,
+      seriesErrors,
+      valid: sourceErrors.length === 0 && seriesErrors.length === 0,
+    };
+  };
+
+  const renderServerValidation = (result) => {
+    const sourceMessages = Array.isArray(result?.fields?.source?.messages)
+      ? result.fields.source.messages
+      : [];
+    const seriesMessages = Array.isArray(result?.fields?.series?.messages)
+      ? result.fields.series.messages
+      : [];
+
+    setFieldValidationState(sourceInput, sourceValidation, sourceMessages);
+    setFieldValidationState(seriesInput, seriesValidation, seriesMessages);
+
+    const generalMessages = Array.isArray(result?.messages) ? result.messages : [];
+    if (generalMessages.length) {
+      status.textContent = generalMessages.join(' ');
+    } else if (result?.valid) {
+      status.textContent = 'Paths validated. Saving preferences...';
+    } else {
+      status.textContent = 'Please resolve the highlighted path issues and try again.';
+    }
+  };
+
+  sourceInput.addEventListener('input', () => {
+    status.textContent = '';
+    runClientValidation();
+  });
+  seriesInput.addEventListener('input', () => {
+    status.textContent = '';
+    runClientValidation();
+  });
 
   const saveButton = document.createElement('button');
   saveButton.type = 'button';
   saveButton.textContent = 'Save and continue';
   saveButton.addEventListener('click', async () => {
-    const source = sourceInput.value.trim();
-    const series = seriesInput.value.trim();
-
-    if (!source || !series) {
-      status.textContent = 'Source directory and series YAML path are required.';
+    const clientValidation = runClientValidation();
+    if (!clientValidation.valid) {
+      status.textContent = 'Fix the highlighted fields before saving.';
       return;
     }
 
+    const source = sourceInput.value.trim();
+    const series = seriesInput.value.trim();
+
     saveButton.disabled = true;
-    status.textContent = 'Saving preferences...';
+    status.textContent = 'Validating paths...';
 
     try {
+      const validationResponse = await fetch('/api/validate/preferences-paths', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source, series }),
+      });
+
+      const validationPayload = await validationResponse.json().catch(() => ({}));
+      if (!validationResponse.ok || validationPayload.valid !== true) {
+        renderServerValidation(validationPayload);
+        return;
+      }
+
       await saveSettings({
         preferences: {
           options: {
@@ -5804,11 +5970,15 @@ function openPreferenceWizardModal() {
       status.textContent = error.message || 'Unable to save preferences';
       showToast(status.textContent, 'error');
     } finally {
-      saveButton.disabled = false;
+      if (!state.settings?.preference_setup_required) {
+        return;
+      }
+      runClientValidation();
     }
   });
 
   modal.footer.appendChild(saveButton);
+  runClientValidation();
 }
 
 // -----------------------------------------------------------------------------
