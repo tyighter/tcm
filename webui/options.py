@@ -28,15 +28,15 @@ SERIES_FIELD_TEMPLATE = [
         "default": "standard",
     },
     {
-        "id": "episode_text_format",
-        "label": "Episode text format",
-        "path": ["episode_text_format"],
+        "id": "episode_number_text_format",
+        "label": "Episode number text format",
+        "path": ["episode_number_text_format"],
         "type": "text",
     },
     {
-        "id": "episode_text_case",
-        "label": "Episode text casing",
-        "path": ["episode_text_case"],
+        "id": "episode_number_text_case",
+        "label": "Episode number text casing",
+        "path": ["episode_number_text_case"],
         "type": "font-case",
         "default": BaseCardType.DEFAULT_FONT_CASE,
     },
@@ -175,55 +175,55 @@ SERIES_FIELD_TEMPLATE = [
     },
     {
         "id": "font.file",
-        "label": "Font file",
+        "label": "Episode title font file",
         "path": ["font", "file"],
         "type": "font",
     },
     {
         "id": "font.size",
-        "label": "Font size (%)",
+        "label": "Episode title size (%)",
         "path": ["font", "size"],
         "type": "text",
     },
     {
         "id": "font.color",
-        "label": "Font color",
+        "label": "Episode title color",
         "path": ["font", "color"],
         "type": "color",
     },
     {
         "id": "font.case",
-        "label": "Font casing",
+        "label": "Episode title casing",
         "path": ["font", "case"],
         "type": "font-case",
     },
     {
         "id": "font.vertical_shift",
-        "label": "Font vertical shift",
+        "label": "Episode title vertical shift",
         "path": ["font", "vertical_shift"],
         "type": "number",
     },
     {
         "id": "font.interline_spacing",
-        "label": "Font interline spacing",
+        "label": "Episode title line spacing",
         "path": ["font", "interline_spacing"],
         "type": "number",
     },
     {
         "id": "font.interword_spacing",
-        "label": "Font interword spacing",
+        "label": "Episode title word spacing",
         "path": ["font", "interword_spacing"],
         "type": "number",
     },
     {
         "id": "font.kerning",
-        "label": "Font kerning",
+        "label": "Episode title kerning",
         "path": ["font", "kerning"],
         "type": "text",
     },
     {
         "id": "font.stroke_width",
-        "label": "Font stroke width",
+        "label": "Episode title stroke width",
         "path": ["font", "stroke_width"],
         "type": "text",
     },
@@ -235,7 +235,7 @@ SERIES_FIELD_TEMPLATE = [
     },
     {
         "id": "font.replacements",
-        "label": "Font replacements",
+        "label": "Episode title replacements",
         "path": ["font", "replacements"],
         "type": "replacement-map",
     },
@@ -310,7 +310,7 @@ def build_series_fields(libraries: dict[str, Any]) -> list[dict[str, Any]]:
             filled["choices"] = [
                 {"value": value, "label": value} for value in episode_sources
             ]
-        elif field["id"] == "font.case" or field["id"] == "episode_text_case":
+        elif field["id"] == "font.case" or field["id"] == "episode_number_text_case":
             filled["choices"] = [
                 {"value": value, "label": value} for value in font_cases
             ]

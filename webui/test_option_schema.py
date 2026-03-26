@@ -5,7 +5,7 @@ from webui.options import build_card_type_extras
 def test_common_episode_text_metadata_contains_aliases() -> None:
     metadata = option_metadata_for_key("episode_text_stroke_color")
 
-    assert metadata["canonical_key"] == "episode_index_text_stroke_color"
+    assert metadata["canonical_key"] == "episode_number_text_stroke_color"
     assert "episode_stroke_color" in metadata["legacy_keys"]
     assert metadata["category"] == "Episode Number Text"
 
@@ -30,3 +30,10 @@ def test_card_type_extras_include_canonical_metadata() -> None:
     assert "legacyKeys" in first_entry
     assert "description" in first_entry
     assert "category" in first_entry
+
+
+def test_common_episode_number_size_metadata_uses_non_font_name() -> None:
+    metadata = option_metadata_for_key("episode_text_font_size")
+
+    assert metadata["canonical_key"] == "episode_number_text_size"
+    assert metadata["label"] == "Episode Number Size"
