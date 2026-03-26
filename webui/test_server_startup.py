@@ -201,6 +201,26 @@ def test_save_config_backfills_episode_keys_async(monkeypatch) -> None:
     assert tv_manager.updated == ("Example (2024)", "555", {"S1E1": "123"})
 
 
+def test_api_settings_returns_non_2xx_when_settings_persistence_fails(monkeypatch) -> None:
+    handler = _build_post_handler("/api/settings", SimpleNamespace(), {"preferences": {}})
+
+    def _raise_persistence(*_args, **_kwargs):
+        raise server.SettingsPersistenceError(
+            "Unable to write UI settings file",
+            remediation="Ensure /config is writable and has free space, then retry.",
+        )
+
+    monkeypatch.setattr(server, "save_settings", _raise_persistence)
+
+    handler.do_POST()
+
+    assert handler.status == HTTPStatus.INTERNAL_SERVER_ERROR
+    payload = json.loads(handler.wfile.getvalue())
+    assert payload["persisted"] is False
+    assert "Unable to write UI settings file" in payload["error"]
+    assert "Ensure /config is writable" in payload["remediation"]
+
+
 def test_api_preview_generates_card(monkeypatch) -> None:
     generated: dict[str, object] = {}
 
