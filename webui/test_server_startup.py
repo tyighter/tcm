@@ -106,7 +106,7 @@ def test_api_config_and_meta_return_error_on_invalid_tv_yaml(caplog) -> None:
 
 def test_api_services_status_reports_connected(monkeypatch) -> None:
     handler = _build_handler("/api/services/status", SimpleNamespace())
-    handler.context.get_plex_interface = lambda: SimpleNamespace(get_library_names=lambda: ["TV"])
+    handler.context.get_plex_interface = lambda: SimpleNamespace(get_libraries=lambda: ["TV"])
 
     monkeypatch.setattr(server.TautulliSettings, "from_settings", lambda: object())
     monkeypatch.setattr(server, "fetch_users", lambda _settings: [{"id": "1", "name": "User"}])
