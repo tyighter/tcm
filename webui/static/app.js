@@ -1997,6 +1997,9 @@ function renderEntry(entry) {
 
   const syncPreviewEpisodeControls = () => {
     previewEpisodeSelect.innerHTML = '';
+    const hasEpisodeOptions =
+      Array.isArray(entry.previewEpisodeOptions) &&
+      entry.previewEpisodeOptions.length > 0;
 
     const randomOption = document.createElement('option');
     randomOption.value = 'random';
@@ -2024,10 +2027,12 @@ function renderEntry(entry) {
 
     previewEpisodeStatus.textContent = statusText;
     previewEpisodeStatus.hidden = !statusText;
-    previewEpisodeErrorState.hidden = entry.previewEpisodeStatus !== 'error';
+    const showEpisodeLoadError =
+      entry.previewEpisodeStatus === 'error' && !hasEpisodeOptions;
+    previewEpisodeErrorState.hidden = !showEpisodeLoadError;
     previewEpisodeSelect.disabled = entry.previewEpisodeStatus === 'loading';
 
-    if (entry.previewEpisodeStatus === 'error') {
+    if (showEpisodeLoadError) {
       const detail = previewEpisodeErrorState.querySelector('.actionable-empty-state__message');
       if (detail) {
         detail.textContent =
@@ -2522,7 +2527,9 @@ async function fetchPreviewEpisodes(entry, onUpdate) {
     entry.previewEpisodeStatus = 'loaded';
     entry.previewEpisodeError = null;
   } catch (error) {
-    entry.previewEpisodeOptions = [];
+    if (!Array.isArray(entry.previewEpisodeOptions)) {
+      entry.previewEpisodeOptions = [];
+    }
     entry.previewEpisodeStatus = 'error';
     entry.previewEpisodeError = error.message || 'Unable to load episodes';
   } finally {
