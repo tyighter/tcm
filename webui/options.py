@@ -11,6 +11,23 @@ from .card_type_images import load_card_type_thumbnails, slugify_card_type
 from .option_schema import build_card_type_option_schema, option_metadata_for_key
 
 STYLE_CHOICES = ["unique", "blur", "grayscale", "blur grayscale"]
+_BASIC_SERIES_FIELD_IDS = {
+    "library",
+    "card_type",
+    "episode_number_text_format",
+    "episode_number_text_case",
+    "episode_data_source",
+    "watched_style",
+    "unwatched_style",
+    "image_source_priority",
+    "font.file",
+    "font.size",
+    "font.color",
+    "font.case",
+    "seasons.hide",
+    "seasons.titles",
+    "translation",
+}
 
 SERIES_FIELD_DESCRIPTIONS = {
     "library": "Choose which media library this series belongs to when importing and syncing.",
@@ -339,6 +356,7 @@ def build_series_fields(libraries: dict[str, Any]) -> list[dict[str, Any]]:
             field["id"],
             f"Configure {field['label'].lower()} for this series.",
         )
+        filled["tier"] = "basic" if field["id"] in _BASIC_SERIES_FIELD_IDS else "advanced"
         if field["id"] == "library":
             filled["choices"] = library_choices
         elif field["id"] == "card_type":
