@@ -76,6 +76,8 @@ const FONT_EXTENSIONS = ['.ttf', '.otf', '.woff', '.woff2', '.ttc'];
 const DESTRUCTIVE_ACTION_UNDO_WINDOW_MS = 9000;
 const HELP_LINKS = {
   gettingStarted: 'https://github.com/CollinHeist/TitleCardMaker#readme',
+  readmeUsage: 'https://github.com/CollinHeist/TitleCardMaker#usage',
+  readmeRequirements: 'https://github.com/CollinHeist/TitleCardMaker#requirements',
   plexSetup: 'https://github.com/CollinHeist/TitleCardMaker/wiki/Plex',
   tautulliSetup: 'https://github.com/CollinHeist/TitleCardMaker/wiki/Tautulli',
 };
@@ -85,6 +87,57 @@ const ONBOARDING_STEP_ORDER = [
   'preview_card',
   'save_config',
   'run_build',
+];
+
+const ERROR_ASSIST_RULES = [
+  {
+    signatureAny: ['no such file', 'path', 'directory not found', 'file not found'],
+    title: 'Path looks invalid',
+    steps: [
+      'Fix typos and remove extra spaces from the path.',
+      'Confirm the file/folder is mounted and readable.',
+      'Save settings, then retry the action.',
+    ],
+    readmeLink: HELP_LINKS.gettingStarted,
+    settingsLabel: 'Open Settings',
+    settingsAction: () => openSettingsModal(),
+  },
+  {
+    signatureAny: ['api key', 'unauthorized', 'forbidden', '401', '403'],
+    title: 'API credentials were rejected',
+    steps: [
+      'Copy a fresh API key from your service.',
+      'Update the key in Settings → Tautulli connection.',
+      'Use Recents to verify the connection.',
+    ],
+    readmeLink: HELP_LINKS.readmeUsage,
+    settingsLabel: 'Tautulli Settings',
+    settingsAction: () => openSettingsModal(),
+  },
+  {
+    signatureAny: ['imagemagick', 'library unavailable', 'module not found', 'missing dependency'],
+    title: 'A required library is unavailable',
+    steps: [
+      'Install missing dependencies listed in README.',
+      'If Docker is used, update/recreate the container.',
+      'Restart TitleCardMaker and rerun.',
+    ],
+    readmeLink: HELP_LINKS.readmeRequirements,
+    settingsLabel: 'Open Preferences',
+    settingsAction: () => openPreferenceWizardModal(),
+  },
+  {
+    signatureAny: ['font not found', 'unable to load font', 'font'],
+    title: 'Font file could not be resolved',
+    steps: [
+      'Pick a valid font file in your mounted fonts directory.',
+      'Use supported extensions (.ttf/.otf/.woff/.woff2/.ttc).',
+      'Save and preview again.',
+    ],
+    readmeLink: HELP_LINKS.gettingStarted,
+    settingsLabel: 'Open Settings',
+    settingsAction: () => openSettingsModal(),
+  },
 ];
 
 const EPISODE_TEXT_FORMAT_GROUPS = [
@@ -7932,7 +7985,7 @@ document.addEventListener('keydown', trapModalFocus, true);
 // Toast notifications
 // -----------------------------------------------------------------------------
 function showToast(message, type = 'info', options = {}) {
-  const { duration = 4500, actionLabel = '', onAction } = options;
+  const { duration = 4500, actionLabel = '', onAction, actions = [] } = options;
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
 
@@ -7950,11 +8003,66 @@ function showToast(message, type = 'info', options = {}) {
     toast.appendChild(actionButton);
   }
 
+  if (Array.isArray(actions)) {
+    actions.forEach((action) => {
+      if (!action?.label || typeof action.onClick !== 'function') {
+        return;
+      }
+      const extraActionButton = document.createElement('button');
+      extraActionButton.type = 'button';
+      extraActionButton.className = 'toast__action';
+      extraActionButton.textContent = action.label;
+      extraActionButton.addEventListener('click', () => action.onClick());
+      toast.appendChild(extraActionButton);
+    });
+  }
+
   toastContainer.appendChild(toast);
+  if (String(type || '').startsWith('error')) {
+    showErrorAssistToast(message);
+  }
   if (duration > 0) {
     setTimeout(() => toast.remove(), duration);
   }
   return toast;
+}
+
+function lookupErrorAssist(message) {
+  const text = String(message || '').toLowerCase();
+  if (!text) {
+    return null;
+  }
+  return (
+    ERROR_ASSIST_RULES.find((rule) => {
+      if (!Array.isArray(rule.signatureAny)) {
+        return false;
+      }
+      return rule.signatureAny.some((token) => text.includes(token));
+    }) || null
+  );
+}
+
+function showErrorAssistToast(message) {
+  const assist = lookupErrorAssist(message);
+  if (!assist) {
+    return;
+  }
+  const compactSteps = Array.isArray(assist.steps) ? assist.steps.map((step) => `• ${step}`).join(' ') : '';
+  const guidanceMessage = `${assist.title}. ${compactSteps}`.trim();
+  const actions = [];
+  if (assist.readmeLink) {
+    actions.push({
+      label: 'README',
+      onClick: () => window.open(assist.readmeLink, '_blank', 'noopener,noreferrer'),
+    });
+  }
+  if (assist.settingsLabel && typeof assist.settingsAction === 'function') {
+    actions.push({
+      label: assist.settingsLabel,
+      onClick: () => assist.settingsAction(),
+    });
+  }
+  showToast(`How to fix: ${guidanceMessage}`, 'info', { duration: 12000, actions });
 }
 
 function queueDestructiveAction({
