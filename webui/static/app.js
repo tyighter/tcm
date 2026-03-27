@@ -18,6 +18,7 @@ const state = {
   },
   settings: {
     series_sync_interval_seconds: 45,
+    entry_visibility_default_mode: 'basic',
     preference_setup_required: false,
     preference_file_generated: false,
     preferences: {},
@@ -769,6 +770,9 @@ async function loadSettings() {
     }
     const data = await response.json();
     state.settings = data || state.settings;
+    state.settings.entry_visibility_default_mode = normalizeEntryVisibilityMode(
+      state.settings?.entry_visibility_default_mode
+    );
   } catch (error) {
     console.warn('Unable to load settings', error);
   }
@@ -2024,6 +2028,28 @@ function renderEntry(entry) {
 
   const body = document.createElement('div');
   body.className = 'entry-body';
+  const entryVisibilityMode = getEntryVisibilityMode(entry);
+
+  const visibilityControls = document.createElement('div');
+  visibilityControls.className = 'entry-visibility-controls';
+
+  const visibilityLabel = document.createElement('span');
+  visibilityLabel.className = 'helper-text';
+  visibilityLabel.textContent = 'Fields';
+
+  const visibilityToggle = document.createElement('button');
+  visibilityToggle.type = 'button';
+  visibilityToggle.className = 'add-line add-line--inline';
+  visibilityToggle.textContent =
+    entryVisibilityMode === 'advanced' ? 'Showing advanced' : 'Showing basic';
+  visibilityToggle.addEventListener('click', () => {
+    const nextMode = getEntryVisibilityMode(entry) === 'advanced' ? 'basic' : 'advanced';
+    setEntryVisibilityMode(entry, nextMode);
+    renderEntries();
+  });
+
+  visibilityControls.append(visibilityLabel, visibilityToggle);
+  body.appendChild(visibilityControls);
 
   const usedFields = new Set();
   const generalFieldRows = [];
@@ -2038,6 +2064,9 @@ function renderEntry(entry) {
       return;
     }
     if (value !== undefined) {
+      if (!isFieldVisibleForMode(field, entryVisibilityMode)) {
+        return;
+      }
       usedFields.add(field.id);
       const row = renderFieldRow(entry, field, value);
       if (field.id === 'library') {
@@ -2056,6 +2085,9 @@ function renderEntry(entry) {
     if (value === undefined) {
       return;
     }
+    if (!isFieldVisibleForMode(field, entryVisibilityMode)) {
+      return;
+    }
     const row = renderFieldRow(entry, field, value);
     if (isFontExtraField(field)) {
       fontFieldRows.push({ field, row });
@@ -2064,7 +2096,8 @@ function renderEntry(entry) {
     }
   });
 
-  const identifierSection = renderIdentifierSection(entry);
+  const identifierSection =
+    entryVisibilityMode === 'advanced' ? renderIdentifierSection(entry) : null;
   if (identifierSection) {
     body.appendChild(identifierSection);
   }
@@ -2113,7 +2146,8 @@ function renderEntry(entry) {
       title: 'Add font line',
       emptyMessage: 'All font options are already configured for this entry.',
       availableFilter: (field) =>
-        field.path?.[0] === 'font' || (field.isExtra && isFontExtraField(field)),
+        (field.path?.[0] === 'font' || (field.isExtra && isFontExtraField(field))) &&
+        isFieldVisibleForMode(field, getEntryVisibilityMode(entry)),
     })
   );
 
@@ -2134,7 +2168,10 @@ function renderEntry(entry) {
   addLineButton.addEventListener('click', () =>
     openFieldSelector(entry, {
       availableFilter: (field) =>
-        field.path?.[0] !== 'font' && !ID_FIELDS.has(field.id) && !isFontExtraField(field),
+        field.path?.[0] !== 'font' &&
+        !ID_FIELDS.has(field.id) &&
+        !isFontExtraField(field) &&
+        isFieldVisibleForMode(field, getEntryVisibilityMode(entry)),
     })
   );
 
@@ -4416,6 +4453,19 @@ const BASICS_FIELDS = new Set([
   'image_source_priority',
 ]);
 
+const BASIC_ENTRY_FIELD_IDS = new Set([
+  ...BASICS_FIELDS,
+  'font.file',
+  'font.size',
+  'font.color',
+  'font.case',
+  'seasons.hide',
+  'seasons.titles',
+  'translation',
+]);
+
+const ENTRY_VISIBILITY_MODES = new Set(['basic', 'advanced']);
+
 const ID_FIELDS = new Set([
   'tmdb_id',
   'tvdb_id',
@@ -4425,6 +4475,49 @@ const ID_FIELDS = new Set([
   'jellyfin_id',
   'sonarr_id',
 ]);
+
+function normalizeEntryVisibilityMode(mode) {
+  return ENTRY_VISIBILITY_MODES.has(mode) ? mode : 'basic';
+}
+
+function defaultEntryVisibilityMode() {
+  return normalizeEntryVisibilityMode(state.settings?.entry_visibility_default_mode);
+}
+
+function getEntryVisibilityMode(entry) {
+  if (!entry) {
+    return defaultEntryVisibilityMode();
+  }
+  entry.visibilityMode = normalizeEntryVisibilityMode(entry.visibilityMode || defaultEntryVisibilityMode());
+  return entry.visibilityMode;
+}
+
+function setEntryVisibilityMode(entry, mode) {
+  if (!entry) {
+    return;
+  }
+  entry.visibilityMode = normalizeEntryVisibilityMode(mode);
+}
+
+function fieldVisibilityTier(field) {
+  if (!field) {
+    return 'advanced';
+  }
+  if (field.tier === 'basic' || field.tier === 'advanced') {
+    return field.tier;
+  }
+  if (field.isExtra) {
+    return 'advanced';
+  }
+  return BASIC_ENTRY_FIELD_IDS.has(field.id) ? 'basic' : 'advanced';
+}
+
+function isFieldVisibleForMode(field, mode) {
+  if (normalizeEntryVisibilityMode(mode) === 'advanced') {
+    return true;
+  }
+  return fieldVisibilityTier(field) === 'basic';
+}
 
 function getIdentifierFields() {
   return state.fields.filter((field) => ID_FIELDS.has(field.id));
@@ -4714,15 +4807,19 @@ function openFieldSelector(
 function openOptionSearch(entry, initialTerm = '') {
   const modal = buildModal('Search options');
   addFloatingCloseButton(modal, 'Close option search dialog');
+  const entryVisibilityMode = getEntryVisibilityMode(entry);
 
   const buildOptions = () => {
     const availableFields = state.fields.filter(
       (field) =>
         field.id !== 'extras' &&
         getValue(entry.config, field.path) === undefined &&
-        !ID_FIELDS.has(field.id)
+        !ID_FIELDS.has(field.id) &&
+        isFieldVisibleForMode(field, entryVisibilityMode)
     );
-    const availableExtras = availableExtraFields(entry);
+    const availableExtras = availableExtraFields(entry).filter((field) =>
+      isFieldVisibleForMode(field, entryVisibilityMode)
+    );
 
     const options = [];
 
@@ -6105,6 +6202,7 @@ function openSettingsModal() {
 
   const tautulli = state.settings?.tautulli || {};
   const seriesSyncInterval = Number(state.settings?.series_sync_interval_seconds);
+  const defaultVisibilityMode = defaultEntryVisibilityMode();
   const preferences = state.settings?.preferences || {};
 
   const quickActions = document.createElement('div');
@@ -6301,6 +6399,25 @@ function openSettingsModal() {
     : 45;
   syncField.append(syncLabel, syncInput);
   syncControls.append(syncField);
+
+
+  const visibilityField = document.createElement('label');
+  visibilityField.className = 'modal-controls__field';
+  const visibilityLabelText = document.createElement('span');
+  visibilityLabelText.className = 'modal-controls__label';
+  visibilityLabelText.textContent = 'Default entry field mode';
+  const visibilitySelect = document.createElement('select');
+  visibilitySelect.className = 'modal-select';
+  const basicVisibility = document.createElement('option');
+  basicVisibility.value = 'basic';
+  basicVisibility.textContent = 'Basic';
+  const advancedVisibility = document.createElement('option');
+  advancedVisibility.value = 'advanced';
+  advancedVisibility.textContent = 'Advanced';
+  visibilitySelect.append(basicVisibility, advancedVisibility);
+  visibilitySelect.value = defaultVisibilityMode;
+  visibilityField.append(visibilityLabelText, visibilitySelect);
+  syncControls.append(visibilityField);
   syncSection.append(syncHeader, syncControls);
 
   const preferencesSection = document.createElement('div');
@@ -6437,8 +6554,10 @@ function openSettingsModal() {
       ? Math.max(0, parsedSyncInterval)
       : 45;
     try {
+      const selectedVisibilityMode = normalizeEntryVisibilityMode(visibilitySelect.value);
       await saveSettings({
         series_sync_interval_seconds: syncIntervalSeconds,
+        entry_visibility_default_mode: selectedVisibilityMode,
         tautulli: {
           url: urlInput.value,
           api_key: keyInput.value,
@@ -6447,6 +6566,15 @@ function openSettingsModal() {
         },
         preferences: buildPreferencePayload(preferences),
       });
+      state.entries.forEach((existingEntry) => {
+        if (!existingEntry || !existingEntry.visibilityMode) {
+          return;
+        }
+        if (!ENTRY_VISIBILITY_MODES.has(existingEntry.visibilityMode)) {
+          existingEntry.visibilityMode = selectedVisibilityMode;
+        }
+      });
+      renderEntries();
       status.textContent = 'Settings saved.';
       showToast('Settings updated');
       await refreshConnectionStatusLights();

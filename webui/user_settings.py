@@ -17,6 +17,7 @@ _DEFAULT_SETTINGS = {
         "user_id": "",
     },
     "series_sync_interval_seconds": 45,
+    "entry_visibility_default_mode": "basic",
     "preview_cache_sweep_interval_seconds": 900,
     "onboarding": {
         "dismissed": False,
@@ -61,6 +62,10 @@ def _merged_settings(data: dict[str, Any] | None) -> dict[str, Any]:
     sweep_interval = data.get("preview_cache_sweep_interval_seconds")
     if isinstance(sweep_interval, (int, float)):
         merged["preview_cache_sweep_interval_seconds"] = max(0, int(sweep_interval))
+
+    visibility_mode = data.get("entry_visibility_default_mode")
+    if visibility_mode in {"basic", "advanced"}:
+        merged["entry_visibility_default_mode"] = visibility_mode
 
     onboarding = data.get("onboarding")
     if isinstance(onboarding, dict):
@@ -193,6 +198,14 @@ def save_settings(payload: Dict[str, Any], preference_file: Path | None = None) 
         settings["preview_cache_sweep_interval_seconds"] = _DEFAULT_SETTINGS[
             "preview_cache_sweep_interval_seconds"
         ]
+
+    visibility_mode = payload.get(
+        "entry_visibility_default_mode",
+        settings["entry_visibility_default_mode"],
+    )
+    settings["entry_visibility_default_mode"] = (
+        visibility_mode if visibility_mode in {"basic", "advanced"} else "basic"
+    )
 
     tautulli = payload.get("tautulli")
     if isinstance(tautulli, dict):

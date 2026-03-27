@@ -67,3 +67,24 @@ def test_onboarding_settings_are_merged_and_saved(tmp_path, monkeypatch) -> None
     assert saved["onboarding"]["completed_steps"]["add_first_series"] is True
     assert saved["onboarding"]["completed_steps"]["save_config"] is True
     assert saved["onboarding"]["completed_steps"]["run_build"] is False
+
+
+def test_entry_visibility_default_mode_is_persisted(tmp_path, monkeypatch) -> None:
+    settings_file = tmp_path / "web-settings.json"
+    preference_file = tmp_path / "preferences.yml"
+    monkeypatch.setattr(user_settings, "SETTINGS_FILE", settings_file)
+
+    loaded = user_settings.load_settings(preference_file)
+    assert loaded["entry_visibility_default_mode"] == "basic"
+
+    saved = user_settings.save_settings(
+        {"entry_visibility_default_mode": "advanced"},
+        preference_file,
+    )
+    assert saved["entry_visibility_default_mode"] == "advanced"
+
+    invalid_saved = user_settings.save_settings(
+        {"entry_visibility_default_mode": "unknown"},
+        preference_file,
+    )
+    assert invalid_saved["entry_visibility_default_mode"] == "basic"
