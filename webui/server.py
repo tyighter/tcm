@@ -645,7 +645,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         try:
             plex = self.context.get_plex_interface()
-            plex.get_library_names()
+            plex.get_libraries()
         except Exception as exc:  # pylint: disable=broad-except
             return {"connected": False, "configured": True, "message": str(exc)}
 
