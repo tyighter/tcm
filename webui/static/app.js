@@ -73,6 +73,11 @@ const LOGO_DB_STORE = 'logos';
 const DEFAULT_BACKUP_DIRECTORY = '/config/backups';
 const FONT_EXTENSIONS = ['.ttf', '.otf', '.woff', '.woff2', '.ttc'];
 const DESTRUCTIVE_ACTION_UNDO_WINDOW_MS = 9000;
+const HELP_LINKS = {
+  gettingStarted: 'https://github.com/CollinHeist/TitleCardMaker#readme',
+  plexSetup: 'https://github.com/CollinHeist/TitleCardMaker/wiki/Plex',
+  tautulliSetup: 'https://github.com/CollinHeist/TitleCardMaker/wiki/Tautulli',
+};
 const ONBOARDING_STEP_ORDER = [
   'set_preferences',
   'add_first_series',
@@ -1527,16 +1532,36 @@ function renderEntries() {
   );
 
   if (filtered.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'empty-entries';
     if (state.entries.length === 0) {
-      empty.innerHTML =
-        '<p>No series entries yet.</p><p class="helper-text">Start by adding your first series, then preview and save before running a build.</p>';
+      const empty = createActionableEmptyState({
+        title: 'No series entries yet',
+        message:
+          'Add your first series to get started. If previews fail later, verify Plex library name and save your settings.',
+        primaryLabel: 'Add first series',
+        primaryAction: () => dom.addEntry?.click(),
+        secondaryLabel: 'Setup help',
+        secondaryHref: HELP_LINKS.gettingStarted,
+      });
+      dom.entries.appendChild(empty);
     } else {
-      empty.innerHTML =
-        '<p>No series match the search.</p><p class="helper-text">Try another filter or use "Add entry" to create one.</p>';
+      const empty = createActionableEmptyState({
+        title: 'No series match this search',
+        message:
+          'Try a different title or include a year suffix (for example, “Show Name (2024)”).',
+        primaryLabel: 'Clear search',
+        primaryAction: () => {
+          state.filter = '';
+          if (dom.search) {
+            dom.search.value = '';
+            dom.search.focus();
+          }
+          renderEntries();
+        },
+        secondaryLabel: 'Search tips',
+        secondaryHref: HELP_LINKS.gettingStarted,
+      });
+      dom.entries.appendChild(empty);
     }
-    dom.entries.appendChild(empty);
     return;
   }
 
@@ -1562,6 +1587,47 @@ function renderEntries() {
   }
 
   requestEntryPreviews(filtered);
+}
+
+function createActionableEmptyState({
+  title,
+  message,
+  primaryLabel,
+  primaryAction,
+  secondaryLabel,
+  secondaryHref,
+  compact = false,
+}) {
+  const block = document.createElement('section');
+  block.className = `actionable-empty-state${compact ? ' actionable-empty-state--compact' : ''}`;
+
+  const heading = document.createElement('h3');
+  heading.className = 'actionable-empty-state__title';
+  heading.textContent = title;
+
+  const description = document.createElement('p');
+  description.className = 'actionable-empty-state__message helper-text';
+  description.textContent = message;
+
+  const actions = document.createElement('div');
+  actions.className = 'actionable-empty-state__actions';
+
+  const primary = document.createElement('button');
+  primary.type = 'button';
+  primary.className = 'primary';
+  primary.textContent = primaryLabel;
+  primary.addEventListener('click', primaryAction);
+
+  const secondary = document.createElement('a');
+  secondary.className = 'actionable-empty-state__link';
+  secondary.href = secondaryHref;
+  secondary.target = '_blank';
+  secondary.rel = 'noopener noreferrer';
+  secondary.textContent = secondaryLabel;
+
+  actions.append(primary, secondary);
+  block.append(heading, description, actions);
+  return block;
 }
 
 function classifyLogoTone(image) {
@@ -1853,13 +1919,24 @@ function renderEntry(entry) {
   const previewEpisodeStatus = document.createElement('span');
   previewEpisodeStatus.className = 'preview-episode-status helper-text';
   previewEpisodeStatus.hidden = true;
-  previewEpisodeStatus.addEventListener('click', () => {
-    if (entry.previewEpisodeStatus === 'error') {
-      entry.previewEpisodeStatus = 'idle';
-      syncPreviewEpisodeControls();
-      ensurePreviewEpisodes(entry, syncPreviewEpisodeControls);
-    }
+
+  const retryPreviewEpisodeLoad = () => {
+    entry.previewEpisodeStatus = 'idle';
+    syncPreviewEpisodeControls();
+    ensurePreviewEpisodes(entry, syncPreviewEpisodeControls);
+  };
+
+  const previewEpisodeErrorState = createActionableEmptyState({
+    title: 'Could not load preview episodes',
+    message: 'Verify Plex library name, then retry loading episodes for this series.',
+    primaryLabel: 'Retry episode load',
+    primaryAction: retryPreviewEpisodeLoad,
+    secondaryLabel: 'Plex setup docs',
+    secondaryHref: HELP_LINKS.plexSetup,
+    compact: true,
   });
+  previewEpisodeErrorState.classList.add('preview-episode-error-state');
+  previewEpisodeErrorState.hidden = true;
 
   const syncPreviewEpisodeControls = () => {
     previewEpisodeSelect.innerHTML = '';
@@ -1885,14 +1962,22 @@ function renderEntry(entry) {
       entry.previewEpisodeStatus === 'loading'
         ? 'Loading episodes…'
         : entry.previewEpisodeStatus === 'error'
-          ? entry.previewEpisodeError || 'Unable to load episodes'
+          ? ''
           : '';
 
     previewEpisodeStatus.textContent = statusText;
-    previewEpisodeStatus.title =
-      entry.previewEpisodeStatus === 'error' ? 'Click to retry loading episodes' : '';
     previewEpisodeStatus.hidden = !statusText;
+    previewEpisodeErrorState.hidden = entry.previewEpisodeStatus !== 'error';
     previewEpisodeSelect.disabled = entry.previewEpisodeStatus === 'loading';
+
+    if (entry.previewEpisodeStatus === 'error') {
+      const detail = previewEpisodeErrorState.querySelector('.actionable-empty-state__message');
+      if (detail) {
+        detail.textContent =
+          `${entry.previewEpisodeError || 'Unable to load episodes from Plex.'} ` +
+          'Verify Plex library name, then retry.';
+      }
+    }
   };
 
   previewEpisodeSelect.addEventListener('change', async () => {
@@ -1904,7 +1989,8 @@ function renderEntry(entry) {
   previewEpisodeControl.append(
     previewEpisodeLabel,
     previewEpisodeSelect,
-    previewEpisodeStatus
+    previewEpisodeStatus,
+    previewEpisodeErrorState
   );
 
   const previewButton = document.createElement('button');
@@ -6172,7 +6258,7 @@ function openSettingsModal() {
   userSelect.append(defaultUserOption);
   userField.append(userLabel, userSelect);
 
-  const userStatus = document.createElement('p');
+  const userStatus = document.createElement('div');
   userStatus.className = 'helper-text modal-controls__status';
   userStatus.textContent = 'Loading users...';
 
@@ -6380,6 +6466,7 @@ function openSettingsModal() {
 
   const loadUsers = async () => {
     userSelect.disabled = true;
+    userStatus.replaceChildren();
     userStatus.textContent = 'Loading users...';
     try {
       const response = await fetch('/api/tautulli/users');
@@ -6404,11 +6491,33 @@ function openSettingsModal() {
       });
 
       userSelect.value = tautulli.user_id || '';
-      userStatus.textContent = users.length
-        ? 'Select a Plex user to filter watch history.'
-        : 'No users returned from Tautulli.';
+      if (users.length) {
+        userStatus.replaceChildren();
+        userStatus.textContent = 'Select a Plex user to filter watch history.';
+      } else {
+        const emptyUsers = createActionableEmptyState({
+          title: 'No Tautulli users returned',
+          message:
+            'Check API key and URL, then reload users. Confirm Tautulli can reach your Plex server.',
+          primaryLabel: 'Reload users',
+          primaryAction: loadUsers,
+          secondaryLabel: 'Tautulli help',
+          secondaryHref: HELP_LINKS.tautulliSetup,
+          compact: true,
+        });
+        userStatus.replaceChildren(emptyUsers);
+      }
     } catch (error) {
-      userStatus.textContent = error.message;
+      const userError = createActionableEmptyState({
+        title: 'Unable to load Tautulli users',
+        message: `${error.message}. Check API key and URL, then retry.`,
+        primaryLabel: 'Retry user load',
+        primaryAction: loadUsers,
+        secondaryLabel: 'Tautulli help',
+        secondaryHref: HELP_LINKS.tautulliSetup,
+        compact: true,
+      });
+      userStatus.replaceChildren(userError);
     } finally {
       userSelect.disabled = false;
     }
