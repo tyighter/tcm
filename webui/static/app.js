@@ -2018,10 +2018,15 @@ function renderEntry(entry) {
       entry.previewEpisodeStatus === 'loading'
         ? 'Loading episodes…'
         : '';
+    const hasEpisodeOptions =
+      Array.isArray(entry.previewEpisodeOptions) &&
+      entry.previewEpisodeOptions.length > 0;
+    const showEpisodeLoadError =
+      entry.previewEpisodeStatus === 'error' && !hasEpisodeOptions;
 
     previewEpisodeStatus.textContent = statusText;
     previewEpisodeStatus.hidden = !statusText;
-    previewEpisodeErrorState.hidden = true;
+    previewEpisodeErrorState.hidden = !showEpisodeLoadError;
     previewEpisodeSelect.disabled = entry.previewEpisodeStatus === 'loading';
   };
 
@@ -2513,7 +2518,7 @@ async function fetchPreviewEpisodes(entry, onUpdate) {
     if (!Array.isArray(entry.previewEpisodeOptions)) {
       entry.previewEpisodeOptions = [];
     }
-    entry.previewEpisodeStatus = 'idle';
+    entry.previewEpisodeStatus = 'error';
     entry.previewEpisodeError = error.message || 'Unable to load episodes';
   } finally {
     if (onUpdate) {
