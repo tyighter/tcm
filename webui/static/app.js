@@ -1984,9 +1984,9 @@ function renderEntry(entry) {
   };
 
   const previewEpisodeErrorState = createActionableEmptyState({
-    title: 'Could not load preview episodes',
-    message: 'Verify Plex library name, then retry loading episodes for this series.',
-    primaryLabel: 'Retry episode load',
+    title: 'Could not load episode list',
+    message: 'Random preview is still available. Retry to load selectable episodes.',
+    primaryLabel: 'Retry loading list',
     primaryAction: retryPreviewEpisodeLoad,
     secondaryLabel: 'Plex setup docs',
     secondaryHref: HELP_LINKS.plexSetup,
@@ -1997,10 +1997,6 @@ function renderEntry(entry) {
 
   const syncPreviewEpisodeControls = () => {
     previewEpisodeSelect.innerHTML = '';
-    const hasEpisodeOptions =
-      Array.isArray(entry.previewEpisodeOptions) &&
-      entry.previewEpisodeOptions.length > 0;
-
     const randomOption = document.createElement('option');
     randomOption.value = 'random';
     randomOption.textContent = 'Random episode';
@@ -2021,25 +2017,12 @@ function renderEntry(entry) {
     const statusText =
       entry.previewEpisodeStatus === 'loading'
         ? 'Loading episodes…'
-        : entry.previewEpisodeStatus === 'error'
-          ? ''
-          : '';
+        : '';
 
     previewEpisodeStatus.textContent = statusText;
     previewEpisodeStatus.hidden = !statusText;
-    const showEpisodeLoadError =
-      entry.previewEpisodeStatus === 'error' && !hasEpisodeOptions;
-    previewEpisodeErrorState.hidden = !showEpisodeLoadError;
+    previewEpisodeErrorState.hidden = true;
     previewEpisodeSelect.disabled = entry.previewEpisodeStatus === 'loading';
-
-    if (showEpisodeLoadError) {
-      const detail = previewEpisodeErrorState.querySelector('.actionable-empty-state__message');
-      if (detail) {
-        detail.textContent =
-          `${entry.previewEpisodeError || 'Unable to load episodes from Plex.'} ` +
-          'Verify Plex library name, then retry.';
-      }
-    }
   };
 
   previewEpisodeSelect.addEventListener('change', async () => {
@@ -2530,7 +2513,7 @@ async function fetchPreviewEpisodes(entry, onUpdate) {
     if (!Array.isArray(entry.previewEpisodeOptions)) {
       entry.previewEpisodeOptions = [];
     }
-    entry.previewEpisodeStatus = 'error';
+    entry.previewEpisodeStatus = 'idle';
     entry.previewEpisodeError = error.message || 'Unable to load episodes';
   } finally {
     if (onUpdate) {
@@ -2543,7 +2526,7 @@ function ensurePreviewEpisodes(entry, onUpdate) {
   if (!entry) {
     return;
   }
-  if (entry.previewEpisodeStatus === 'loaded' || entry.previewEpisodeStatus === 'error') {
+  if (entry.previewEpisodeStatus === 'loaded') {
     return;
   }
 
