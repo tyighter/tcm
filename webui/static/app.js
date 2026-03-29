@@ -2515,11 +2515,16 @@ async function fetchPreviewEpisodes(entry, onUpdate) {
     entry.previewEpisodeStatus = 'loaded';
     entry.previewEpisodeError = null;
   } catch (error) {
+    const hasExistingEpisodeOptions =
+      Array.isArray(entry.previewEpisodeOptions) &&
+      entry.previewEpisodeOptions.length > 0;
     if (!Array.isArray(entry.previewEpisodeOptions)) {
       entry.previewEpisodeOptions = [];
     }
-    entry.previewEpisodeStatus = 'error';
-    entry.previewEpisodeError = error.message || 'Unable to load episodes';
+    entry.previewEpisodeStatus = hasExistingEpisodeOptions ? 'loaded' : 'error';
+    entry.previewEpisodeError = hasExistingEpisodeOptions
+      ? null
+      : error.message || 'Unable to load episodes';
   } finally {
     if (onUpdate) {
       onUpdate();
