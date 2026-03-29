@@ -7144,10 +7144,17 @@ function normalizeSnapshot(snapshot) {
 }
 
 function snapshotEntry(entry) {
-  const previewEpisode = syncPreviewEpisodeConfig(entry);
+  const previewEpisode = resolvePreviewEpisode(entry);
+  const config = cloneData(entry.config) || {};
+
+  if (config && typeof config === 'object' && !Array.isArray(config)) {
+    delete config.previewEpisode;
+    delete config.preview_episode;
+  }
+
   return {
     name: entry.name,
-    config: cloneData(entry.config),
+    config,
     previewEpisode: previewEpisode || 'random',
   };
 }
