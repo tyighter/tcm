@@ -119,6 +119,44 @@ def test_api_services_status_reports_connected(monkeypatch) -> None:
     assert payload["tautulli"]["connected"] is True
 
 
+def test_api_config_includes_fingerprint() -> None:
+    class _TvManager:
+        def as_payload(self) -> dict:
+            return {
+                "libraries": {"TV": "/library/tv"},
+                "series": [{"name": "Demo Show (2024)", "config": {"library": "TV"}}],
+            }
+
+    handler = _build_handler("/api/config", _TvManager())
+
+    handler.do_GET()
+
+    assert handler.status == HTTPStatus.OK
+    payload = json.loads(handler.wfile.getvalue())
+    assert isinstance(payload.get("fingerprint"), str)
+    assert len(payload["fingerprint"]) == 64
+
+
+def test_api_config_fingerprint_endpoint_matches_config_response() -> None:
+    class _TvManager:
+        def as_payload(self) -> dict:
+            return {
+                "libraries": {"TV": "/library/tv"},
+                "series": [{"name": "Demo Show (2024)", "config": {"library": "TV"}}],
+            }
+
+    config_handler = _build_handler("/api/config", _TvManager())
+    config_handler.do_GET()
+    config_payload = json.loads(config_handler.wfile.getvalue())
+
+    fingerprint_handler = _build_handler("/api/config/fingerprint", _TvManager())
+    fingerprint_handler.do_GET()
+    fingerprint_payload = json.loads(fingerprint_handler.wfile.getvalue())
+
+    assert fingerprint_handler.status == HTTPStatus.OK
+    assert fingerprint_payload["fingerprint"] == config_payload["fingerprint"]
+
+
 def test_api_services_status_reports_disconnected(monkeypatch) -> None:
     handler = _build_handler("/api/services/status", SimpleNamespace())
     handler.context.preference_parser.use_plex = True

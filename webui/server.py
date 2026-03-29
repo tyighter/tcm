@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import logging
 import mimetypes
@@ -177,6 +178,14 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             logger.error("Unable to load tv.yml for %s: %s", self.path, exc)
             self._error(f"Unable to load tv.yml: {exc}", status=HTTPStatus.BAD_REQUEST)
             return None
+
+    def _payload_fingerprint(self, payload: dict[str, Any]) -> str:
+        serialized = json.dumps(
+            _to_builtin(payload),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
     def _annotate_plex_lookup_status(self, payload: dict) -> None:
         if not self.context.preference_parser.use_plex:
@@ -1084,7 +1093,15 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             self._annotate_plex_lookup_status(payload)
+            payload["fingerprint"] = self._payload_fingerprint(payload)
             self._json_response(payload)
+            return
+
+        if parsed.path == "/api/config/fingerprint":
+            payload = self._tv_payload_or_error()
+            if payload is None:
+                return
+            self._json_response({"fingerprint": self._payload_fingerprint(payload)})
             return
 
         if parsed.path == "/api/meta":
