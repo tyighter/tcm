@@ -1048,6 +1048,11 @@ async function reconcilePersistedBaselineFingerprint() {
 
     if (fingerprint !== state.persistedServerFingerprint) {
       state.persistedServerFingerprint = fingerprint;
+      const currentPayload = buildCurrentNormalizedPayload();
+      const currentFingerprint = baselineFingerprintFromPayload(currentPayload);
+      if (currentFingerprint === fingerprint) {
+        assignPersistedBaseline(currentPayload, fingerprint);
+      }
       refreshDirtyState();
     }
   } catch (error) {
