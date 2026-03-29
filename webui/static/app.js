@@ -6,8 +6,9 @@ const state = {
   filter: '',
   pendingEntryId: null,
   collapsedEntries: new Set(),
-  lastSavedEntries: new Map(),
-  lastSavedEntryOrder: [],
+  persistedBaselineFingerprint: null,
+  persistedBaselinePayload: null,
+  persistedBaselineEntryOrder: [],
   isDirty: false,
   logoCache: {},
   cardTypeExtras: {},
@@ -34,6 +35,8 @@ const state = {
 let saveInProgress = false;
 let saveStatusPanel = null;
 let saveStatusArchive = [];
+let persistedFingerprintPollTimer = null;
+let persistedFingerprintPollInFlight = false;
 
 const VALIDATION_SEVERITY_ERROR = 'error';
 const VALIDATION_SEVERITY_WARNING = 'warning';
@@ -74,6 +77,7 @@ const LOGO_DB_STORE = 'logos';
 const DEFAULT_BACKUP_DIRECTORY = '/config/backups';
 const FONT_EXTENSIONS = ['.ttf', '.otf', '.woff', '.woff2', '.ttc'];
 const DESTRUCTIVE_ACTION_UNDO_WINDOW_MS = 9000;
+const PERSISTED_FINGERPRINT_POLL_INTERVAL_MS = 5000;
 const HELP_LINKS = {
   gettingStarted: 'https://github.com/CollinHeist/TitleCardMaker#readme',
   readmeUsage: 'https://github.com/CollinHeist/TitleCardMaker#usage',
@@ -784,6 +788,7 @@ async function init() {
     await loadMetadata();
     await loadSettings();
     await loadConfiguration();
+    startPersistedFingerprintPolling();
     if (!isSetupIncomplete()) {
       markOnboardingStepComplete('set_preferences');
     }
@@ -983,7 +988,8 @@ async function loadConfiguration() {
   });
   sortEntries();
   state.collapsedEntries = new Set(state.entries.map((entry) => entry.id));
-  syncSavedEntrySnapshots();
+  assignPersistedBaseline(data, data?.fingerprint);
+  refreshDirtyState();
   const stalePreviews = [];
   await Promise.all(
     state.entries.map(async (entry) => {
@@ -992,6 +998,62 @@ async function loadConfiguration() {
     })
   );
   requestEntryPreviews(stalePreviews);
+}
+
+async function fetchPersistedConfigFingerprint() {
+  const response = await fetch('/api/config/fingerprint');
+  if (!response.ok) {
+    throw new Error('Unable to fetch configuration fingerprint');
+  }
+  const data = await response.json().catch(() => ({}));
+  const fingerprint =
+    typeof data?.fingerprint === 'string' && data.fingerprint.trim().length > 0
+      ? data.fingerprint.trim()
+      : null;
+  if (!fingerprint) {
+    throw new Error('Fingerprint response was missing a valid fingerprint');
+  }
+  return fingerprint;
+}
+
+function stopPersistedFingerprintPolling() {
+  if (!persistedFingerprintPollTimer) {
+    return;
+  }
+  clearInterval(persistedFingerprintPollTimer);
+  persistedFingerprintPollTimer = null;
+}
+
+function startPersistedFingerprintPolling() {
+  stopPersistedFingerprintPolling();
+  persistedFingerprintPollTimer = setInterval(() => {
+    void reconcilePersistedBaselineFingerprint();
+  }, PERSISTED_FINGERPRINT_POLL_INTERVAL_MS);
+}
+
+async function reconcilePersistedBaselineFingerprint() {
+  if (persistedFingerprintPollInFlight || saveInProgress) {
+    return;
+  }
+
+  persistedFingerprintPollInFlight = true;
+  try {
+    const fingerprint = await fetchPersistedConfigFingerprint();
+    if (!state.persistedBaselineFingerprint) {
+      state.persistedBaselineFingerprint = fingerprint;
+      refreshDirtyState();
+      return;
+    }
+
+    if (fingerprint !== state.persistedBaselineFingerprint) {
+      state.persistedBaselineFingerprint = fingerprint;
+      refreshDirtyState();
+    }
+  } catch (error) {
+    console.debug('Unable to reconcile persisted fingerprint', error);
+  } finally {
+    persistedFingerprintPollInFlight = false;
+  }
 }
 
 async function saveSettings(payload) {
@@ -7159,63 +7221,80 @@ function snapshotEntry(entry) {
   };
 }
 
-function serializeEntrySnapshot(entry) {
-  return stableStringify(snapshotEntry(entry));
+function normalizePersistedPayload(rawPayload) {
+  const payload = rawPayload && typeof rawPayload === 'object' ? rawPayload : {};
+  const libraries = cloneData(payload.libraries) || {};
+  const series = Array.isArray(payload.series) ? payload.series : [];
+  const normalizedSeries = series
+    .map((entry) => ({
+      name: String(entry?.name || ''),
+      config: cloneData(entry?.config) || {},
+    }))
+    .filter((entry) => entry.name.length > 0)
+    .map((entry) => snapshotEntry(entry))
+    .map((entry) => ({
+      name: entry.name,
+      config: entry.config,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+  return {
+    libraries,
+    series: normalizedSeries,
+  };
 }
 
-function resolveSnapshotName(snapshot) {
-  if (!snapshot) {
-    return null;
-  }
-
-  try {
-    const parsed = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
-    const name = parsed?.name;
-    return typeof name === 'string' && name.length ? name : null;
-  } catch (error) {
-    return null;
-  }
+function baselineFingerprintFromPayload(payload) {
+  return hashString(stableStringify(normalizePersistedPayload(payload)));
 }
 
-function deepEqualEntrySnapshots(a, b) {
-  return stableStringify(a) === stableStringify(b);
+function buildCurrentNormalizedPayload() {
+  return normalizePersistedPayload({
+    libraries: state.libraries,
+    series: state.entries.map((entry) => ({
+      name: entry.name,
+      config: entry.config,
+    })),
+  });
 }
 
-function hasEntryChangedSinceLastSave(entry) {
-  const previous = state.lastSavedEntries.get(entry.id);
-  if (!previous) {
-    return true;
-  }
-  return !deepEqualEntrySnapshots(previous, snapshotEntry(entry));
+function persistedEntryOrderFromPayload(payload) {
+  const normalized = normalizePersistedPayload(payload);
+  return normalized.series.map((entry, index) => `${index}:${entry.name}`);
 }
 
-function syncSavedEntrySnapshots() {
-  state.lastSavedEntries = new Map(
-    state.entries.map((entry) => [entry.id, snapshotEntry(entry)])
-  );
-  state.lastSavedEntryOrder = state.entries.map((entry) => entry.id);
+function assignPersistedBaseline(payload, fingerprint = null) {
+  const normalizedPayload = normalizePersistedPayload(payload);
+  state.persistedBaselinePayload = normalizedPayload;
+  state.persistedBaselineEntryOrder = persistedEntryOrderFromPayload(normalizedPayload);
+  state.persistedBaselineFingerprint =
+    typeof fingerprint === 'string' && fingerprint.trim().length > 0
+      ? fingerprint.trim()
+      : baselineFingerprintFromPayload(normalizedPayload);
+}
+
+function currentEntryOrderForDirtyCheck() {
+  const normalizedPayload = buildCurrentNormalizedPayload();
+  return persistedEntryOrderFromPayload(normalizedPayload);
 }
 
 function computeDirtyState() {
-  const currentOrder = state.entries.map((entry) => entry.id);
-  if (state.lastSavedEntryOrder.length !== currentOrder.length) {
+  if (!state.persistedBaselinePayload) {
+    return state.entries.length > 0;
+  }
+
+  const currentOrder = currentEntryOrderForDirtyCheck();
+  if (state.persistedBaselineEntryOrder.length !== currentOrder.length) {
     return true;
   }
 
-  if (state.lastSavedEntryOrder.some((id, index) => id !== currentOrder[index])) {
+  if (state.persistedBaselineEntryOrder.some((id, index) => id !== currentOrder[index])) {
     return true;
   }
 
-  const savedIds = new Set(state.lastSavedEntries.keys());
-  if (savedIds.size !== currentOrder.length) {
-    return true;
-  }
-
-  if (currentOrder.some((id) => !savedIds.has(id))) {
-    return true;
-  }
-
-  return state.entries.some((entry) => hasEntryChangedSinceLastSave(entry));
+  const currentPayload = buildCurrentNormalizedPayload();
+  const currentFingerprint = baselineFingerprintFromPayload(currentPayload);
+  return currentFingerprint !== state.persistedBaselineFingerprint;
 }
 
 function setDirtyState(isDirty) {
@@ -7691,7 +7770,6 @@ async function saveConfiguration() {
     sortEntries();
     renderEntries();
     state.entries.forEach((entry) => syncPreviewEpisodeConfig(entry));
-    const changedEntries = state.entries.filter(hasEntryChangedSinceLastSave);
     const payload = {
       libraries: state.libraries,
       series: state.entries.map((entry) => ({
@@ -7763,11 +7841,8 @@ async function saveConfiguration() {
     );
     markOnboardingStepComplete('save_config');
 
-    syncSavedEntrySnapshots();
-    refreshDirtyState();
-
-    await Promise.all(changedEntries.map((entry) => invalidateEntryPreview(entry)));
-    requestEntryPreviews(changedEntries);
+    await loadConfiguration();
+    renderEntries();
   } catch (error) {
     const message = error?.message || 'Unable to save configuration';
     renderSaveStatusPanel({
@@ -7787,6 +7862,7 @@ async function saveConfiguration() {
 }
 
 window.addEventListener('beforeunload', (event) => {
+  stopPersistedFingerprintPolling();
   if (!state.isDirty) {
     return;
   }
