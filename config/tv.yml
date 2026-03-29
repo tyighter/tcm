@@ -150,6 +150,7 @@ series:
         S9E12: '211782'
         S9E13: '230303'
         S9E14: '231061'
+        S9E15: '232051'
   "A Man on the Inside (2024)":
     library: TV Shows
     card_type: standard
@@ -181,6 +182,8 @@ series:
         S2E8: '197419'
     extras:
       episode_text_font_size: 1.8
+      episode_number_text_font_size: 1.8
+      episode_number_text_size: 1.8
     previewEpisode: 1-7
   "Abbott Elementary (2021)":
     library: TV Shows
@@ -285,6 +288,10 @@ series:
         S5E14: '211631'
         S5E15: '230204'
         S5E16: '230969'
+        S5E17: '231926'
+    episode_number_text_format: Grade {season_number}, Class {episode_number}
+    extras:
+      episode_text_font_size: 2
   "Adam Eats the 80s (2022)":
     library: TV Shows
     card_type: landscape
@@ -325,6 +332,7 @@ series:
         S1E3: '165818'
         S1E4: '165819'
         S1E5: '165820'
+    episode_number_text_format: Episode {episode_number_cardinal}
   "Agatha All Along (2024)":
     library: TV Shows
     card_type: standard
@@ -340,6 +348,8 @@ series:
       omit_gradient: false
       episode_text_font_size: 1.5
       episode_text_color: '#b6aff2'
+      episode_number_text_font_size: 1.5
+      episode_number_text_size: 1.5
     seasons:
       hide: true
     tmdb_id: 138501
@@ -355,6 +365,7 @@ series:
         S1E7: '97739'
         S1E8: '97740'
         S1E9: '97741'
+    episode_number_text_format: '{episode_number_ordinal} incantation'
   "Alien: Earth (2025)":
     library: TV Shows
     card_type: shape
@@ -488,6 +499,7 @@ series:
         S12E5: '98473'
         S12E6: '98474'
         S12E7: '98475'
+    episode_number_text_format: ''
   "Archive 81 (2022)":
     library: TV Shows
     card_type: tinted frame
@@ -501,6 +513,8 @@ series:
       hide: true
     extras:
       episode_text_font_size: '2.5'
+      episode_number_text_font_size: '2.5'
+      episode_number_text_size: '2.5'
     tmdb_id: 112314
     rating_key: 98480
     episode_text_format: '{episode_number_ordinal} tape'
@@ -514,6 +528,7 @@ series:
         S1E6: '98487'
         S1E7: '98488'
         S1E8: '98489'
+    episode_number_text_format: '{episode_number_ordinal} tape'
   "Arrested Development (2003)":
     library: TV Shows
     card_type: overline
@@ -702,6 +717,9 @@ series:
     extras:
       episode_text_font: /config/fonts/papyrus.ttf
       episode_text_font_size: 1.4
+      episode_number_text_font_file: /config/fonts/papyrus.ttf
+      episode_number_text_font_size: 1.4
+      episode_number_text_size: 1.4
     episode_text_format: Episode {episode_number_cardinal}
     episode_text_case: title
     translation:
@@ -771,6 +789,8 @@ series:
         S3E19: '98817'
         S3E20: '98818'
         S3E21: '98819'
+    episode_number_text_format: Episode {episode_number_cardinal}
+    episode_number_text_case: title
   "Bar Rescue (2011)":
     library: TV Shows
     card_type: tinted frame
@@ -785,6 +805,8 @@ series:
       frame_color: '#ff0800'
       frame_width: 10
       episode_text_font_size: 2
+      episode_number_text_font_size: 2
+      episode_number_text_size: 2
     seasons:
       hide: true
     tmdb_id: 44470
@@ -1066,6 +1088,7 @@ series:
         S10E3: '218659'
         S10E4: '218660'
         S10E5: '231058'
+    episode_number_text_format: '{airdate: %B %d, %Y}'
   "Big Fat Quiz (2004)":
     library: TV Shows
     card_type: logo
@@ -1077,6 +1100,7 @@ series:
       logo_vertical_shift: '100'
       episode_text_vertical_shift: '-100'
       logo: /config/source/Big Fat Quiz (2004)/logo.png
+      episode_number_text_vertical_shift: '-100'
     font:
       color: '#ffffff'
       file: /config/fonts/quiz.otf
@@ -1122,6 +1146,10 @@ series:
         S2007E1: '204370'
         S2026E1: '204533'
         S2013E1: '204967'
+        S1E86: '232083'
+        S1E2016: '232084'
+        S1E2024: '232085'
+    episode_number_text_format: ''
   "Blue Planet (2001)":
     library: TV Shows
     card_type: landscape
@@ -1278,6 +1306,7 @@ series:
         S1E11: '102115'
         S1E12: '102116'
         S1E13: '102117'
+    episode_number_text_format: '{episode_number}'
   "Clone High (2023)":
     library: TV Shows
     card_type: divider
@@ -1314,6 +1343,7 @@ series:
         S2E8: '102138'
         S2E9: '102139'
         S2E10: '102140'
+    episode_number_text_format: '{episode_number}'
   "CSI: Crime Scene Investigation (2000)":
     library: TV Shows
     font:
@@ -2288,6 +2318,7 @@ series:
         S1E8: '180452'
         S1E9: '180453'
         S1E10: '180454'
+    episode_number_text_format: Track {episode_number_cardinal}
   "Death Note (2006)":
     library: TV Shows
     card_type: anime
@@ -2347,10 +2378,16 @@ series:
       episode_text_font_size: 2
       episode_text_vertical_shift: -50
       episode_text_case: title
+      episode_number_text_case: title
+      episode_number_text_font_file: /config/fonts/agatha.ttf
+      episode_number_text_font_size: 2
+      episode_number_text_size: 2
+      episode_number_text_vertical_shift: -50
     watched_style: unique
     unwatched_style: blur grayscale
     seasons:
       hide: true
+    episode_number_text_format: Chapter {episode_number_cardinal}
   "Dragon Ball Z Kai (2009)":
     library: TV Shows
     card_type: anime
@@ -2533,6 +2570,74 @@ series:
         S1E165: '105363'
         S1E166: '105364'
         S1E167: '105365'
+        S0E1: '231982'
+        S0E2: '231983'
+        S0E3: '231984'
+        S0E4: '231985'
+        S0E5: '231986'
+        S0E6: '231987'
+        S0E7: '231988'
+        S0E8: '231989'
+        S2E2: '231991'
+        S2E3: '231992'
+        S2E4: '231993'
+        S2E5: '231994'
+        S2E6: '231995'
+        S2E7: '231996'
+        S2E8: '231997'
+        S2E9: '231998'
+        S2E10: '231999'
+        S2E11: '232000'
+        S2E12: '232001'
+        S2E13: '232002'
+        S2E14: '232003'
+        S2E15: '232004'
+        S2E16: '232005'
+        S2E17: '232006'
+        S2E18: '232007'
+        S2E19: '232008'
+        S2E20: '232009'
+        S2E21: '232010'
+        S2E22: '232011'
+        S2E23: '232012'
+        S2E24: '232013'
+        S2E25: '232014'
+        S2E26: '232015'
+        S2E27: '232016'
+        S2E28: '232017'
+        S2E29: '232018'
+        S2E30: '232019'
+        S2E31: '232020'
+        S2E32: '232021'
+        S2E33: '232022'
+        S2E34: '232023'
+        S2E35: '232024'
+        S2E36: '232025'
+        S2E37: '232026'
+        S2E38: '232027'
+        S2E39: '232028'
+        S2E40: '232029'
+        S2E41: '232030'
+        S2E42: '232031'
+        S2E43: '232032'
+        S2E44: '232033'
+        S2E45: '232034'
+        S2E46: '232035'
+        S2E47: '232036'
+        S2E48: '232037'
+        S2E49: '232038'
+        S2E50: '232039'
+        S2E51: '232040'
+        S2E52: '232041'
+        S2E53: '232042'
+        S2E54: '232043'
+        S2E55: '232044'
+        S2E56: '232045'
+        S2E57: '232046'
+        S2E58: '232047'
+        S2E59: '232048'
+        S2E60: '232049'
+        S2E61: '232050'
   "Evil (2019)":
     library: TV Shows
     card_type: anime
@@ -2641,7 +2746,13 @@ series:
       episode_text_font: /config/fonts/silostencil.ttf
       title_text_line_end_offset: 50
       episode_text_justification: left
+      episode_number_text_font_file: /config/fonts/silostencil.ttf
+      episode_number_text_font_size: 1.8
+      episode_number_text_size: 1.8
+      episode_number_text_vertical_shift: 450
+      episode_title_text_margin: 50
     previewEpisode: 1-2
+    episode_number_text_format: 'Episode: {episode_number_cardinal}'
   "Fargo (2014)":
     library: TV Shows
     card_type: anime
@@ -2660,6 +2771,11 @@ series:
       episode_text_case: title
       episode_text_font: /config/fonts/Mondia ExtraBold.otf
       episode_text_vertical_shift: -75
+      episode_number_text_case: title
+      episode_number_text_font_file: /config/fonts/Mondia ExtraBold.otf
+      episode_number_text_font_size: 2.3
+      episode_number_text_size: 2.3
+      episode_number_text_vertical_shift: -75
     seasons:
       '1': '2006'
       '2': '1979'
@@ -2727,6 +2843,7 @@ series:
     translation:
       - language: JA
         key: Kanji
+    episode_number_text_format: '{episode_number_ordinal} Episode'
   "For All Mankind (2019)":
     library: TV Shows
     card_type: standard
@@ -2782,6 +2899,7 @@ series:
         S4E8: '191465'
         S4E9: '191466'
         S4E10: '191467'
+        S5E1: '232054'
   "Foundation (2021)":
     library: TV Shows
     card_type: tinted frame
@@ -2863,6 +2981,7 @@ series:
         S1E16: '106992'
         S1E17: '106993'
         S1E18: '106994'
+    episode_number_text_format: ''
   "Fringe (2008)":
     library: TV Shows
     card_type: standard
@@ -2983,6 +3102,7 @@ series:
         S5E11: '107098'
         S5E12: '107099'
         S5E13: '107100'
+    episode_number_text_format: S{season_number}E{episode_number}
   "Fullmetal Alchemist: Brotherhood (2009)":
     library: TV Shows
     card_type: anime
@@ -3001,6 +3121,10 @@ series:
       episode_text_font: /config/fonts/truedet.otf
       episode_text_case: upper
       episode_text_font_size: 1.8
+      episode_number_text_case: upper
+      episode_number_text_font_file: /config/fonts/truedet.otf
+      episode_number_text_font_size: 1.8
+      episode_number_text_size: 1.8
     tmdb_id: 31911
     rating_key: 107231
     tvdb_id: 85249
@@ -3073,6 +3197,7 @@ series:
         S1E64: '107296'
     unwatched_style: blur grayscale
     watched_style: unique
+    episode_number_text_format: Chapter {episode_number_cardinal}
   "Gen V (2023)":
     library: TV Shows
     card_type: standard
@@ -3191,6 +3316,7 @@ series:
         S4E8: '107955'
         S4E9: '107956'
         S4E10: '107957'
+    episode_number_text_format: v{season_number}.{episode_number}
   "Hannibal (2013)":
     library: TV Shows
     card_type: anime
@@ -3219,6 +3345,11 @@ series:
       episode_text_font: /config/fonts/fonnts.com-calgary_serial-regular.otf
       episode_text_font_size: 1.9
       episode_text_vertical_shift: -75
+      episode_number_text_case: upper
+      episode_number_text_font_file: /config/fonts/fonnts.com-calgary_serial-regular.otf
+      episode_number_text_font_size: 1.9
+      episode_number_text_size: 1.9
+      episode_number_text_vertical_shift: -75
     previewEpisode: 2-11
     unwatched_style: blur grayscale
     watched_style: unique
@@ -3267,6 +3398,8 @@ series:
         S3E11: '182797'
         S3E12: '182798'
         S3E13: '182799'
+    episode_number_text_format: '{season_number_ordinal} Meal, {episode_number_ordinal}
+      Course '
   "High Potential (2024)":
     library: TV Shows
     cand_type: standard
@@ -3307,6 +3440,7 @@ series:
         S2E13: '211542'
         S2E14: '229871'
         S2E15: '230851'
+        S2E16: '231922'
   "His Dark Materials (2019)":
     library: TV Shows
     card_type: olivier
@@ -3385,6 +3519,7 @@ series:
         S3E6: '108493'
         S3E7: '108494'
         S3E8: '108495'
+    episode_number_text_format: '{airdate:%A %B %d, %Y}'
   "How I Met Your Mother (2005)":
     library: TV Shows
     card_type: frame
@@ -3611,6 +3746,7 @@ series:
         S9E22: '108896'
         S9E23: '108897'
         S9E24: '108898'
+    episode_number_text_format: e{episode_number}
   "Ink Master (2012)":
     library: TV Shows
     card_type: comic book
@@ -4403,6 +4539,7 @@ series:
         S17E6: '109666'
         S17E7: '109667'
         S17E8: '109668'
+    episode_number_text_format: s{season_number}e{episode_number}
   "IT: Welcome to Derry (2025)":
     library: TV Shows
     card_type: divider
@@ -4429,6 +4566,7 @@ series:
         S1E6: '200656'
         S1E7: '201293'
         S1E8: '202089'
+    episode_number_text_format: Chapter {episode_number}
   "Kitchen Nightmares (US) (2007)":
     library: TV Shows
     card_type: tinted frame
@@ -4442,6 +4580,8 @@ series:
       frame_color: '#49a8f1'
       frame_width: 12
       episode_text_font_size: 2
+      episode_number_text_font_size: 2
+      episode_number_text_size: 2
     font:
       color: '#ffffff'
       file: /config/fonts/resto.otf
@@ -4564,6 +4704,7 @@ series:
         S8E10: '110598'
         S8E11: '110599'
         S6E10: '204968'
+    episode_number_text_format: '{airdate: %B %d, %Y}'
   "Laid-Back Camp (2018)":
     library: TV Shows
     card_type: anime
@@ -4666,6 +4807,7 @@ series:
         S1E6: '110899'
         S1E7: '110900'
         S1E8: '110901'
+    episode_number_text_format: Chapter {episode_number}
   "Lost (2004)":
     library: TV Shows
     episode_data_source: plex
@@ -5011,6 +5153,7 @@ series:
         S1E5: '112929'
         S1E6: '112930'
         S1E7: '112931'
+    episode_number_text_format: '{episode_number_ordinal} Book'
   "MILF Manor (2023)":
     library: TV Shows
     card_type: landscape
@@ -5140,6 +5283,7 @@ series:
         S1E72: '113452'
         S1E73: '113453'
         S1E74: '113454'
+    episode_number_text_format: Chapter {episode_number_cardinal}
   "Mr. Mercedes (2017)":
     library: TV Shows
     card_type: divider
@@ -5190,6 +5334,7 @@ series:
         S3E8: '113626'
         S3E9: '113627'
         S3E10: '113628'
+    episode_number_text_format: Chapter {episode_number}
   "Mr. Robot (2015)":
     library: TV Shows
     watched_style: unique
@@ -5255,6 +5400,9 @@ series:
         S4E13: '113560'
     extras:
       episode_text_font_size: 1.9
+      episode_number_text_font_size: 1.9
+      episode_number_text_size: 1.9
+    episode_number_text_format: v{season_number}.{episode_number}
   "Muscles & Mayhem: An Unauthorized Story of American Gladiators (2023)":
     library: TV Shows
     card_type: divider
@@ -5276,6 +5424,7 @@ series:
         S1E3: '113714'
         S1E4: '113715'
         S1E5: '113716'
+    episode_number_text_format: '{episode_number}'
   "Mystery Diners (2011)":
     episode_data_source: plex
     image_source_priority: plex
@@ -5414,6 +5563,7 @@ series:
         S4E8: '114136'
         S4E9: '114137'
         S4E10: '114138'
+    episode_number_text_format: v{season_number}.{episode_number}
   "Neon Genesis Evangelion (1995)":
     library: TV Shows
     card_type: anime
@@ -5675,6 +5825,8 @@ series:
     imdb_id: tt0387764
     extras:
       episode_text_font_size: '1.5'
+      episode_number_text_font_size: '1.5'
+      episode_number_text_size: '1.5'
     font:
       file: /config/fonts/ITC Bauhaus Heavy Regular.otf
       size: 120%
@@ -5738,6 +5890,7 @@ series:
         S9E4: '115270'
         S9E5: '115271'
         S9E6: '115272'
+    episode_number_text_format: Series {season_number} - Episode {episode_number}
   "Percy Jackson and the Olympians (2023)":
     library: TV Shows
     card_type: anime
@@ -5788,6 +5941,11 @@ series:
       episode_text_font: /config/fonts/greek.ttf
       episode_text_font_size: 1.7
       episode_text_vertical_shift: -55
+      episode_number_text_case: upper
+      episode_number_text_font_file: /config/fonts/greek.ttf
+      episode_number_text_font_size: 1.7
+      episode_number_text_size: 1.7
+      episode_number_text_vertical_shift: -55
     seasons:
       '1': The Lightning Thief
       '2': The Sea of Monsters
@@ -5796,6 +5954,7 @@ series:
       - language: JA
         key: Kanji
     previewEpisode: 2-6
+    episode_number_text_format: Chapter {episode_number_cardinal}
   "Planet Earth (2006)":
     library: TV Shows
     card_type: landscape
@@ -5861,6 +6020,9 @@ series:
       episode_text_font_size: '2'
       text_vertical_shift: '400'
       episode_text_font: /config/fonts/pluribus.ttf
+      episode_number_text_font_file: /config/fonts/pluribus.ttf
+      episode_number_text_font_size: '2'
+      episode_number_text_size: '2'
     tmdb_id: 225171
     rating_key: 191612
     tvdb_id: 436457
@@ -5903,6 +6065,7 @@ series:
         S1E6: '211089'
         S1E7: '211090'
         S1E8: '211091'
+    episode_number_text_format: Chapter {episode_number_cardinal}
   "Poker Face (2023)":
     library: TV Shows
     card_type: standard
@@ -5980,6 +6143,7 @@ series:
     extras:
       stroke_color: '#004F98'
       kanji_vertical_shift: 50
+      episode_title_text_stroke_color: '#004F98'
     tmdb_id: 60572
     rating_key: 115549
     tvdb_id: 76703
@@ -7177,6 +7341,7 @@ series:
         S20E43: '116759'
         S20E44: '116760'
         S20E45: '116761'
+    episode_number_text_format: Episode {episode_number_cardinal}
   "Pokémon: Origins (2013)":
     library: TV Shows
     card_type: anime
@@ -7201,6 +7366,7 @@ series:
       '1': ''
     extras:
       stroke_color: '#004F98'
+      episode_title_text_stroke_color: '#004F98'
     tmdb_id: 61295
     rating_key: 116762
     tvdb_id: 273616
@@ -7211,6 +7377,7 @@ series:
         S1E2: '116765'
         S1E3: '116766'
         S1E4: '116767'
+    episode_number_text_format: File {episode_number_cardinal}
   "QI (2003)":
     library: TV Shows
     card_type: anime
@@ -7254,6 +7421,8 @@ series:
       '26': Series Z
     extras:
       episode_text_font_size: 1.5
+      episode_number_text_font_size: 1.5
+      episode_number_text_size: 1.5
     episode_rating_keys:
       '198743':
         S1E1: '198748'
@@ -7889,6 +8058,8 @@ series:
       frame_width: 20
       frame_color: '#2E8BC0'
       episode_text_font_size: 1.5
+      episode_number_text_font_size: 1.5
+      episode_number_text_size: 1.5
     watched_style: unique
     unwatched_style: blur grayscale
     season_posters:
@@ -8036,6 +8207,7 @@ series:
         S7E18: '117677'
         S7E19: '117678'
         S7E20: '117679'
+    episode_number_text_format: Chapter {episode_number}
   "Samurai Jack (2001)":
     library: TV Shows
     card_type: anime
@@ -8117,6 +8289,7 @@ series:
         S5E8: '118406'
         S5E9: '118407'
         S5E10: '118408'
+    episode_number_text_format: Chapter {episode_number_cardinal}
   "Scrubs (2001)":
     library: TV Shows
     watched_style: unique
@@ -8350,6 +8523,7 @@ series:
         S2E8: '119838'
         S2E9: '119839'
         S2E10: '119840'
+    episode_number_text_format: Episode {episode_number}
   "Silo (2023)":
     library: TV Shows
     watched_style: unique
@@ -8420,6 +8594,9 @@ series:
     extras:
       episode_text_font_size: 1.9
       episode_text_font: /config/fonts/gill-sans-nova-condensed.ttf
+      episode_number_text_font_file: /config/fonts/gill-sans-nova-condensed.ttf
+      episode_number_text_font_size: 1.9
+      episode_number_text_size: 1.9
     seasons:
       hide: true
     episode_text_format: Season {season_number} | Episode {episode_number}
@@ -8462,6 +8639,7 @@ series:
         S2E16: '231794'
     unwatched_style: grayscale
     watched_style: unique
+    episode_number_text_format: Season {season_number} | Episode {episode_number}
   "Star Trek: Deep Space Nine (1993)":
     library: TV Shows
     font:
@@ -9393,6 +9571,7 @@ series:
       '109470':
         S1E1: '109472'
         S1E2: '109473'
+    episode_number_text_format: Part {episode_number}
   "Stranger Things (2016)":
     library: TV Shows
     card_type: standard
@@ -9418,6 +9597,9 @@ series:
     extras:
       episode_text_font: /config/fonts/king3.otf
       episode_text_font_size: 1.8
+      episode_number_text_font_file: /config/fonts/king3.otf
+      episode_number_text_font_size: 1.8
+      episode_number_text_size: 1.8
     watched_style: unique
     unwatched_style: blur grayscale
     episode_text_format: '{season_number_ordinal} Book - Chapter {episode_number_cardinal}'
@@ -9468,6 +9650,7 @@ series:
         S5E6: '203603'
         S5E7: '203605'
         S5E8: '204221'
+    episode_number_text_format: '{season_number_ordinal} Book - Chapter {episode_number_cardinal}'
   "Sweetpea (2024)":
     library: TV Shows
     card_type: standard
@@ -9483,6 +9666,9 @@ series:
     extras:
       episode_text_font_size: 1.5
       episode_text_case: title
+      episode_number_text_case: title
+      episode_number_text_font_size: 1.5
+      episode_number_text_size: 1.5
     seasons:
       hide: true
     episode_text_format: Episode {episode_number_cardinal}
@@ -9495,6 +9681,7 @@ series:
         S1E4: '121849'
         S1E5: '121850'
         S1E6: '121851'
+    episode_number_text_format: Episode {episode_number_cardinal}
   "Tales from the Crypt (1989)":
     library: TV Shows
     card_type: standard
@@ -9603,6 +9790,7 @@ series:
         S7E11: '121950'
         S7E12: '121951'
         S7E13: '121952'
+    episode_number_text_format: Volume {season_number_cardinal}, Issue {episode_number_cardinal}
   "Taskmaster (2015)":
     library: TV Shows
     card_type: standard
@@ -9812,6 +10000,7 @@ series:
         S20E10: '198136'
         S0E269: '204340'
         S0E270: '204308'
+    episode_number_text_format: Series {season_number} - Episode {episode_number}
   "Tattoo Fixers (2015)":
     library: TV Shows
     card_type: comic book
@@ -10148,6 +10337,7 @@ series:
         S8E20: '122765'
         S8E21: '122766'
         S8E22: '122767'
+    episode_number_text_format: Track {episode_number}
   "The Americans (2013)":
     library: TV Shows
     card_type: olivier
@@ -10298,6 +10488,7 @@ series:
       size: 145%
     extras:
       stroke_color: black
+      episode_title_text_stroke_color: black
     seasons:
       hide: true
     tmdb_id: 114655
@@ -10361,6 +10552,7 @@ series:
         S1E6: '123709'
         S1E7: '123710'
         S1E8: '123711'
+    episode_number_text_format: Chapter {abs_number}
   "The Food That Built America (2019)":
     library: TV Shows
     card_type: landscape
@@ -10511,6 +10703,7 @@ series:
         S4E11: '124137'
         S4E12: '124138'
         S4E13: '124139'
+    episode_number_text_format: Chapter {abs_number}
   "The Green Planet (2022)":
     library: TV Shows
     card_type: landscape
@@ -10596,6 +10789,7 @@ series:
         S2E7: '209251'
         S2E8: '209252'
         S2E9: '209253'
+    episode_number_text_format: Chapter {episode_number}
   "The IT Crowd (2006)":
     library: TV Shows
     card_type: sherlock
@@ -10650,6 +10844,7 @@ series:
         S4E4: '124427'
         S4E5: '124428'
         S4E6: '124429'
+    episode_number_text_format: v{season_number}.{episode_number}
   "The Last Of Us (2023)":
     library: TV Shows
     card_type: overline
@@ -10775,6 +10970,7 @@ series:
         S3E6: '197794'
         S3E7: '197795'
         S3E8: '197796'
+    episode_number_text_format: Chapter {abs_number}
   "The Midnight Club (2022)":
     library: TV Shows
     card_type: divider
@@ -10801,6 +10997,7 @@ series:
         S1E8: '204423'
         S1E9: '204424'
         S1E10: '125194'
+    episode_number_text_format: Chapter {episode_number}
   "The Movies That Made Us (2019)":
     library: TV Shows
     card_type: landscape
@@ -10871,6 +11068,7 @@ series:
         S1E8: '165600'
         S1E9: '165601'
         S1E10: '165602'
+    episode_number_text_format: Track {episode_number_cardinal}
   "The Office (US) (2005)":
     library: TV Shows
     watched_style: unique
@@ -11106,6 +11304,7 @@ series:
         S1E8: '165432'
         S1E9: '165433'
         S1E10: '165434'
+    episode_number_text_format: Chapter {episode_number}
   "The Penguin (2024)":
     library: TV Shows
     card_type: olivier
@@ -11118,6 +11317,9 @@ series:
     extras:
       episode_text_font_size: 1.5
       episode_text_vertical_shift: -20
+      episode_number_text_font_size: 1.5
+      episode_number_text_size: 1.5
+      episode_number_text_vertical_shift: -20
     tmdb_id: 194764
     rating_key: 125738
     tvdb_id: 417648
@@ -11228,9 +11430,14 @@ series:
       episode_text_font_size: 1.9
       episode_text_case: upper
       episode_text_vertical_shift: -75
+      episode_number_text_case: upper
+      episode_number_text_font_size: 1.9
+      episode_number_text_size: 1.9
+      episode_number_text_vertical_shift: -75
     translation:
       - language: JA
         key: Kanji
+    episode_number_text_format: 'Chapter {season_number}: Verse {episode_number}'
   "The Shining (1997)":
     library: TV Shows
     card_type: divider
@@ -11253,6 +11460,7 @@ series:
         S1E1: '119907'
         S1E2: '119908'
         S1E3: '119909'
+    episode_number_text_format: Chapter {episode_number}
   "The Stand (1994)":
     library: TV Shows
     card_type: divider
@@ -11279,6 +11487,7 @@ series:
         S1E2: '126404'
         S1E3: '126405'
         S1E4: '126406'
+    episode_number_text_format: Chapter {episode_number}
   "The Stand (2020)":
     library: TV Shows
     card_type: divider
@@ -11310,6 +11519,7 @@ series:
         S1E7: '126415'
         S1E8: '126416'
         S1E9: '126417'
+    episode_number_text_format: Chapter {episode_number}
   "The UnBelievable with Dan Aykroyd (2023)":
     library: TV Shows
     card_type: banner
@@ -11409,6 +11619,7 @@ series:
         S4E6: '199416'
         S4E7: '199417'
         S4E8: '199418'
+    episode_number_text_format: s{season_number}e{episode_number}
   "The X-Files (1993)":
     library: TV Shows
     watched_style: unique
@@ -11653,6 +11864,7 @@ series:
       size: 146%
     extras:
       stroke_color: black
+      episode_title_text_stroke_color: black
     seasons:
       '1': Louisiana
       '2': California
@@ -11694,6 +11906,7 @@ series:
         S4E4: '155648'
         S4E5: '155649'
         S4E6: '155650'
+    episode_number_text_format: '{episode_number_ordinal} Case File'
   "Twin Peaks (1990)":
     library: TV Shows
     card_type: anime
@@ -11761,6 +11974,7 @@ series:
         S3E16: '156265'
         S3E17: '156266'
         S3E18: '156267'
+    episode_number_text_format: Episode {episode_number_cardinal}
   "Under the Dome (2013)":
     library: TV Shows
     card_type: divider
@@ -11819,6 +12033,7 @@ series:
         S3E11: '180108'
         S3E12: '180109'
         S3E13: '180110'
+    episode_number_text_format: Chapter {abs_number}
   "Vice Principals (2016)":
     library: TV Shows
     card_type: standard
@@ -11852,6 +12067,8 @@ series:
         S2E7: '156784'
         S2E8: '156785'
         S2E9: '156786'
+    episode_number_text_format: Year {season_number_cardinal}, {episode_number_ordinal}
+      Period
   "Westworld (2016)":
     library: TV Shows
     card_type: anime
@@ -11907,6 +12124,7 @@ series:
         S4E6: '155613'
         S4E7: '155614'
         S4E8: '155615'
+    episode_number_text_format: v{season_number}.{episode_number}
   "Yellowjackets (2021)":
     library: TV Shows
     card_type: standard
