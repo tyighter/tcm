@@ -1983,18 +1983,6 @@ function renderEntry(entry) {
     ensurePreviewEpisodes(entry, syncPreviewEpisodeControls);
   };
 
-  const previewEpisodeErrorState = createActionableEmptyState({
-    title: 'Could not load episode list',
-    message: 'Random preview is still available. Retry to load selectable episodes.',
-    primaryLabel: 'Retry loading list',
-    primaryAction: retryPreviewEpisodeLoad,
-    secondaryLabel: 'Plex setup docs',
-    secondaryHref: HELP_LINKS.plexSetup,
-    compact: true,
-  });
-  previewEpisodeErrorState.classList.add('preview-episode-error-state');
-  previewEpisodeErrorState.hidden = true;
-
   const syncPreviewEpisodeControls = () => {
     previewEpisodeSelect.innerHTML = '';
     const randomOption = document.createElement('option');
@@ -2014,19 +2002,15 @@ function renderEntry(entry) {
       previewEpisodeSelect.value = 'random';
     }
 
-    const statusText =
-      entry.previewEpisodeStatus === 'loading'
-        ? 'Loading episodes…'
-        : '';
-    const hasEpisodeOptions =
-      Array.isArray(entry.previewEpisodeOptions) &&
-      entry.previewEpisodeOptions.length > 0;
-    const showEpisodeLoadError =
-      entry.previewEpisodeStatus === 'error' && !hasEpisodeOptions;
+    let statusText = '';
+    if (entry.previewEpisodeStatus === 'loading') {
+      statusText = 'Loading episodes…';
+    } else if (entry.previewEpisodeStatus === 'error') {
+      statusText = 'Episode list unavailable; random preview remains available.';
+    }
 
     previewEpisodeStatus.textContent = statusText;
     previewEpisodeStatus.hidden = !statusText;
-    previewEpisodeErrorState.hidden = !showEpisodeLoadError;
     previewEpisodeSelect.disabled = entry.previewEpisodeStatus === 'loading';
   };
 
@@ -2039,8 +2023,7 @@ function renderEntry(entry) {
   previewEpisodeControl.append(
     previewEpisodeLabel,
     previewEpisodeSelect,
-    previewEpisodeStatus,
-    previewEpisodeErrorState
+    previewEpisodeStatus
   );
 
   const previewButton = document.createElement('button');
