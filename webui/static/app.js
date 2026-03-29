@@ -7189,10 +7189,6 @@ function hasEntryChangedSinceLastSave(entry) {
   return !deepEqualEntrySnapshots(previous, snapshotEntry(entry));
 }
 
-function recordEntrySaveSnapshot(entry) {
-  state.lastSavedEntries.set(entry.id, snapshotEntry(entry));
-}
-
 function syncSavedEntrySnapshots() {
   state.lastSavedEntries = new Map(
     state.entries.map((entry) => [entry.id, snapshotEntry(entry)])
@@ -7767,14 +7763,10 @@ async function saveConfiguration() {
     );
     markOnboardingStepComplete('save_config');
 
-    await Promise.all(
-      changedEntries.map(async (entry) => {
-        await invalidateEntryPreview(entry);
-        recordEntrySaveSnapshot(entry);
-      })
-    );
     syncSavedEntrySnapshots();
     refreshDirtyState();
+
+    await Promise.all(changedEntries.map((entry) => invalidateEntryPreview(entry)));
     requestEntryPreviews(changedEntries);
   } catch (error) {
     const message = error?.message || 'Unable to save configuration';
