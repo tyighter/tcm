@@ -7,6 +7,7 @@ const state = {
   pendingEntryId: null,
   collapsedEntries: new Set(),
   persistedBaselineFingerprint: null,
+  persistedServerFingerprint: null,
   persistedBaselinePayload: null,
   persistedBaselineEntryOrder: [],
   isDirty: false,
@@ -1039,14 +1040,14 @@ async function reconcilePersistedBaselineFingerprint() {
   persistedFingerprintPollInFlight = true;
   try {
     const fingerprint = await fetchPersistedConfigFingerprint();
-    if (!state.persistedBaselineFingerprint) {
-      state.persistedBaselineFingerprint = fingerprint;
+    if (!state.persistedServerFingerprint) {
+      state.persistedServerFingerprint = fingerprint;
       refreshDirtyState();
       return;
     }
 
-    if (fingerprint !== state.persistedBaselineFingerprint) {
-      state.persistedBaselineFingerprint = fingerprint;
+    if (fingerprint !== state.persistedServerFingerprint) {
+      state.persistedServerFingerprint = fingerprint;
       refreshDirtyState();
     }
   } catch (error) {
@@ -7267,10 +7268,11 @@ function assignPersistedBaseline(payload, fingerprint = null) {
   const normalizedPayload = normalizePersistedPayload(payload);
   state.persistedBaselinePayload = normalizedPayload;
   state.persistedBaselineEntryOrder = persistedEntryOrderFromPayload(normalizedPayload);
-  state.persistedBaselineFingerprint =
+  state.persistedBaselineFingerprint = baselineFingerprintFromPayload(normalizedPayload);
+  state.persistedServerFingerprint =
     typeof fingerprint === 'string' && fingerprint.trim().length > 0
       ? fingerprint.trim()
-      : baselineFingerprintFromPayload(normalizedPayload);
+      : state.persistedBaselineFingerprint;
 }
 
 function currentEntryOrderForDirtyCheck() {
