@@ -19,7 +19,7 @@ tmdb:
 
 tautulli:
   url: http://192.168.111.77:8181/          # Your Tautulli URL
-  api_key: 7p6yOQnr5gvXh_rxomOJCVYCmMlZX8_q        # Your API key
+  api_key: bbe3c04fcea5441bb6ff4b5a469f2d04        # Your API key
   verify_ssl: false
   username: tyfighter0 #This should be dropdown.
   use_plex_fallback: true                      # Poll Plex for watch state changes when history entries are missing
