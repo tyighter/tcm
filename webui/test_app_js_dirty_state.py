@@ -24,6 +24,10 @@ FUNCTIONS_UNDER_TEST = [
     "assignPersistedBaseline",
     "currentEntryOrderForDirtyCheck",
     "computeDirtyState",
+    "normalizeObjectForDiff",
+    "listChangedObjectPaths",
+    "collectUnsavedChangeDetails",
+    "updateDirtyIndicatorDetails",
     "setDirtyState",
     "refreshDirtyState",
     "fetchPersistedConfigFingerprint",
@@ -82,7 +86,26 @@ def _run_js_scenario(scenario_js: str) -> dict:
       isDirty: false,
     }};
     const dom = {{
-      dirtyIndicator: {{ hidden: true }},
+      dirtyIndicator: {{
+        hidden: true,
+        title: '',
+        ariaLabel: '',
+        setAttribute(name, value) {{
+          if (name === 'aria-label') {{
+            this.ariaLabel = value;
+          }} else {{
+            this[name] = value;
+          }}
+        }},
+        removeAttribute(name) {{
+          if (name === 'title') {{
+            this.title = '';
+          }}
+          if (name === 'aria-label') {{
+            this.ariaLabel = '';
+          }}
+        }},
+      }},
       runBuilder: {{ disabled: false, title: '' }},
     }};
 
@@ -159,6 +182,7 @@ def test_initial_load_from_api_config_starts_clean():
         return {
           isDirty: state.isDirty,
           dirtyHidden: dom.dirtyIndicator.hidden,
+          dirtyTitle: dom.dirtyIndicator.title,
         };
         """
     )
@@ -219,12 +243,14 @@ def test_user_edit_after_load_marks_dirty():
         return {
           isDirty: state.isDirty,
           dirtyHidden: dom.dirtyIndicator.hidden,
+          dirtyTitle: dom.dirtyIndicator.title,
         };
         """
     )
 
     assert result["isDirty"] is True
     assert result["dirtyHidden"] is False
+    assert "Example Show: card_type" in result["dirtyTitle"]
 
 
 def test_external_persisted_fingerprint_change_reconciles_dirty_state():
@@ -328,6 +354,40 @@ def test_normalization_parity_preview_episode_keys_do_not_trigger_dirty():
     assert result["isDirty"] is False
     assert result["dirtyHidden"] is True
 
+
+
+def test_dirty_indicator_tooltip_clears_after_reverting_changes():
+    result = _run_js_scenario(
+        """
+        const payload = {
+          fingerprint: 'remote-v1',
+          libraries: { 'TV Shows': '/mnt/tv' },
+          series: [{ name: 'Example Show', config: { card_type: 'standard' } }],
+        };
+        state.libraries = payload.libraries;
+        state.entries = payload.series.map((entry) => ({ name: entry.name, config: { ...entry.config } }));
+        assignPersistedBaseline(payload, payload.fingerprint);
+
+        state.entries[0].config.card_type = 'banner';
+        refreshDirtyState();
+        const dirtyTitle = dom.dirtyIndicator.title;
+
+        state.entries[0].config.card_type = 'standard';
+        refreshDirtyState();
+
+        return {
+          dirtyTitle,
+          cleanTitle: dom.dirtyIndicator.title,
+          cleanAria: dom.dirtyIndicator.ariaLabel,
+          isDirty: state.isDirty,
+        };
+        """
+    )
+
+    assert "Example Show: card_type" in result["dirtyTitle"]
+    assert result["cleanTitle"] == ""
+    assert result["cleanAria"] == ""
+    assert result["isDirty"] is False
 
 def test_save_error_does_not_reset_dirty_baseline():
     result = _run_js_scenario(
