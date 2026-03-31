@@ -607,7 +607,7 @@ class StripedTitleCard(BaseCardType):
             *[polygon.draw() for polygon in self._create_polygons()],
             f'" "{mask.resolve()}"',
         ])
-        self.image_magick.run(command)
+        self.image_magick.run(command, operation='card_render')
 
         return mask
 
@@ -719,6 +719,6 @@ class StripedTitleCard(BaseCardType):
             f'"{self.output_file.resolve()}"',
         ])
 
-        self.image_magick.run(command)
+        self.image_magick.run(command, operation='card_render')
 
         self.image_magick.delete_intermediate_images(mask)

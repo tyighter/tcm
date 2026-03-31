@@ -60,7 +60,8 @@ class ImageMagickInterface:
     __REQUIRED_VERSION_SUBSTRINGS = ('Version','Copyright','License','Features')
 
     __slots__ = (
-        'executable', 'container', 'use_docker', 'prefix', 'timeout', '__history'
+        'executable', 'container', 'use_docker', 'prefix', 'timeout', '__history',
+        '__timeout_count', '__timeout_warning_logged',
     )
 
     TEXT_LOG_PATH = Path('/config/text.log')
@@ -95,6 +96,8 @@ class ImageMagickInterface:
 
         # Command history for debug purposes
         self.__history: list[tuple[str, bytes, bytes]] = []
+        self.__timeout_count = 0
+        self.__timeout_warning_logged = False
 
         self.__initialize_text_log()
 
@@ -168,7 +171,11 @@ class ImageMagickInterface:
         return string
 
 
-    def run(self, command: str) -> tuple[bytes, bytes]:
+    def run(self,
+            command: str,
+            *,
+            operation: Optional[str] = None,
+        ) -> tuple[bytes, bytes]:
         """
         Wrapper for running a given command. This uses either the host
         machine (i.e. direct calls); or through the provided docker
@@ -177,6 +184,8 @@ class ImageMagickInterface:
 
         Args:
             command: The command (as string) to execute.
+            operation: Optional label that describes what operation this
+                command belongs to.
 
         Returns:
             Tuple of the STDOUT and STDERR of the executed command.
@@ -213,11 +222,25 @@ class ImageMagickInterface:
                 except TimeoutExpired:
                     process.kill()
                     stdout, stderr = process.communicate()
+                    self.__timeout_count += 1
+                    truncated_command = command if len(command) <= 200 \
+                        else f'{command[:197]}...'
                     log.error(
-                        'ImageMagick command timed out after %ss',
+                        ('ImageMagick command timed out '
+                         '(operation=%s timeout=%ss command="%s")'),
+                        operation or 'unspecified',
                         self.timeout,
+                        truncated_command,
                     )
                     log.debug(command)
+                    if (self.__timeout_count >= 3
+                            and not self.__timeout_warning_logged):
+                        log.warning(
+                            ('ImageMagick has timed out repeatedly in this run; '
+                             'consider increasing `imagemagick.timeout` in '
+                             'your user config.')
+                        )
+                        self.__timeout_warning_logged = True
         except FileNotFoundError:
             log.exception('Command error')
             log.debug(command)
@@ -228,18 +251,24 @@ class ImageMagickInterface:
         return stdout, stderr
 
 
-    def run_get_output(self, command: str) -> str:
+    def run_get_output(self,
+            command: str,
+            *,
+            operation: Optional[str] = None,
+        ) -> str:
         """
         Wrapper for `run()`, but return the byte-decoded stdout.
 
         Args:
             command: The command (as string) being executed.
+            operation: Optional label that describes what operation this
+                command belongs to.
 
         Returns:
             The decoded stdout output of the executed command.
         """
 
-        output = self.run(command)
+        output = self.run(command, operation=operation)
 
         try:
             return b''.join(output).decode()
@@ -337,7 +366,7 @@ class ImageMagickInterface:
         command_contains_label = ' label:"' in command
 
         # Execute dimension command, parse output
-        metrics = self.run_get_output(command)
+        metrics = self.run_get_output(command, operation='text_metrics')
         widths = list(map(int, findall(r'Metrics:.*width:\s+(\d+)', metrics)))
         heights = list(map(int, findall(r'Metrics:.*height:\s+(\d+)', metrics)))
         ascents = list(map(int, findall(r'Metrics:.*ascent:\s+(\d+)', metrics)))
@@ -431,7 +460,7 @@ class ImageMagickInterface:
             f'"{output_image.resolve()}"',
         ])
 
-        self.run(command)
+        self.run(command, operation='resize_image')
 
         return output_image
 
@@ -466,7 +495,7 @@ class ImageMagickInterface:
             f'"{image.resolve()}"',
             f'"{destination.resolve()}"',
         ])
-        self.run(command)
+        self.run(command, operation='svg_convert')
 
         # Print command history if conversion failed
         if destination.exists():
@@ -553,6 +582,6 @@ class ImageMagickInterface:
             f'-compose DstIn',
             f'-composite',
             f'"{temp_image.resolve()}"',
-        ]))
+        ]), operation='round_corners')
 
         return temp_image

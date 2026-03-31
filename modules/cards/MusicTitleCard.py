@@ -928,5 +928,5 @@ class MusicTitleCard(BaseCardType):
             f'"{self.output_file.resolve()}"',
         ])
 
-        self.image_magick.run(command)
+        self.image_magick.run(command, operation='card_render')
         self.image_magick.delete_intermediate_images(*self.__cleanup)

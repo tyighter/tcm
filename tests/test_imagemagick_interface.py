@@ -36,3 +36,50 @@ def test_run_kills_process_and_collects_output_after_timeout(monkeypatch) -> Non
     assert process.communicate_calls == 2
     assert stdout == b"done"
     assert stderr == b"killed"
+
+
+def test_run_timeout_log_includes_operation_and_truncated_command(
+    monkeypatch, caplog
+) -> None:
+    process = _TimeoutProcess()
+    long_command = "convert " + ("verylongsegment " * 40)
+
+    monkeypatch.setattr("modules.ImageMagickInterface.Popen", lambda *args, **kwargs: process)
+    caplog.set_level("ERROR", logger="tcm")
+
+    interface = ImageMagickInterface(timeout=7)
+    interface.run(long_command, operation="card_render")
+
+    error_messages = [record.message for record in caplog.records if record.levelname == "ERROR"]
+    assert any("operation=card_render" in message for message in error_messages)
+    assert any("timeout=7s" in message for message in error_messages)
+    assert any('command="' in message and "..." in message for message in error_messages)
+
+
+def test_run_warns_once_after_repeated_timeouts(monkeypatch, caplog) -> None:
+    monkeypatch.setattr("modules.ImageMagickInterface.Popen", lambda *args, **kwargs: _TimeoutProcess())
+    caplog.set_level("WARNING", logger="tcm")
+
+    interface = ImageMagickInterface(timeout=1)
+    for _ in range(4):
+        interface.run("convert input output", operation="card_render")
+
+    warning_messages = [record.message for record in caplog.records if record.levelname == "WARNING"]
+    assert len([m for m in warning_messages if "imagemagick.timeout" in m]) == 1
+
+
+def test_get_text_dimensions_uses_text_metrics_operation(monkeypatch) -> None:
+    interface = ImageMagickInterface()
+    operations = []
+
+    def _fake_run_get_output(self, command, *, operation=None):  # pylint: disable=unused-argument
+        operations.append(operation)
+        return "Metrics: width: 10 height: 20 ascent: 12 descent: -4"
+
+    monkeypatch.setattr(ImageMagickInterface, "run_get_output", _fake_run_get_output)
+
+    dimensions = interface.get_text_dimensions(['label:"Test"'])
+
+    assert dimensions.width == 10
+    assert dimensions.height == 8
+    assert operations == ["text_metrics"]

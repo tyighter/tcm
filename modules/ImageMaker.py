@@ -126,7 +126,10 @@ class ImageMaker(ABC):
             return self._text_dimension_cache[cache_key]
 
         # Execute dimension command, parse output
-        metrics = self.image_magick.run_get_output(text_command)
+        metrics = self.image_magick.run_get_output(
+            text_command,
+            operation='text_metrics',
+        )
         widths = map(int, findall(r'Metrics:.*width:\s+(\d+)', metrics))
         heights = map(int, findall(r'Metrics:.*height:\s+(\d+)', metrics))
 
@@ -187,7 +190,7 @@ class ImageMaker(ABC):
             f'"{ImageMaker.TEMPORARY_COMPRESS_FILE.resolve()}"',
         ])
 
-        image_magick_interface.run(command)
+        image_magick_interface.run(command, operation='compress_image')
 
         return ImageMaker.TEMPORARY_COMPRESS_FILE
 
