@@ -75,6 +75,132 @@ _TRAILING_YEAR_PATTERNS = (
     re.compile(r"\s+\d{4}\s*$"),
 )
 
+_PREWARM_ENABLED_ENV = "TCM_WEBUI_PREWARM_PREVIEWS"
+_PREWARM_LIMIT_ENV = "TCM_WEBUI_PREWARM_LIMIT"
+_PREWARM_DEFAULT_LIMIT = 20
+_PREWARM_MIN_LIMIT = 1
+_PREWARM_MAX_LIMIT = 200
+
+
+def _env_flag_enabled(name: str, default: bool = False) -> bool:
+    """Parse a boolean-style environment variable."""
+
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+
+    normalized = str(raw).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+
+    logger.warning("Invalid boolean for %s=%r; using default=%s", name, raw, default)
+    return default
+
+
+def _env_int(name: str, default: int, *, minimum: int | None = None, maximum: int | None = None) -> int:
+    """Parse and clamp an integer environment variable."""
+
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        logger.warning("Invalid integer for %s=%r; using default=%s", name, raw, default)
+        return default
+
+    if minimum is not None and value < minimum:
+        logger.info("Clamping %s from %s to minimum=%s", name, value, minimum)
+        value = minimum
+    if maximum is not None and value > maximum:
+        logger.info("Clamping %s from %s to maximum=%s", name, value, maximum)
+        value = maximum
+    return value
+
+
+def _prewarm_preview_cache(context: AppContext, tv_manager: TvYamlManager) -> None:
+    """Generate preview cache entries for a small initial set of series."""
+
+    if not _env_flag_enabled(_PREWARM_ENABLED_ENV, default=False):
+        logger.info("Preview prewarm disabled; set %s=true to enable", _PREWARM_ENABLED_ENV)
+        return
+
+    limit = _env_int(
+        _PREWARM_LIMIT_ENV,
+        _PREWARM_DEFAULT_LIMIT,
+        minimum=_PREWARM_MIN_LIMIT,
+        maximum=_PREWARM_MAX_LIMIT,
+    )
+
+    started_at = time.perf_counter()
+    try:
+        payload = tv_manager.as_payload()
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.warning("Preview prewarm aborted; unable to read tv.yml payload: %s", exc)
+        return
+
+    series_entries = payload.get("series")
+    if not isinstance(series_entries, list) or not series_entries:
+        logger.info("Preview prewarm skipped; no series found")
+        return
+
+    selected_entries: list[tuple[str, dict[str, Any]]] = []
+    for entry in series_entries:
+        if len(selected_entries) >= limit:
+            break
+        if not isinstance(entry, dict):
+            continue
+        show_name = str(entry.get("name") or "").strip()
+        config = entry.get("config")
+        if not show_name or not isinstance(config, dict):
+            continue
+        selected_entries.append((show_name, config))
+
+    if not selected_entries:
+        logger.info("Preview prewarm skipped; no valid series entries found")
+        return
+
+    logger.info(
+        "Starting preview prewarm for %d series (limit=%d, configured=%s)",
+        len(selected_entries),
+        limit,
+        _PREWARM_LIMIT_ENV,
+    )
+
+    failures = 0
+    for show_name, series_config in selected_entries:
+        series_started_at = time.perf_counter()
+        try:
+            get_or_generate_preview(
+                context,
+                tv_manager,
+                show_name,
+                series_config,
+                force=False,
+                prefer_existing=True,
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            failures += 1
+            logger.warning("Preview prewarm failed for %s: %s", show_name, exc)
+            continue
+
+        logger.info(
+            "Preview prewarm completed for %s in %.2fs",
+            show_name,
+            time.perf_counter() - series_started_at,
+        )
+
+    duration = time.perf_counter() - started_at
+    logger.info(
+        "Preview prewarm finished in %.2fs (%d attempted, %d failed)",
+        duration,
+        len(selected_entries),
+        failures,
+    )
+
 
 def _configure_logging() -> None:
     """Configure logging to stdout and a fresh log file in /config."""
@@ -1838,6 +1964,8 @@ def _run_startup_tasks_async(context: AppContext, tv_manager: TvYamlManager) -> 
                 logger.warning("Unable to prefetch card type thumbnails: %s", exc)
             else:
                 logger.info("Prefetched %d card type thumbnails", len(thumbnails))
+
+        _prewarm_preview_cache(context, tv_manager)
 
     thread = Thread(target=_task, name="startup-tasks", daemon=True)
     thread.start()
