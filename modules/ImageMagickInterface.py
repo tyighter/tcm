@@ -5,6 +5,7 @@ from re import findall
 from shlex import split as command_split
 from string import hexdigits
 from subprocess import Popen, PIPE, TimeoutExpired
+from time import sleep
 from typing import Iterable, Literal, NamedTuple, Optional, overload
 
 try:
@@ -175,6 +176,9 @@ class ImageMagickInterface:
             command: str,
             *,
             operation: Optional[str] = None,
+            retries: int = 0,
+            retry_backoff_seconds: float = 0.25,
+            retry_on_timeout: bool = False,
         ) -> tuple[bytes, bytes]:
         """
         Wrapper for running a given command. This uses either the host
@@ -186,6 +190,11 @@ class ImageMagickInterface:
             command: The command (as string) to execute.
             operation: Optional label that describes what operation this
                 command belongs to.
+            retries: Number of times to retry when a timeout occurs.
+            retry_backoff_seconds: Seconds to wait between timeout
+                retries.
+            retry_on_timeout: Whether timeout retries are allowed for
+                this command.
 
         Returns:
             Tuple of the STDOUT and STDERR of the executed command.
@@ -215,35 +224,64 @@ class ImageMagickInterface:
 
         # Execute, capturing stdout and stderr
         stdout, stderr = b'', b''
-        try:
-            with Popen(cmd, stdout=PIPE, stderr=PIPE) as process:
-                try:
-                    stdout, stderr = process.communicate(timeout=self.timeout)
-                except TimeoutExpired:
-                    process.kill()
-                    stdout, stderr = process.communicate()
-                    self.__timeout_count += 1
-                    truncated_command = command if len(command) <= 200 \
-                        else f'{command[:197]}...'
-                    log.error(
-                        ('ImageMagick command timed out '
-                         '(operation=%s timeout=%ss command="%s")'),
-                        operation or 'unspecified',
-                        self.timeout,
-                        truncated_command,
-                    )
-                    log.debug(command)
-                    if (self.__timeout_count >= 3
-                            and not self.__timeout_warning_logged):
-                        log.warning(
-                            ('ImageMagick has timed out repeatedly in this run; '
-                             'consider increasing `imagemagick.timeout` in '
-                             'your user config.')
+        max_retries = max(0, retries)
+        attempt = 1
+        while True:
+            try:
+                with Popen(cmd, stdout=PIPE, stderr=PIPE) as process:
+                    try:
+                        stdout, stderr = process.communicate(timeout=self.timeout)
+                        break
+                    except TimeoutExpired:
+                        process.kill()
+                        stdout, stderr = process.communicate()
+                        self.__timeout_count += 1
+                        truncated_command = command if len(command) <= 200 \
+                            else f'{command[:197]}...'
+                        log.error(
+                            ('ImageMagick command timed out '
+                             '(operation=%s timeout=%ss attempt=%s/%s command="%s")'),
+                            operation or 'unspecified',
+                            self.timeout,
+                            attempt,
+                            max_retries + 1,
+                            truncated_command,
                         )
-                        self.__timeout_warning_logged = True
-        except FileNotFoundError:
-            log.exception('Command error')
-            log.debug(command)
+                        log.debug(command)
+                        if (self.__timeout_count >= 3
+                                and not self.__timeout_warning_logged):
+                            log.warning(
+                                ('ImageMagick has timed out repeatedly in this run; '
+                                 'consider increasing `imagemagick.timeout` in '
+                                 'your user config.')
+                            )
+                            self.__timeout_warning_logged = True
+
+                        can_retry = retry_on_timeout and attempt <= max_retries
+                        if can_retry:
+                            log.debug(
+                                'Retrying ImageMagick command after timeout '
+                                '(attempt %s/%s, operation=%s)',
+                                attempt + 1,
+                                max_retries + 1,
+                                operation or 'unspecified',
+                            )
+                            if retry_backoff_seconds > 0:
+                                sleep(retry_backoff_seconds)
+                            attempt += 1
+                            continue
+
+                        log.error(
+                            'ImageMagick timeout retries exhausted '
+                            '(operation=%s attempts=%s)',
+                            operation or 'unspecified',
+                            attempt,
+                        )
+                        break
+            except FileNotFoundError:
+                log.exception('Command error')
+                log.debug(command)
+                break
 
         # Add command to history and return results
         self.__history.append((command, stdout, stderr))
@@ -255,6 +293,9 @@ class ImageMagickInterface:
             command: str,
             *,
             operation: Optional[str] = None,
+            retries: int = 0,
+            retry_backoff_seconds: float = 0.25,
+            retry_on_timeout: bool = False,
         ) -> str:
         """
         Wrapper for `run()`, but return the byte-decoded stdout.
@@ -263,12 +304,23 @@ class ImageMagickInterface:
             command: The command (as string) being executed.
             operation: Optional label that describes what operation this
                 command belongs to.
+            retries: Number of times to retry when a timeout occurs.
+            retry_backoff_seconds: Seconds to wait between timeout
+                retries.
+            retry_on_timeout: Whether timeout retries are allowed for
+                this command.
 
         Returns:
             The decoded stdout output of the executed command.
         """
 
-        output = self.run(command, operation=operation)
+        output = self.run(
+            command,
+            operation=operation,
+            retries=retries,
+            retry_backoff_seconds=retry_backoff_seconds,
+            retry_on_timeout=retry_on_timeout,
+        )
 
         try:
             return b''.join(output).decode()
@@ -366,7 +418,12 @@ class ImageMagickInterface:
         command_contains_label = ' label:"' in command
 
         # Execute dimension command, parse output
-        metrics = self.run_get_output(command, operation='text_metrics')
+        metrics = self.run_get_output(
+            command,
+            operation='text_metrics',
+            retries=2,
+            retry_on_timeout=True,
+        )
         widths = list(map(int, findall(r'Metrics:.*width:\s+(\d+)', metrics)))
         heights = list(map(int, findall(r'Metrics:.*height:\s+(\d+)', metrics)))
         ascents = list(map(int, findall(r'Metrics:.*ascent:\s+(\d+)', metrics)))
@@ -495,7 +552,12 @@ class ImageMagickInterface:
             f'"{image.resolve()}"',
             f'"{destination.resolve()}"',
         ])
-        self.run(command, operation='svg_convert')
+        self.run(
+            command,
+            operation='svg_convert',
+            retries=2,
+            retry_on_timeout=True,
+        )
 
         # Print command history if conversion failed
         if destination.exists():
