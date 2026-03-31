@@ -5,7 +5,7 @@ from re import findall
 from shlex import split as command_split
 from string import hexdigits
 from subprocess import Popen, PIPE, TimeoutExpired
-from time import sleep
+from time import monotonic, sleep
 from typing import Iterable, Literal, NamedTuple, Optional, overload
 
 try:
@@ -48,6 +48,12 @@ class ImageMagickInterface:
     """Default quality for image creation"""
     DEFAULT_CARD_QUALITY = 95
 
+    """Seconds to aggregate identical timeout log entries"""
+    TIMEOUT_AGGREGATION_WINDOW_SECONDS = 45
+
+    """Minimum duplicate count before escalating timeout summary to warning"""
+    TIMEOUT_WARNING_THRESHOLD = 5
+
     """Directory for all temporary images created during image creation"""
     TEMP_DIR = Path(__file__).parent / '.objects'
 
@@ -62,7 +68,7 @@ class ImageMagickInterface:
 
     __slots__ = (
         'executable', 'container', 'use_docker', 'prefix', 'timeout', '__history',
-        '__timeout_count', '__timeout_warning_logged',
+        '__timeout_count', '__timeout_warning_logged', '__timeout_events',
     )
 
     TEXT_LOG_PATH = Path('/config/text.log')
@@ -99,6 +105,7 @@ class ImageMagickInterface:
         self.__history: list[tuple[str, bytes, bytes]] = []
         self.__timeout_count = 0
         self.__timeout_warning_logged = False
+        self.__timeout_events: dict[tuple[str, str], dict[str, float | int | str]] = {}
 
         self.__initialize_text_log()
 
@@ -204,6 +211,8 @@ class ImageMagickInterface:
         if os_name == 'nt':
             command = command.replace('\(', '(').replace('\)', ')')
 
+        self.__flush_expired_timeout_events()
+
         # If a docker image ID is specified, execute the command in that
         # container otherwise, execute on the host machine (no docker wrapper)
         if self.use_docker:
@@ -238,14 +247,11 @@ class ImageMagickInterface:
                         self.__timeout_count += 1
                         truncated_command = command if len(command) <= 200 \
                             else f'{command[:197]}...'
-                        log.error(
-                            ('ImageMagick command timed out '
-                             '(operation=%s timeout=%ss attempt=%s/%s command="%s")'),
-                            operation or 'unspecified',
-                            self.timeout,
-                            attempt,
-                            max_retries + 1,
-                            truncated_command,
+                        self.__log_timeout_event(
+                            operation=operation or 'unspecified',
+                            command_fingerprint=truncated_command,
+                            attempt=attempt,
+                            max_attempts=max_retries + 1,
                         )
                         log.debug(command)
                         if (self.__timeout_count >= 3
@@ -287,6 +293,82 @@ class ImageMagickInterface:
         self.__history.append((command, stdout, stderr))
 
         return stdout, stderr
+
+
+    def __flush_expired_timeout_events(self, now: Optional[float] = None) -> None:
+        """Emit summaries for timeout events whose aggregation window expired."""
+
+        now = monotonic() if now is None else now
+        expired_keys: list[tuple[str, str]] = []
+
+        for key, timeout_event in self.__timeout_events.items():
+            if now - float(timeout_event['last_seen']) < self.TIMEOUT_AGGREGATION_WINDOW_SECONDS:
+                continue
+
+            count = int(timeout_event['count'])
+            if count > 1:
+                self.__log_timeout_summary(
+                    operation=str(timeout_event['operation']),
+                    count=count,
+                )
+            expired_keys.append(key)
+
+        for key in expired_keys:
+            self.__timeout_events.pop(key, None)
+
+
+    def __log_timeout_event(self,
+            operation: str,
+            command_fingerprint: str,
+            attempt: int,
+            max_attempts: int,
+        ) -> None:
+        """Log timeout details while suppressing duplicate timeout flood."""
+
+        now = monotonic()
+        key = (operation, command_fingerprint)
+        timeout_event = self.__timeout_events.get(key)
+
+        if timeout_event is None:
+            self.__timeout_events[key] = {
+                'operation': operation,
+                'count': 1,
+                'last_seen': now,
+            }
+            log.error(
+                ('ImageMagick command timed out '
+                 '(operation=%s timeout=%ss attempt=%s/%s command="%s")'),
+                operation,
+                self.timeout,
+                attempt,
+                max_attempts,
+                command_fingerprint,
+            )
+            return
+
+        timeout_event['count'] = int(timeout_event['count']) + 1
+        timeout_event['last_seen'] = now
+
+
+    def __log_timeout_summary(self, *, operation: str, count: int) -> None:
+        """Log an aggregated timeout summary message."""
+
+        recommendation = ''
+        if count >= self.TIMEOUT_WARNING_THRESHOLD:
+            recommendation = (
+                ' Consider increasing `imagemagick.timeout` in your user config '
+                'if this operation is expected to take longer.'
+            )
+
+        message = (
+            f'ImageMagick timeouts: {count} occurrences for {operation} '
+            f'within {self.TIMEOUT_AGGREGATION_WINDOW_SECONDS}s '
+            f'(timeout={self.timeout}s).{recommendation}'
+        )
+        if count >= self.TIMEOUT_WARNING_THRESHOLD:
+            log.warning(message)
+        else:
+            log.info(message)
 
 
     def run_get_output(self,
