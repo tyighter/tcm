@@ -357,4 +357,4 @@ class InsetTitleCard(BaseCardType):
             f'"{self.output_file.resolve()}"',
         ])
 
-        self.image_magick.run(command)
+        self.image_magick.run(command, operation='card_render')
