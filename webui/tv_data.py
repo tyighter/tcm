@@ -148,7 +148,11 @@ class TvYamlManager:
             "series": series_entries,
         }
 
-    def write(self, payload: dict[str, Any]) -> None:
+    def write(self,
+        payload: dict[str, Any],
+        *,
+        migrate_text_option_aliases: bool = False,
+    ) -> None:
         """Persist the provided payload to disk."""
 
         libraries = payload.get("libraries")
@@ -167,15 +171,48 @@ class TvYamlManager:
             key=lambda item: str(item.get("name", "")).casefold(),
         )
 
+        rewritten_keys: set[str] = set()
+        rewritten_series = 0
         for entry in sorted_series:
             name = entry.get("name")
-            config = entry.get("config", {})
+            config = deepcopy(entry.get("config", {}))
             if not name:
                 continue
+
+            if migrate_text_option_aliases and isinstance(config, dict):
+                config, rewrites = TitleCard.rewrite_option_keys_for_persistence(
+                    config,
+                    scope=f'write series "{name}"',
+                )
+                if rewrites:
+                    rewritten_keys.update(rewrites)
+                    rewritten_series += 1
+
+                extras = config.get("extras")
+                if isinstance(extras, dict):
+                    migrated_extras, extra_rewrites = (
+                        TitleCard.rewrite_option_keys_for_persistence(
+                            extras,
+                            scope=f'write extras "{name}"',
+                        )
+                    )
+                    config["extras"] = migrated_extras
+                    if extra_rewrites:
+                        rewritten_keys.update(extra_rewrites)
+                        rewritten_series += 1
+
             quoted_name = DoubleQuotedScalarString(str(name))
             series_map[quoted_name] = _to_commented(config)
 
         current["series"] = series_map
+
+        if migrate_text_option_aliases and rewritten_keys:
+            logger.info(
+                'Migrated legacy text option keys for %s (%s series): %s',
+                self.file_path,
+                rewritten_series,
+                ", ".join(sorted(rewritten_keys)),
+            )
 
         self._write_locked(current)
 
@@ -276,19 +313,23 @@ class TvYamlManager:
                     continue
 
                 config = _to_builtin(raw_config)
-                normalized = TitleCard.normalize_option_keys(
+                normalized, rewrites = TitleCard.rewrite_option_keys_for_persistence(
                     config,
                     scope=f'legacy conversion series "{name}"',
                 )
 
                 extras = normalized.get("extras")
                 if isinstance(extras, dict):
-                    normalized["extras"] = TitleCard.normalize_option_keys(
+                    normalized_extras, extra_rewrites = (
+                        TitleCard.rewrite_option_keys_for_persistence(
                         extras,
                         scope=f'legacy conversion extras "{name}"',
                     )
+                    )
+                    normalized["extras"] = normalized_extras
+                    rewrites.update(extra_rewrites)
 
-                if normalized == config:
+                if not rewrites:
                     continue
 
                 series[name] = _to_commented(normalized)
