@@ -7287,6 +7287,114 @@ function currentEntryOrderForDirtyCheck() {
   return persistedEntryOrderFromPayload(normalizedPayload);
 }
 
+
+function normalizeObjectForDiff(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeObjectForDiff(item));
+  }
+  if (value && typeof value === 'object') {
+    const normalized = {};
+    Object.keys(value)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+      .forEach((key) => {
+        normalized[key] = normalizeObjectForDiff(value[key]);
+      });
+    return normalized;
+  }
+  return value;
+}
+
+function listChangedObjectPaths(previousValue, currentValue, prefix = []) {
+  const previousIsObject =
+    previousValue && typeof previousValue === 'object' && !Array.isArray(previousValue);
+  const currentIsObject =
+    currentValue && typeof currentValue === 'object' && !Array.isArray(currentValue);
+
+  if (previousIsObject && currentIsObject) {
+    const keys = [...new Set([...Object.keys(previousValue), ...Object.keys(currentValue)])].sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base' })
+    );
+    return keys.flatMap((key) =>
+      listChangedObjectPaths(previousValue[key], currentValue[key], [...prefix, key])
+    );
+  }
+
+  const previousSnapshot = stableStringify(normalizeObjectForDiff(previousValue));
+  const currentSnapshot = stableStringify(normalizeObjectForDiff(currentValue));
+  if (previousSnapshot === currentSnapshot) {
+    return [];
+  }
+
+  return [prefix.join('.') || '(value)'];
+}
+
+function collectUnsavedChangeDetails() {
+  const baselinePayload = state.persistedBaselinePayload || { libraries: {}, series: [] };
+  const currentPayload = buildCurrentNormalizedPayload();
+
+  const changes = [];
+
+  const baselineLibraries = baselinePayload.libraries || {};
+  const currentLibraries = currentPayload.libraries || {};
+  listChangedObjectPaths(baselineLibraries, currentLibraries).forEach((path) => {
+    changes.push(`Libraries: ${path}`);
+  });
+
+  const toSeriesMap = (seriesList) => {
+    const map = new Map();
+    (seriesList || []).forEach((entry) => {
+      if (entry?.name) {
+        map.set(entry.name, entry.config || {});
+      }
+    });
+    return map;
+  };
+
+  const baselineSeries = toSeriesMap(baselinePayload.series);
+  const currentSeries = toSeriesMap(currentPayload.series);
+  const seriesNames = [...new Set([...baselineSeries.keys(), ...currentSeries.keys()])].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base' })
+  );
+
+  seriesNames.forEach((name) => {
+    const baselineConfig = baselineSeries.get(name);
+    const currentConfig = currentSeries.get(name);
+    if (!baselineConfig) {
+      changes.push(`${name}: entry added`);
+      return;
+    }
+    if (!currentConfig) {
+      changes.push(`${name}: entry removed`);
+      return;
+    }
+    listChangedObjectPaths(baselineConfig, currentConfig).forEach((path) => {
+      changes.push(`${name}: ${path}`);
+    });
+  });
+
+  return changes;
+}
+
+function updateDirtyIndicatorDetails() {
+  if (!dom.dirtyIndicator) {
+    return;
+  }
+
+  if (!state.isDirty) {
+    dom.dirtyIndicator.removeAttribute('title');
+    dom.dirtyIndicator.removeAttribute('aria-label');
+    return;
+  }
+
+  const changes = collectUnsavedChangeDetails();
+  const summary = changes.length > 0
+    ? changes.slice(0, 30).join('\n')
+    : 'Unsaved changes are present.';
+
+  dom.dirtyIndicator.title = summary;
+  dom.dirtyIndicator.setAttribute('aria-label', `Unsaved changes: ${summary.replace(/\n/g, ', ')}`);
+}
+
 function computeDirtyState() {
   if (!state.persistedBaselinePayload) {
     return state.entries.length > 0;
@@ -7311,6 +7419,7 @@ function setDirtyState(isDirty) {
   if (dom.dirtyIndicator) {
     dom.dirtyIndicator.hidden = !state.isDirty;
   }
+  updateDirtyIndicatorDetails();
   if (dom.runBuilder) {
     dom.runBuilder.disabled = state.isDirty;
     dom.runBuilder.title = state.isDirty
