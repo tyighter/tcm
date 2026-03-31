@@ -200,6 +200,33 @@ series:
     assert "title_text_margin" not in series_config["extras"]
 
 
+def test_backup_and_convert_legacy_keys_rewrites_nested_entries(tmp_path: Path) -> None:
+    tv_file = tmp_path / "tv.yml"
+    tv_file.write_text(
+        """libraries: {}
+series:
+  "Nested Show (2024)":
+    seasons:
+      1:
+        episode_text_case: lower
+        episode_number_text_format: "Chapter {episode_number}"
+        episode_text_format: "Legacy {episode_number}"
+"""
+    )
+
+    manager = TvYamlManager(tv_file)
+    _, updated_series = manager.backup_and_convert_legacy_keys()
+
+    assert updated_series == 1
+
+    converted = manager.load()
+    season_config = converted["series"]["Nested Show (2024)"]["seasons"][1]
+    assert season_config["episode_number_text_case"] == "lower"
+    assert "episode_text_case" not in season_config
+    assert season_config["episode_number_text_format"] == "Chapter {episode_number}"
+    assert "episode_text_format" not in season_config
+
+
 def test_write_can_migrate_legacy_text_aliases(tmp_path: Path) -> None:
     tv_file = tmp_path / "tv.yml"
     manager = TvYamlManager(tv_file)
