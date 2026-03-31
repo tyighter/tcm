@@ -39,3 +39,17 @@ def test_legacy_and_canonical_option_keys_normalize_to_equivalent_card_extras() 
     )
     for key in keys:
         assert legacy[key] == canonical[key]
+
+
+def test_rewrite_option_keys_for_persistence_uses_canonical_keys_only() -> None:
+    rewritten, rewrites = TitleCard.rewrite_option_keys_for_persistence(
+        {
+            "episode_number_text_case": "title",
+            "episode_text_case": "upper",
+        },
+        scope="test persistence",
+    )
+
+    assert rewritten["episode_number_text_case"] == "title"
+    assert "episode_text_case" not in rewritten
+    assert "episode_text_case->episode_number_text_case" in rewrites

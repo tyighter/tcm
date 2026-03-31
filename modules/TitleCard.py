@@ -334,6 +334,39 @@ class TitleCard:
 
         return normalized
 
+    @classmethod
+    def rewrite_option_keys_for_persistence(cls,
+            config_dict: dict[str, Any],
+            *,
+            scope: str = 'configuration',
+        ) -> tuple[dict[str, Any], set[str]]:
+        """
+        Rewrite legacy option keys to canonical keys for persisted YAML.
+
+        This preserves read-time backwards compatibility (legacy keys are still
+        accepted), but returns output where canonical keys win and legacy keys
+        are removed.
+
+        Returns:
+            Tuple of ``(rewritten_config, rewrites)``, where ``rewrites`` is a
+            set of ``legacy->canonical`` mapping labels that were applied.
+        """
+
+        normalized = cls.normalize_option_keys(config_dict, scope=scope)
+        rewritten = dict(normalized)
+        rewrites: set[str] = set()
+
+        for canonical_key, legacy_keys in cls._CANONICAL_TEXT_ALIASES.items():
+            if canonical_key not in rewritten:
+                continue
+
+            for legacy_key in legacy_keys:
+                if legacy_key in rewritten:
+                    rewritten.pop(legacy_key, None)
+                    rewrites.add(f'{legacy_key}->{canonical_key}')
+
+        return rewritten, rewrites
+
 
     def _coerce_extra_types(self, kwargs: dict[str, Any]) -> None:
         """Convert extras to expected types based on the card constructor."""

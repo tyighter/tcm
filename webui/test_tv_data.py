@@ -195,6 +195,32 @@ series:
     converted = manager.load()
     series_config = converted["series"]["Demo Show (2024)"]
     assert series_config["episode_number_text_case"] == "title"
-    assert series_config["episode_text_case"] == "title"
+    assert "episode_text_case" not in series_config
     assert series_config["extras"]["episode_title_text_horizontal_offset"] == 12
-    assert series_config["extras"]["title_text_margin"] == 12
+    assert "title_text_margin" not in series_config["extras"]
+
+
+def test_write_can_migrate_legacy_text_aliases(tmp_path: Path) -> None:
+    tv_file = tmp_path / "tv.yml"
+    manager = TvYamlManager(tv_file)
+
+    manager.write(
+        {
+            "libraries": {},
+            "series": [
+                {
+                    "name": "Demo Show (2024)",
+                    "config": {
+                        "episode_number_text_case": "title",
+                        "episode_text_case": "upper",
+                    },
+                }
+            ],
+        },
+        migrate_text_option_aliases=True,
+    )
+
+    converted = manager.load()
+    series_config = converted["series"]["Demo Show (2024)"]
+    assert series_config["episode_number_text_case"] == "title"
+    assert "episode_text_case" not in series_config
