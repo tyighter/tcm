@@ -989,7 +989,8 @@ async function loadConfiguration() {
   });
   sortEntries();
   state.collapsedEntries = new Set(state.entries.map((entry) => entry.id));
-  assignPersistedBaseline(data, data?.fingerprint);
+  const currentPayload = buildCurrentNormalizedPayload();
+  assignPersistedBaseline(currentPayload, data?.fingerprint);
   refreshDirtyState();
   const stalePreviews = [];
   await Promise.all(
