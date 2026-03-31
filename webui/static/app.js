@@ -1480,7 +1480,7 @@ function registerEvents() {
           refresh: true,
           onSuccess: () => {
             markOnboardingStepComplete('run_build');
-            refreshEntryPreviews();
+            refreshEntryPreviews(undefined, { cacheBust: true });
           },
         }
       );
@@ -1629,7 +1629,7 @@ function openEntryActionsModal(entry, entryPayload) {
               workingLabel: 'Fresh building...',
               refresh: false,
               payload: entryPayload(),
-              onSuccess: () => refreshEntryPreviews([entry]),
+              onSuccess: () => refreshEntryPreviews([entry], { cacheBust: true }),
             }
           ),
       }),
@@ -2026,7 +2026,7 @@ function renderEntry(entry) {
         workingLabel: 'Building...',
         refresh: false,
         payload: entryPayload(),
-        onSuccess: () => refreshEntryPreviews([entry]),
+        onSuccess: () => refreshEntryPreviews([entry], { cacheBust: true }),
       }
     )
   );
@@ -2292,7 +2292,7 @@ function renderEntry(entry) {
 let previewObserver = null;
 const previewLoadOptions = new WeakMap();
 
-function previewUrlForEntry(entry, { cacheBust = true } = {}) {
+function previewUrlForEntry(entry, { cacheBust = false } = {}) {
   if (!entry) {
     return null;
   }
@@ -2452,10 +2452,12 @@ function previewSeasonForEntry(entry, previewEpisodeKey) {
   return null;
 }
 
-async function invalidateEntryPreview(entry) {
+async function invalidateEntryPreview(entry, options = {}) {
   if (!entry) {
     return;
   }
+  const { cacheBust = false } = options;
+  entry.previewForceCacheBust = Boolean(cacheBust);
   entry.previewError = null;
   entry.previewSrc = null;
   entry.previewLoading = false;
@@ -2463,10 +2465,13 @@ async function invalidateEntryPreview(entry) {
   observeEntryPreview(entry);
 }
 
-async function loadEntryPreview(entry) {
+async function loadEntryPreview(entry, options = {}) {
   if (!entry || entry.previewLoading) {
     return;
   }
+  const { cacheBust = false } = options;
+  const forceCacheBust = Boolean(cacheBust || entry.previewForceCacheBust);
+  entry.previewForceCacheBust = false;
 
   const requestId = (entry.previewRequestId || 0) + 1;
   entry.previewRequestId = requestId;
@@ -2474,7 +2479,7 @@ async function loadEntryPreview(entry) {
   entry.previewError = null;
   updateEntryPreview(entry);
 
-  const src = previewUrlForEntry(entry);
+  const src = previewUrlForEntry(entry, { cacheBust: forceCacheBust });
   if (!src) {
     entry.previewError = 'Preview unavailable';
     entry.previewLoading = false;
@@ -2510,8 +2515,8 @@ function requestEntryPreviews(entries = state.entries) {
   });
 }
 
-async function refreshEntryPreviews(entries = state.entries) {
-  await Promise.all(entries.map((entry) => invalidateEntryPreview(entry)));
+async function refreshEntryPreviews(entries = state.entries, options = {}) {
+  await Promise.all(entries.map((entry) => invalidateEntryPreview(entry, options)));
   requestEntryPreviews(entries);
 }
 
