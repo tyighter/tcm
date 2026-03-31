@@ -1,4 +1,6 @@
+import os
 from pathlib import Path
+from time import perf_counter
 from typing import Callable, Iterable
 
 from tqdm import tqdm
@@ -111,7 +113,7 @@ class Manager:
         self.archives: list[ShowArchive] = []
 
 
-    def sync_series_files(self) -> None:
+    def sync_series_files(self, *, context: str = 'manager.run') -> int:
         """Sync series YAML files from Emby/Jellyfin/Sonarr/Plex."""
 
         # If no sync-able interfaces are enabled, skip
@@ -119,16 +121,20 @@ class Manager:
             and not self.preferences.use_jellyfin
             and not self.preferences.use_sonarr
             and not self.preferences.use_plex):
-            return None
+            return 0
 
-        # Always notify the user
-        log.info('Starting to sync to series YAML files..')
+        log.debug(
+            'Syncing series YAML files '
+            f'[context="{context}", show=None, season=None, episode=None, worker={os.getpid()}]'
+        )
+        synced_file_count = 0
 
         if (self.preferences.use_emby
             and len(self.preferences.emby_yaml_writers) > 0):
             for writer, update_args in zip(self.preferences.emby_yaml_writers,
                                         self.preferences.emby_yaml_update_args):
                 writer.update_from_emby(self.emby_interface, **update_args)
+                synced_file_count += 1
 
         if (self.preferences.use_jellyfin
             and len(self.preferences.jellyfin_yaml_writers) > 0):
@@ -138,12 +144,14 @@ class Manager:
                 writer.update_from_jellyfin(
                     self.jellyfin_interface, **update_args
                 )
+                synced_file_count += 1
 
         if (self.preferences.use_plex
             and len(self.preferences.plex_yaml_writers) > 0):
             for writer, update_args in zip(self.preferences.plex_yaml_writers,
                                         self.preferences.plex_yaml_update_args):
                 writer.update_from_plex(self.plex_interface, **update_args)
+                synced_file_count += 1
 
         if (self.preferences.use_sonarr
             and len(self.preferences.sonarr_yaml_writers) > 0):
@@ -151,8 +159,9 @@ class Manager:
                 writer.update_from_sonarr(
                     self.sonarr_interfaces[interface_id], **args
                 )
+                synced_file_count += 1
 
-        return None
+        return synced_file_count
 
 
     @notify('Starting to read series YAML files..')
@@ -375,7 +384,11 @@ class Manager:
 
         # If serial, don't update series files or create shows
         if not serial:
-            self.sync_series_files()
+            log.info('Starting to sync to series YAML files..')
+            sync_start = perf_counter()
+            synced_file_count = self.sync_series_files(context='manager.run.batch')
+            sync_duration = perf_counter() - sync_start
+            log.info(f'Synced {synced_file_count} series YAML files in {sync_duration:.2f}s')
             self.create_shows()
 
         # Always execute these, even in serial mode
@@ -398,7 +411,11 @@ class Manager:
         """Run the Manager, executing each step for each show at a time."""
 
         # Sync YAML files
-        self.sync_series_files()
+        log.info('Starting to sync to series YAML files..')
+        sync_start = perf_counter()
+        synced_file_count = self.sync_series_files(context='manager.run.serial')
+        sync_duration = perf_counter() - sync_start
+        log.info(f'Synced {synced_file_count} series YAML files in {sync_duration:.2f}s')
 
         # Go through each Series YAML file, creating Show/ShowArchive objects
         for show in self.preferences.iterate_series_files():
