@@ -153,6 +153,98 @@ def test_preview_cache_freshness_depends_on_source_mtime_and_age(monkeypatch, tm
     services.invalidate_preview_cache("Show")
 
 
+def test_get_or_generate_preview_promotes_valid_persistent_cache(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(services, "PREVIEW_CACHE_DIR", tmp_path / "preview-cache")
+    services._preview_cache.clear()
+
+    source = tmp_path / "source.jpg"
+    source.write_bytes(b"source")
+    source_mtime = time.time() - 30
+    os.utime(source, (source_mtime, source_mtime))
+
+    cache_key = services.preview_cache_key("Demo Show", {"library": "TV"})
+    payload = services.PreviewPayload(
+        mime="image/jpeg",
+        data="persisted-data",
+        source_path=source,
+        existing_source=True,
+        cached_at=time.time(),
+        source_mtime=source_mtime,
+    )
+    services._persist_preview_payload(cache_key, payload)
+
+    monkeypatch.setattr(
+        services,
+        "generate_preview",
+        lambda *_args, **_kwargs: pytest.fail("generate_preview should not run for valid persistent cache"),
+    )
+    monkeypatch.setattr(services, "_show_logger", lambda *_args, **_kwargs: None)
+
+    mime, data = services.get_or_generate_preview(
+        context=SimpleNamespace(),
+        tv_manager=SimpleNamespace(),
+        show_name="Demo Show",
+        series_config={"library": "TV"},
+        force=False,
+    )
+
+    assert (mime, data) == ("image/jpeg", "persisted-data")
+    with services._preview_cache_lock:
+        assert services._preview_cache[cache_key].data == "persisted-data"
+
+
+def test_get_or_generate_preview_regenerates_when_persistent_cache_source_changes(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setattr(services, "PREVIEW_CACHE_DIR", tmp_path / "preview-cache")
+    services._preview_cache.clear()
+
+    source = tmp_path / "source.jpg"
+    source.write_bytes(b"source")
+    old_mtime = time.time() - 60
+    os.utime(source, (old_mtime, old_mtime))
+
+    cache_key = services.preview_cache_key("Demo Show", {"library": "TV"})
+    stale_payload = services.PreviewPayload(
+        mime="image/jpeg",
+        data="stale-data",
+        source_path=source,
+        cached_at=time.time(),
+        source_mtime=old_mtime,
+    )
+    services._persist_preview_payload(cache_key, stale_payload)
+
+    new_mtime = old_mtime + 20
+    os.utime(source, (new_mtime, new_mtime))
+
+    generated_payload = services.PreviewPayload(
+        mime="image/jpeg",
+        data="fresh-data",
+        source_path=source,
+        cached_at=time.time(),
+        source_mtime=new_mtime,
+    )
+    monkeypatch.setattr(services, "_load_show_for_preview", lambda *_args, **_kwargs: SimpleNamespace())
+    monkeypatch.setattr(services, "_preview_from_existing_sources", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(services, "generate_preview", lambda *_args, **_kwargs: generated_payload)
+    monkeypatch.setattr(services, "_show_logger", lambda *_args, **_kwargs: None)
+
+    mime, data = services.get_or_generate_preview(
+        context=SimpleNamespace(),
+        tv_manager=SimpleNamespace(),
+        show_name="Demo Show",
+        series_config={"library": "TV"},
+        force=False,
+        prefer_existing=False,
+    )
+
+    assert (mime, data) == ("image/jpeg", "fresh-data")
+
+    reloaded = services._load_persistent_preview(cache_key)
+    assert reloaded is not None
+    assert reloaded.data == "fresh-data"
+
+
 def test_preview_logs_are_written_to_per_show_files(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(services, "SHOW_LOG_DIR", tmp_path)
     services._show_loggers.clear()
@@ -179,17 +271,22 @@ def test_preview_logs_are_written_to_per_show_files(monkeypatch, tmp_path) -> No
     assert "Preview cache decision | show=Demo Show (2024)" in log_output
 
 
-def test_preview_request_logs_top_level_show_message(caplog, monkeypatch) -> None:
+def test_preview_request_logs_top_level_show_message(caplog, monkeypatch, tmp_path) -> None:
+    source = tmp_path / "cached.jpg"
+    source.write_bytes(b"cached")
+    source_mtime = time.time() - 20
+    os.utime(source, (source_mtime, source_mtime))
+
     cache_key = services.preview_cache_key("Demo Show", {"library": "TV"})
     _cache_preview_payload(
         cache_key,
         services.PreviewPayload(
             mime="image/jpeg",
             data="cached",
-            source_path=None,
+            source_path=source,
             existing_source=True,
             cached_at=time.time(),
-            source_mtime=None,
+            source_mtime=source_mtime,
         ),
     )
     monkeypatch.setattr(services, "_show_logger", lambda *_args, **_kwargs: None)

@@ -421,10 +421,11 @@ def enforce_preview_cache_limit(
     series_name: str | None,
     *,
     preferred_keys: Iterable[str | None] | None = None,
+    max_entries: int = MAX_PREVIEW_CACHE_ENTRIES_PER_SERIES,
 ) -> int:
     """Ensure only the latest preview cache entries are retained for a series."""
 
-    if series_name is None:
+    if series_name is None or max_entries < 0:
         return 0
 
     preferred_keys = [key for key in (preferred_keys or []) if key]
@@ -445,7 +446,7 @@ def enforce_preview_cache_limit(
         if cache_key in allowed_keys:
             continue
 
-        if len(allowed_keys) < MAX_PREVIEW_CACHE_ENTRIES_PER_SERIES:
+        if len(allowed_keys) < max_entries:
             if cache_key:
                 allowed_keys.append(cache_key)
             else:
@@ -944,8 +945,29 @@ def preview_cache_is_fresh(
         )
         return False
 
-    current_source_mtime = _stat_mtime(cached.source_path)
-    cached_source_mtime = cached.source_mtime if cached.source_mtime is not None else current_source_mtime
+    return _preview_payload_is_fresh(
+        show_name,
+        cache_key,
+        cached,
+        preview_episode_key=preview_episode_key,
+        max_age_ms=max_age_ms,
+    )
+
+
+def _preview_payload_is_fresh(
+    show_name: str,
+    cache_key: str,
+    payload: PreviewPayload,
+    *,
+    preview_episode_key: str | None = None,
+    max_age_ms: int = PREVIEW_CACHE_MAX_AGE_MS,
+) -> bool:
+    """Return True when a preview payload still matches source and age constraints."""
+
+    current_source_mtime = _stat_mtime(payload.source_path)
+    cached_source_mtime = (
+        payload.source_mtime if payload.source_mtime is not None else current_source_mtime
+    )
 
     if current_source_mtime is None:
         _log_preview_cache_decision(
@@ -973,7 +995,7 @@ def preview_cache_is_fresh(
         )
         return False
 
-    age_ms = _preview_cache_age_ms(cached.cached_at)
+    age_ms = _preview_cache_age_ms(payload.cached_at)
     if age_ms is None:
         _log_preview_cache_decision(
             show_name,
@@ -1278,25 +1300,65 @@ def get_or_generate_preview(
             with _preview_cache_lock:
                 cached = _preview_cache.get(cache_key)
             if cached is not None:
+                if _preview_payload_is_fresh(
+                    show_name,
+                    cache_key,
+                    cached,
+                    preview_episode_key=preview_episode_key,
+                ):
+                    if not _generated_preview_superseded(
+                        _load_show,
+                        cached,
+                        prefer_existing=prefer_existing,
+                        preview_episode_key=preview_episode_key,
+                        show_name=show_name,
+                        cache_key=cache_key,
+                        origin="memory-cache",
+                    ):
+                        _log_preview_event(
+                            show_name,
+                            cached.source_path,
+                            status="success",
+                            origin="memory-cache",
+                            episode_key=preview_episode_key,
+                            cached=True,
+                            existing_source=cached.existing_source,
+                        )
+                        return cached.mime, cached.data
+                else:
+                    with _preview_cache_lock:
+                        _preview_cache.pop(cache_key, None)
+
+            persistent_cached = _load_persistent_preview(cache_key)
+            if persistent_cached is not None and _preview_payload_is_fresh(
+                show_name,
+                cache_key,
+                persistent_cached,
+                preview_episode_key=preview_episode_key,
+            ):
+                with _preview_cache_lock:
+                    _preview_cache[cache_key] = persistent_cached
+
                 if not _generated_preview_superseded(
                     _load_show,
-                    cached,
+                    persistent_cached,
                     prefer_existing=prefer_existing,
                     preview_episode_key=preview_episode_key,
                     show_name=show_name,
                     cache_key=cache_key,
-                    origin="memory-cache",
+                    origin="persistent-cache",
                 ):
                     _log_preview_event(
                         show_name,
-                        cached.source_path,
+                        persistent_cached.source_path,
                         status="success",
-                        origin="memory-cache",
+                        origin="persistent-cache",
                         episode_key=preview_episode_key,
                         cached=True,
-                        existing_source=cached.existing_source,
+                        persistent=True,
+                        existing_source=persistent_cached.existing_source,
                     )
-                    return cached.mime, cached.data
+                    return persistent_cached.mime, persistent_cached.data
 
         try:
             show = preloaded_show or _load_show_for_preview(
@@ -1354,6 +1416,12 @@ def get_or_generate_preview(
 
         with _preview_cache_lock:
             _preview_cache[cache_key] = payload
+        _persist_preview_payload(cache_key, payload)
+        enforce_preview_cache_limit(
+            show_name,
+            preferred_keys=(cache_key,),
+            max_entries=MAX_PREVIEW_CACHE_ENTRIES_PER_SERIES,
+        )
 
         _log_preview_event(
             show_name,
