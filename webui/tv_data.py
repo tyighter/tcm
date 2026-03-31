@@ -35,6 +35,49 @@ _backup_thread: Thread | None = None
 _backup_stop_event = Event()
 
 
+def _rewrite_legacy_option_keys_deep(
+    value: Any,
+    *,
+    scope: str,
+) -> tuple[Any, set[str]]:
+    """Recursively rewrite legacy text-option aliases to canonical keys."""
+
+    rewrites: set[str] = set()
+
+    if isinstance(value, dict):
+        rewritten_dict, direct_rewrites = TitleCard.rewrite_option_keys_for_persistence(
+            dict(value),
+            scope=scope,
+        )
+        rewrites.update(direct_rewrites)
+
+        normalized_dict: dict[str, Any] = {}
+        for key, item in rewritten_dict.items():
+            child_scope = f'{scope}.{key}'
+            normalized_item, child_rewrites = _rewrite_legacy_option_keys_deep(
+                item,
+                scope=child_scope,
+            )
+            normalized_dict[key] = normalized_item
+            rewrites.update(child_rewrites)
+
+        return normalized_dict, rewrites
+
+    if isinstance(value, list):
+        normalized_list = []
+        for index, item in enumerate(value):
+            normalized_item, child_rewrites = _rewrite_legacy_option_keys_deep(
+                item,
+                scope=f"{scope}[{index}]",
+            )
+            normalized_list.append(normalized_item)
+            rewrites.update(child_rewrites)
+
+        return normalized_list, rewrites
+
+    return value, rewrites
+
+
 class TvYamlManager:
     """Utility for reading and writing the tv.yml configuration."""
 
@@ -180,26 +223,13 @@ class TvYamlManager:
                 continue
 
             if migrate_text_option_aliases and isinstance(config, dict):
-                config, rewrites = TitleCard.rewrite_option_keys_for_persistence(
+                config, rewrites = _rewrite_legacy_option_keys_deep(
                     config,
                     scope=f'write series "{name}"',
                 )
                 if rewrites:
                     rewritten_keys.update(rewrites)
                     rewritten_series += 1
-
-                extras = config.get("extras")
-                if isinstance(extras, dict):
-                    migrated_extras, extra_rewrites = (
-                        TitleCard.rewrite_option_keys_for_persistence(
-                            extras,
-                            scope=f'write extras "{name}"',
-                        )
-                    )
-                    config["extras"] = migrated_extras
-                    if extra_rewrites:
-                        rewritten_keys.update(extra_rewrites)
-                        rewritten_series += 1
 
             quoted_name = DoubleQuotedScalarString(str(name))
             series_map[quoted_name] = _to_commented(config)
@@ -313,21 +343,10 @@ class TvYamlManager:
                     continue
 
                 config = _to_builtin(raw_config)
-                normalized, rewrites = TitleCard.rewrite_option_keys_for_persistence(
+                normalized, rewrites = _rewrite_legacy_option_keys_deep(
                     config,
                     scope=f'legacy conversion series "{name}"',
                 )
-
-                extras = normalized.get("extras")
-                if isinstance(extras, dict):
-                    normalized_extras, extra_rewrites = (
-                        TitleCard.rewrite_option_keys_for_persistence(
-                        extras,
-                        scope=f'legacy conversion extras "{name}"',
-                    )
-                    )
-                    normalized["extras"] = normalized_extras
-                    rewrites.update(extra_rewrites)
 
                 if not rewrites:
                     continue
