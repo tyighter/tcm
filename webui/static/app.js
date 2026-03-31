@@ -3360,10 +3360,6 @@ function hideSeasonsSelect(entry, field, value) {
     }
   };
 
-  if (value === undefined) {
-    persistSelection(normalizedValue);
-  }
-
   select.addEventListener('change', (event) => {
     persistSelection(event.target.value);
   });

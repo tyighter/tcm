@@ -30,6 +30,8 @@ FUNCTIONS_UNDER_TEST = [
     "reconcilePersistedBaselineFingerprint",
     "hashString",
     "saveConfiguration",
+    "normalizeHideSeasonsValue",
+    "hideSeasonsSelect",
 ]
 
 
@@ -260,6 +262,43 @@ def test_external_persisted_fingerprint_change_reconciles_dirty_state():
     assert result["dirtyBeforeExternalChange"] is True
     assert result["dirtyAfterExternalChange"] is False
     assert result["dirtyHiddenAfterExternalChange"] is True
+
+
+def test_hide_seasons_select_does_not_mark_entry_dirty_when_value_missing():
+    result = _run_js_scenario(
+        """
+        globalThis.document = {
+          createElement: () => ({
+            options: [],
+            appendChild(option) { this.options.push(option); },
+            addEventListener() {},
+          }),
+        };
+
+        const payload = {
+          libraries: { 'TV Shows': '/mnt/tv' },
+          series: [{ name: 'Example Show', config: { card_type: 'standard' } }],
+        };
+        state.libraries = payload.libraries;
+        state.entries = payload.series.map((entry) => ({ name: entry.name, config: { ...entry.config } }));
+        assignPersistedBaseline(payload, baselineFingerprintFromPayload(payload));
+        refreshDirtyState();
+
+        const field = { id: 'hide_seasons', path: ['hide_seasons'] };
+        hideSeasonsSelect(state.entries[0], field, undefined);
+
+        return {
+          isDirty: state.isDirty,
+          hasHideSeasons: Object.prototype.hasOwnProperty.call(
+            state.entries[0].config,
+            'hide_seasons'
+          ),
+        };
+        """
+    )
+
+    assert result["isDirty"] is False
+    assert result["hasHideSeasons"] is False
 
 
 def test_normalization_parity_preview_episode_keys_do_not_trigger_dirty():
