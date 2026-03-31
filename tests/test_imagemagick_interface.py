@@ -137,7 +137,7 @@ def test_run_timeout_exhaustion_after_max_retries(monkeypatch, caplog) -> None:
     )
 
     error_messages = [record.message for record in caplog.records if record.levelname == "ERROR"]
-    assert len([m for m in error_messages if "timed out" in m]) == 3
+    assert len([m for m in error_messages if "timed out" in m]) == 1
     assert any("retries exhausted" in message and "attempts=3" in message for message in error_messages)
 
 
@@ -158,3 +158,39 @@ def test_run_does_not_retry_when_disabled(monkeypatch, caplog) -> None:
     retry_logs = [record.message for record in caplog.records if "Retrying ImageMagick command" in record.message]
     assert process.communicate_calls == 2
     assert retry_logs == []
+
+
+def test_run_aggregates_timeout_logs_and_emits_summary_after_window(monkeypatch, caplog) -> None:
+    caplog.set_level("INFO", logger="tcm")
+
+    processes = [_TimeoutProcess(), _TimeoutProcess(), _SuccessProcess()]
+
+    def _fake_popen(*args, **kwargs):  # pylint: disable=unused-argument
+        return processes.pop(0)
+
+    monkeypatch.setattr("modules.ImageMagickInterface.Popen", _fake_popen)
+
+    time_values = iter((100.0, 101.0, 110.0, 111.0, 170.0))
+    monkeypatch.setattr("modules.ImageMagickInterface.monotonic", lambda: next(time_values))
+
+    interface = ImageMagickInterface(timeout=9)
+    interface.run("convert input output", operation="text_metrics")
+    interface.run("convert input output", operation="text_metrics")
+    interface.run("convert different output", operation="other_operation")
+
+    timeout_errors = [
+        record.message
+        for record in caplog.records
+        if record.levelname == "ERROR" and "ImageMagick command timed out" in record.message
+    ]
+    summaries = [
+        record.message
+        for record in caplog.records
+        if record.levelname in {"INFO", "WARNING"} and "ImageMagick timeouts:" in record.message
+    ]
+
+    assert len(timeout_errors) == 1
+    assert "operation=text_metrics" in timeout_errors[0]
+    assert len(summaries) == 1
+    assert "2 occurrences for text_metrics" in summaries[0]
+    assert "timeout=9s" in summaries[0]
