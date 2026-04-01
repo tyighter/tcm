@@ -179,6 +179,25 @@ def test_api_services_status_reports_disconnected(monkeypatch) -> None:
     assert "Tautulli down" in payload["tautulli"]["message"]
 
 
+def test_api_actions_status_returns_active_contexts(monkeypatch) -> None:
+    handler = _build_handler("/api/actions/status", SimpleNamespace())
+    monkeypatch.setattr(
+        server,
+        "active_action_status",
+        lambda: {
+            "contexts": [{"context": "build-series:Demo Show", "started_at": 123.4}],
+            "per_series_builds": ["Demo Show"],
+        },
+    )
+
+    handler.do_GET()
+
+    payload = json.loads(handler.wfile.getvalue())
+    assert handler.status == HTTPStatus.OK
+    assert payload["contexts"][0]["context"] == "build-series:Demo Show"
+    assert payload["per_series_builds"] == ["Demo Show"]
+
+
 def test_save_config_backfills_episode_keys_async(monkeypatch) -> None:
     update_complete = Event()
     backfill_started = Event()

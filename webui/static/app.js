@@ -40,6 +40,8 @@ let saveStatusPanel = null;
 let saveStatusArchive = [];
 let persistedFingerprintPollTimer = null;
 let persistedFingerprintPollInFlight = false;
+let actionStatusPollTimer = null;
+let actionStatusPollInFlight = false;
 
 const VALIDATION_SEVERITY_ERROR = 'error';
 const VALIDATION_SEVERITY_WARNING = 'warning';
@@ -74,6 +76,7 @@ const CLIENT_LOG_ENDPOINT = '/api/client-log';
 const LOGO_BACKGROUND_STORAGE_KEY = 'tcm-logo-backgrounds';
 const BUILDING_SERIES_STORAGE_KEY = 'tcm-building-series';
 const BUILDING_SERIES_MAX_AGE_MS = 1000 * 60 * 60 * 6;
+const ACTION_STATUS_POLL_INTERVAL_MS = 4000;
 const CACHE_DB_NAME = 'tcm-cache';
 const CACHE_DB_VERSION = 2;
 const CACHE_DB_OPEN_TIMEOUT_MS = 2000;
@@ -241,6 +244,70 @@ function loadBuildingSeriesState() {
   if (pruneStaleBuildingSeries()) {
     persistBuildingSeriesState();
   }
+}
+
+function rebuildBuildingSeriesFromActionContexts(contexts, now = Date.now()) {
+  const nextBuildingState = {};
+  const contextList = Array.isArray(contexts) ? contexts : [];
+  contextList.forEach((entry) => {
+    const contextValue =
+      typeof entry === 'string' ? entry : String(entry?.context || '').trim();
+    if (!contextValue || contextValue.indexOf(':') === -1) {
+      return;
+    }
+    const separatorIndex = contextValue.indexOf(':');
+    const actionKey = contextValue.slice(0, separatorIndex);
+    if (actionKey !== 'build-series' && actionKey !== 'fresh-build-series') {
+      return;
+    }
+    const seriesName = normalizeBuildingSeriesName(contextValue.slice(separatorIndex + 1));
+    if (!seriesName) {
+      return;
+    }
+    nextBuildingState[seriesName] = now;
+  });
+  return nextBuildingState;
+}
+
+function applyServerActionStatus(statusPayload) {
+  const nextState = rebuildBuildingSeriesFromActionContexts(statusPayload?.contexts, Date.now());
+  const existingKeys = Object.keys(state.buildingSeries || {});
+  const nextKeys = Object.keys(nextState);
+  const changed =
+    existingKeys.length !== nextKeys.length ||
+    existingKeys.some((key) => !Object.prototype.hasOwnProperty.call(nextState, key));
+  state.buildingSeries = nextState;
+  persistBuildingSeriesState();
+  if (changed) {
+    renderEntries();
+  }
+}
+
+async function refreshActionStatus() {
+  if (actionStatusPollInFlight) {
+    return;
+  }
+  actionStatusPollInFlight = true;
+  try {
+    const response = await fetch('/api/actions/status');
+    if (!response.ok) {
+      throw new Error('Unable to load action status');
+    }
+    applyServerActionStatus(await response.json());
+  } catch (error) {
+    // localStorage fallback remains until server status can be fetched.
+  } finally {
+    actionStatusPollInFlight = false;
+  }
+}
+
+function startActionStatusPolling() {
+  if (actionStatusPollTimer) {
+    return;
+  }
+  actionStatusPollTimer = setInterval(() => {
+    refreshActionStatus();
+  }, ACTION_STATUS_POLL_INTERVAL_MS);
 }
 
 function setSeriesBuildingState(seriesNames, isBuilding) {
@@ -869,6 +936,8 @@ async function init() {
     await loadMetadata();
     await loadSettings();
     await loadConfiguration();
+    await refreshActionStatus();
+    startActionStatusPolling();
     startPersistedFingerprintPolling();
     if (!isSetupIncomplete()) {
       markOnboardingStepComplete('set_preferences');

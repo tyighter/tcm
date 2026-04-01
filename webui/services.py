@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, ContextManager, Iterable
 
 from ruamel.yaml.comments import CommentedMap
 
@@ -41,6 +41,8 @@ class ActionInProgressError(RuntimeError):
 logger = logging.getLogger(__name__)
 
 _action_lock = Lock()
+_action_context_lock = Lock()
+_active_action_contexts: dict[str, float] = {}
 _preview_cache_lock = Lock()
 _preview_cache: dict[str, "PreviewPayload"] = {}
 _preview_log_lock = Lock()
@@ -1962,6 +1964,52 @@ def delete_series_cards(
         ]
 
         _run_fixer_command(args, input_text="Y\n", assume_locked=assume_locked)
+
+
+def register_action_context(context: str | None) -> ContextManager[None]:
+    """Track the lifecycle of a user-triggered action context."""
+
+    @contextmanager
+    def _tracker():
+        if not context:
+            yield
+            return
+
+        started_at = time.time()
+        with _action_context_lock:
+            _active_action_contexts[context] = started_at
+
+        try:
+            yield
+        finally:
+            with _action_context_lock:
+                _active_action_contexts.pop(context, None)
+
+    return _tracker()
+
+
+def active_action_status() -> dict[str, Any]:
+    """Return active action contexts and metadata for UI reconciliation."""
+
+    with _action_context_lock:
+        contexts = [
+            {"context": context, "started_at": started_at}
+            for context, started_at in _active_action_contexts.items()
+        ]
+
+    per_series_builds: list[str] = []
+    for entry in contexts:
+        context_name = str(entry.get("context") or "")
+        if ":" not in context_name:
+            continue
+        action, series_name = context_name.split(":", 1)
+        if action in {"build-series", "fresh-build-series"} and series_name:
+            per_series_builds.append(series_name)
+
+    return {
+        "contexts": contexts,
+        "per_series_builds": per_series_builds,
+    }
 
 
 def run_fresh_build_for_series(
