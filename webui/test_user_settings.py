@@ -103,3 +103,33 @@ def test_prewarm_previews_defaults_to_enabled_and_can_be_toggled(tmp_path, monke
 
     enabled = user_settings.save_settings({"prewarm_previews": True}, preference_file)
     assert enabled["prewarm_previews"] is True
+
+
+def test_prewarm_preview_limit_defaults_to_200_and_persists(tmp_path, monkeypatch) -> None:
+    settings_file = tmp_path / "web-settings.json"
+    preference_file = tmp_path / "preferences.yml"
+    monkeypatch.setattr(user_settings, "SETTINGS_FILE", settings_file)
+
+    loaded = user_settings.load_settings(preference_file)
+    assert loaded["prewarm_preview_limit"] == 200
+
+    saved = user_settings.save_settings({"prewarm_preview_limit": 123}, preference_file)
+    assert saved["prewarm_preview_limit"] == 123
+
+    reloaded = user_settings.load_settings(preference_file)
+    assert reloaded["prewarm_preview_limit"] == 123
+
+
+def test_prewarm_preview_limit_is_clamped_to_valid_range(tmp_path, monkeypatch) -> None:
+    settings_file = tmp_path / "web-settings.json"
+    preference_file = tmp_path / "preferences.yml"
+    monkeypatch.setattr(user_settings, "SETTINGS_FILE", settings_file)
+
+    low = user_settings.save_settings({"prewarm_preview_limit": -5}, preference_file)
+    assert low["prewarm_preview_limit"] == 1
+
+    high = user_settings.save_settings({"prewarm_preview_limit": 999}, preference_file)
+    assert high["prewarm_preview_limit"] == 200
+
+    invalid = user_settings.save_settings({"prewarm_preview_limit": "not-a-number"}, preference_file)
+    assert invalid["prewarm_preview_limit"] == 200

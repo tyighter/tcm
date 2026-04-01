@@ -20,6 +20,7 @@ _DEFAULT_SETTINGS = {
     "entry_visibility_default_mode": "basic",
     "preview_cache_sweep_interval_seconds": 900,
     "prewarm_previews": True,
+    "prewarm_preview_limit": 200,
     "onboarding": {
         "dismissed": False,
         "completed_steps": {
@@ -67,6 +68,10 @@ def _merged_settings(data: dict[str, Any] | None) -> dict[str, Any]:
     prewarm_previews = data.get("prewarm_previews")
     if isinstance(prewarm_previews, bool):
         merged["prewarm_previews"] = prewarm_previews
+
+    prewarm_preview_limit = data.get("prewarm_preview_limit")
+    if isinstance(prewarm_preview_limit, (int, float)):
+        merged["prewarm_preview_limit"] = max(1, min(200, int(prewarm_preview_limit)))
 
     visibility_mode = data.get("entry_visibility_default_mode")
     if visibility_mode in {"basic", "advanced"}:
@@ -207,6 +212,15 @@ def save_settings(payload: Dict[str, Any], preference_file: Path | None = None) 
     settings["prewarm_previews"] = bool(
         payload.get("prewarm_previews", settings.get("prewarm_previews", True))
     )
+
+    prewarm_preview_limit = payload.get(
+        "prewarm_preview_limit",
+        settings.get("prewarm_preview_limit", _DEFAULT_SETTINGS["prewarm_preview_limit"]),
+    )
+    try:
+        settings["prewarm_preview_limit"] = max(1, min(200, int(str(prewarm_preview_limit).strip())))
+    except (TypeError, ValueError):
+        settings["prewarm_preview_limit"] = _DEFAULT_SETTINGS["prewarm_preview_limit"]
 
     visibility_mode = payload.get(
         "entry_visibility_default_mode",

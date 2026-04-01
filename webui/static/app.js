@@ -21,6 +21,7 @@ const state = {
   },
   settings: {
     series_sync_interval_seconds: 45,
+    prewarm_preview_limit: 200,
     entry_visibility_default_mode: 'basic',
     preference_setup_required: false,
     preference_file_generated: false,
@@ -6453,6 +6454,7 @@ function openSettingsModal() {
   const tautulli = state.settings?.tautulli || {};
   const seriesSyncInterval = Number(state.settings?.series_sync_interval_seconds);
   const prewarmPreviews = state.settings?.prewarm_previews !== false;
+  const prewarmPreviewLimit = Number(state.settings?.prewarm_preview_limit);
   const defaultVisibilityMode = defaultEntryVisibilityMode();
   const preferences = state.settings?.preferences || {};
 
@@ -6662,6 +6664,30 @@ function openSettingsModal() {
   prewarmField.append(prewarmLabel, prewarmInput);
   syncControls.append(prewarmField);
 
+  const prewarmLimitField = document.createElement('label');
+  prewarmLimitField.className = 'modal-controls__field';
+  const prewarmLimitLabel = document.createElement('span');
+  prewarmLimitLabel.className = 'modal-controls__label';
+  prewarmLimitLabel.textContent = 'Prewarm limit';
+  const prewarmLimitInput = document.createElement('input');
+  prewarmLimitInput.type = 'number';
+  prewarmLimitInput.min = '1';
+  prewarmLimitInput.max = '200';
+  prewarmLimitInput.step = '1';
+  prewarmLimitInput.inputMode = 'numeric';
+  prewarmLimitInput.value = Number.isFinite(prewarmPreviewLimit)
+    ? Math.max(1, Math.min(200, Math.round(prewarmPreviewLimit)))
+    : 200;
+  prewarmLimitField.append(prewarmLimitLabel, prewarmLimitInput);
+  syncControls.append(prewarmLimitField);
+
+  const syncPrewarmLimitControlState = () => {
+    prewarmLimitInput.disabled = !prewarmInput.checked;
+    prewarmLimitField.style.opacity = prewarmInput.checked ? '1' : '0.6';
+  };
+  syncPrewarmLimitControlState();
+  prewarmInput.addEventListener('change', syncPrewarmLimitControlState);
+
 
   const visibilityField = document.createElement('label');
   visibilityField.className = 'modal-controls__field';
@@ -6815,11 +6841,16 @@ function openSettingsModal() {
     const syncIntervalSeconds = Number.isFinite(parsedSyncInterval)
       ? Math.max(0, parsedSyncInterval)
       : 45;
+    const parsedPrewarmLimit = Number(prewarmLimitInput.value);
+    const prewarmPreviewLimitValue = Number.isFinite(parsedPrewarmLimit)
+      ? Math.max(1, Math.min(200, parsedPrewarmLimit))
+      : 200;
     try {
       const selectedVisibilityMode = normalizeEntryVisibilityMode(visibilitySelect.value);
       await saveSettings({
         series_sync_interval_seconds: syncIntervalSeconds,
         prewarm_previews: prewarmInput.checked,
+        prewarm_preview_limit: prewarmPreviewLimitValue,
         entry_visibility_default_mode: selectedVisibilityMode,
         tautulli: {
           url: urlInput.value,

@@ -77,7 +77,7 @@ _TRAILING_YEAR_PATTERNS = (
 
 _PREWARM_ENABLED_ENV = "TCM_WEBUI_PREWARM_PREVIEWS"
 _PREWARM_LIMIT_ENV = "TCM_WEBUI_PREWARM_LIMIT"
-_PREWARM_DEFAULT_LIMIT = 20
+_PREWARM_DEFAULT_LIMIT = 200
 _PREWARM_MIN_LIMIT = 1
 _PREWARM_MAX_LIMIT = 200
 
@@ -133,9 +133,13 @@ def _prewarm_preview_cache(context: AppContext, tv_manager: TvYamlManager) -> No
         )
         return
 
+    settings_default_limit = settings.get("prewarm_preview_limit", _PREWARM_DEFAULT_LIMIT)
+    if not isinstance(settings_default_limit, int):
+        settings_default_limit = _PREWARM_DEFAULT_LIMIT
+
     limit = _env_int(
         _PREWARM_LIMIT_ENV,
-        _PREWARM_DEFAULT_LIMIT,
+        settings_default_limit,
         minimum=_PREWARM_MIN_LIMIT,
         maximum=_PREWARM_MAX_LIMIT,
     )
