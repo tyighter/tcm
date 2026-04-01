@@ -124,8 +124,13 @@ def _env_int(name: str, default: int, *, minimum: int | None = None, maximum: in
 def _prewarm_preview_cache(context: AppContext, tv_manager: TvYamlManager) -> None:
     """Generate preview cache entries for a small initial set of series."""
 
-    if not _env_flag_enabled(_PREWARM_ENABLED_ENV, default=False):
-        logger.info("Preview prewarm disabled; set %s=true to enable", _PREWARM_ENABLED_ENV)
+    settings = load_settings(context.preference_file)
+    default_enabled = bool(settings.get("prewarm_previews", True))
+    if not _env_flag_enabled(_PREWARM_ENABLED_ENV, default=default_enabled):
+        logger.info(
+            "Preview prewarm disabled; set settings.prewarm_previews=true or %s=true to enable",
+            _PREWARM_ENABLED_ENV,
+        )
         return
 
     limit = _env_int(
