@@ -7257,6 +7257,329 @@ function openPreferenceWizardModal() {
 // -----------------------------------------------------------------------------
 // Add entry modal
 // -----------------------------------------------------------------------------
+function findFieldById(fieldId) {
+  return state.fields.find((field) => field.id === fieldId);
+}
+
+function setWizardFieldValue(entry, fieldId, value) {
+  const field = findFieldById(fieldId);
+  if (!field) {
+    throw new Error(`Missing field definition for ${fieldId}`);
+  }
+  updateField(entry, field, value);
+}
+
+async function fetchPreviewDataUrl(entry) {
+  const previewEpisode = resolvePreviewEpisode(entry);
+  const previewEpisodeOption = (entry.previewEpisodeOptions || []).find(
+    (option) => option.key === previewEpisode
+  );
+  const payload = {
+    name: entry.name,
+    config: entry.config,
+  };
+  if (previewEpisode && previewEpisode !== 'random') {
+    payload.previewEpisode = previewEpisode;
+  }
+  if (previewEpisodeOption) {
+    if (previewEpisodeOption.season || previewEpisodeOption.season === 0) {
+      payload.season = previewEpisodeOption.season;
+    }
+    if (previewEpisodeOption.episode || previewEpisodeOption.episode === 0) {
+      payload.episode = previewEpisodeOption.episode;
+    }
+  }
+  const response = await fetch('/api/preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.data) {
+    throw new Error(data.error || 'Preview unavailable');
+  }
+  return `data:${data.mime || 'image/png'};base64,${data.data}`;
+}
+
+function openTitleSizeModal({ initialValue, onApply }) {
+  const modal = buildModal('Episode title size (%)');
+  addFloatingCloseButton(modal, 'Close title size dialog');
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'modal-section';
+
+  const hint = document.createElement('p');
+  hint.className = 'helper-text';
+  hint.textContent = 'Enter a percentage (for example, 85 or 110%).';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = '100%';
+  input.value = normalizeFontSize(initialValue) ?? '';
+
+  wrapper.append(hint, input);
+  modal.content.appendChild(wrapper);
+
+  const save = document.createElement('button');
+  save.className = 'accent';
+  save.textContent = 'Apply';
+  save.addEventListener('click', () => {
+    const normalized = normalizeFontSize(input.value);
+    if (!normalized) {
+      showToast('Please enter a title size percentage.', 'error');
+      return;
+    }
+    onApply(normalized);
+    closeModal(modal.element);
+  });
+
+  modal.footer.append(save, closeButton(() => closeModal(modal.element)));
+}
+
+function openTitleColorModal({ initialValue, onApply }) {
+  const modal = buildModal('Episode title color');
+  addFloatingCloseButton(modal, 'Close title color dialog');
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'inline-actions color-input';
+
+  const colorInput = document.createElement('input');
+  colorInput.type = 'color';
+  colorInput.value = isValidHexColor(initialValue) ? initialValue : '#ffffff';
+
+  const textInput = document.createElement('input');
+  textInput.type = 'text';
+  textInput.placeholder = '#RRGGBB';
+  textInput.value = initialValue ?? '';
+
+  colorInput.addEventListener('input', () => {
+    textInput.value = colorInput.value;
+  });
+  textInput.addEventListener('input', () => {
+    if (isValidHexColor(textInput.value.trim())) {
+      colorInput.value = textInput.value.trim();
+    }
+  });
+
+  wrapper.append(colorInput, textInput);
+  modal.content.appendChild(wrapper);
+
+  const save = document.createElement('button');
+  save.className = 'accent';
+  save.textContent = 'Apply';
+  save.addEventListener('click', () => {
+    const nextValue = textInput.value.trim();
+    if (!isValidHexColor(nextValue)) {
+      showToast('Please enter a valid hex color.', 'error');
+      return;
+    }
+    onApply(nextValue);
+    closeModal(modal.element);
+  });
+
+  modal.footer.append(save, closeButton(() => closeModal(modal.element)));
+}
+
+function openEpisodeNumberFormatModal({ initialValue, onApply }) {
+  const modal = buildModal('Episode number text format');
+  addFloatingCloseButton(modal, 'Close episode number format dialog');
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'modal-section';
+
+  const hint = document.createElement('p');
+  hint.className = 'helper-text';
+  hint.textContent = 'Use placeholders or plain text for episode numbering.';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = initialValue ?? '';
+  enableEpisodeTextFormatHelper(input);
+
+  wrapper.append(hint, input);
+  modal.content.appendChild(wrapper);
+
+  const save = document.createElement('button');
+  save.className = 'accent';
+  save.textContent = 'Apply';
+  save.addEventListener('click', () => {
+    onApply(input.value);
+    closeModal(modal.element);
+  });
+
+  modal.footer.append(save, closeButton(() => closeModal(modal.element)));
+}
+
+function openNewEntryWizard(entry) {
+  const cardTypeField = findFieldById('card_type');
+  if (!cardTypeField) {
+    showToast('Card type options are unavailable.', 'error');
+    return;
+  }
+
+  const modal = buildModal('New show setup');
+  const closeControl = addFloatingCloseButton(modal, 'Exit setup and delete show entry');
+  closeControl.addEventListener('click', () => removeEntry(entry));
+
+  let selectedCardType = entry.config?.card_type || getDefaultCardType();
+  let previewImage = null;
+  let previewStatus = null;
+  let previewRequest = 0;
+
+  const renderCardTypeStep = () => {
+    modal.content.innerHTML = '';
+    modal.footer.innerHTML = '';
+
+    const section = document.createElement('section');
+    section.className = 'modal-section';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Choose card type';
+
+    const helper = document.createElement('p');
+    helper.className = 'helper-text';
+    helper.textContent = 'Pick a card type before previewing this show.';
+
+    const current = document.createElement('p');
+    current.className = 'helper-text';
+    current.textContent = `Current selection: ${selectedCardType}`;
+
+    const chooseButton = document.createElement('button');
+    chooseButton.className = 'accent';
+    chooseButton.textContent = 'Choose card type';
+    chooseButton.addEventListener('click', () => {
+      openCardTypeModal(cardTypeField, selectedCardType, (selection) => {
+        selectedCardType = selection;
+        current.textContent = `Current selection: ${selectedCardType}`;
+      });
+    });
+
+    section.append(title, helper, current, chooseButton);
+    modal.content.appendChild(section);
+
+    const nextButton = document.createElement('button');
+    nextButton.className = 'accent';
+    nextButton.textContent = 'Next';
+    nextButton.addEventListener('click', () => {
+      setWizardFieldValue(entry, 'card_type', selectedCardType);
+      renderPreviewStep();
+    });
+
+    modal.footer.append(nextButton);
+  };
+
+  const regeneratePreview = async () => {
+    const requestId = ++previewRequest;
+    previewStatus.textContent = 'Saving changes and generating preview…';
+    previewStatus.dataset.tone = 'muted';
+    try {
+      await saveConfiguration();
+      const src = await fetchPreviewDataUrl(entry);
+      if (requestId !== previewRequest) {
+        return;
+      }
+      entry.previewSrc = src;
+      entry.previewError = null;
+      updateEntryPreview(entry);
+      previewImage.src = src;
+      previewStatus.textContent = 'Preview updated.';
+      previewStatus.dataset.tone = 'success';
+    } catch (error) {
+      if (requestId !== previewRequest) {
+        return;
+      }
+      previewStatus.textContent = error.message || 'Preview unavailable';
+      previewStatus.dataset.tone = 'warning';
+      showToast(previewStatus.textContent, 'error');
+    }
+  };
+
+  const renderPreviewStep = () => {
+    modal.content.innerHTML = '';
+    modal.footer.innerHTML = '';
+
+    const section = document.createElement('section');
+    section.className = 'modal-section';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Preview';
+
+    const previewFrame = document.createElement('div');
+    previewFrame.className = 'entry-preview wizard-preview';
+
+    previewImage = document.createElement('img');
+    previewImage.className = 'entry-preview__image';
+    previewImage.alt = `${entry.name} preview`;
+    previewFrame.appendChild(previewImage);
+
+    previewStatus = document.createElement('p');
+    previewStatus.className = 'helper-text';
+
+    const actions = document.createElement('div');
+    actions.className = 'modal-actions';
+
+    const makeAction = (label, onClick) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.addEventListener('click', onClick);
+      return button;
+    };
+
+    actions.append(
+      makeAction('Change Font', () => {
+        openFontPickerModal({
+          initialPath: getValue(entry.config, ['font', 'file']) || state.fontDirectory,
+          onSelect: async (path) => {
+            setWizardFieldValue(entry, 'font.file', path);
+            await regeneratePreview();
+          },
+        });
+      }),
+      makeAction('Title size', () => {
+        openTitleSizeModal({
+          initialValue: getValue(entry.config, ['font', 'size']),
+          onApply: async (value) => {
+            setWizardFieldValue(entry, 'font.size', value);
+            await regeneratePreview();
+          },
+        });
+      }),
+      makeAction('Title Color', () => {
+        openTitleColorModal({
+          initialValue: getValue(entry.config, ['font', 'color']),
+          onApply: async (value) => {
+            setWizardFieldValue(entry, 'font.color', value);
+            await regeneratePreview();
+          },
+        });
+      }),
+      makeAction('Number Format', () => {
+        openEpisodeNumberFormatModal({
+          initialValue: getValue(entry.config, ['episode_number_text_format']),
+          onApply: async (value) => {
+            setWizardFieldValue(entry, 'episode_number_text_format', value || undefined);
+            await regeneratePreview();
+          },
+        });
+      })
+    );
+
+    section.append(title, previewFrame, previewStatus, actions);
+    modal.content.appendChild(section);
+
+    const doneButton = document.createElement('button');
+    doneButton.className = 'accent';
+    doneButton.textContent = 'Done';
+    doneButton.addEventListener('click', () => closeModal(modal.element));
+    modal.footer.append(doneButton);
+
+    void regeneratePreview();
+  };
+
+  renderCardTypeStep();
+}
+
 function openAddEntryModal() {
   const modal = buildModal('Add series entry');
   addFloatingCloseButton(modal, 'Close add series dialog');
@@ -7405,6 +7728,7 @@ function openAddEntryModal() {
 
     closeModal(modal.element);
     renderEntries();
+    openNewEntryWizard(newEntry);
   });
 
   modal.footer.appendChild(createButton);
