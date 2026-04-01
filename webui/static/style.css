@@ -256,6 +256,10 @@ button {
   white-space: nowrap;
 }
 
+.dirty-indicator[hidden] {
+  display: none;
+}
+
 .dirty-indicator::before {
   content: '';
   width: 0.5rem;
