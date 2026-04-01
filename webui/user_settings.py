@@ -19,6 +19,7 @@ _DEFAULT_SETTINGS = {
     "series_sync_interval_seconds": 45,
     "entry_visibility_default_mode": "basic",
     "preview_cache_sweep_interval_seconds": 900,
+    "prewarm_previews": True,
     "onboarding": {
         "dismissed": False,
         "completed_steps": {
@@ -62,6 +63,10 @@ def _merged_settings(data: dict[str, Any] | None) -> dict[str, Any]:
     sweep_interval = data.get("preview_cache_sweep_interval_seconds")
     if isinstance(sweep_interval, (int, float)):
         merged["preview_cache_sweep_interval_seconds"] = max(0, int(sweep_interval))
+
+    prewarm_previews = data.get("prewarm_previews")
+    if isinstance(prewarm_previews, bool):
+        merged["prewarm_previews"] = prewarm_previews
 
     visibility_mode = data.get("entry_visibility_default_mode")
     if visibility_mode in {"basic", "advanced"}:
@@ -198,6 +203,10 @@ def save_settings(payload: Dict[str, Any], preference_file: Path | None = None) 
         settings["preview_cache_sweep_interval_seconds"] = _DEFAULT_SETTINGS[
             "preview_cache_sweep_interval_seconds"
         ]
+
+    settings["prewarm_previews"] = bool(
+        payload.get("prewarm_previews", settings.get("prewarm_previews", True))
+    )
 
     visibility_mode = payload.get(
         "entry_visibility_default_mode",

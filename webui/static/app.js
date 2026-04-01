@@ -6308,6 +6308,7 @@ function openSettingsModal() {
 
   const tautulli = state.settings?.tautulli || {};
   const seriesSyncInterval = Number(state.settings?.series_sync_interval_seconds);
+  const prewarmPreviews = state.settings?.prewarm_previews !== false;
   const defaultVisibilityMode = defaultEntryVisibilityMode();
   const preferences = state.settings?.preferences || {};
 
@@ -6506,6 +6507,17 @@ function openSettingsModal() {
   syncField.append(syncLabel, syncInput);
   syncControls.append(syncField);
 
+  const prewarmField = document.createElement('label');
+  prewarmField.className = 'modal-controls__field';
+  const prewarmLabel = document.createElement('span');
+  prewarmLabel.className = 'modal-controls__label';
+  prewarmLabel.textContent = 'Prewarm previews on startup';
+  const prewarmInput = document.createElement('input');
+  prewarmInput.type = 'checkbox';
+  prewarmInput.checked = prewarmPreviews;
+  prewarmField.append(prewarmLabel, prewarmInput);
+  syncControls.append(prewarmField);
+
 
   const visibilityField = document.createElement('label');
   visibilityField.className = 'modal-controls__field';
@@ -6663,6 +6675,7 @@ function openSettingsModal() {
       const selectedVisibilityMode = normalizeEntryVisibilityMode(visibilitySelect.value);
       await saveSettings({
         series_sync_interval_seconds: syncIntervalSeconds,
+        prewarm_previews: prewarmInput.checked,
         entry_visibility_default_mode: selectedVisibilityMode,
         tautulli: {
           url: urlInput.value,

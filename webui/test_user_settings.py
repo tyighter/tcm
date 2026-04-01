@@ -88,3 +88,18 @@ def test_entry_visibility_default_mode_is_persisted(tmp_path, monkeypatch) -> No
         preference_file,
     )
     assert invalid_saved["entry_visibility_default_mode"] == "basic"
+
+
+def test_prewarm_previews_defaults_to_enabled_and_can_be_toggled(tmp_path, monkeypatch) -> None:
+    settings_file = tmp_path / "web-settings.json"
+    preference_file = tmp_path / "preferences.yml"
+    monkeypatch.setattr(user_settings, "SETTINGS_FILE", settings_file)
+
+    loaded = user_settings.load_settings(preference_file)
+    assert loaded["prewarm_previews"] is True
+
+    disabled = user_settings.save_settings({"prewarm_previews": False}, preference_file)
+    assert disabled["prewarm_previews"] is False
+
+    enabled = user_settings.save_settings({"prewarm_previews": True}, preference_file)
+    assert enabled["prewarm_previews"] is True
