@@ -2480,6 +2480,10 @@ function renderEntry(entry) {
 
 let previewObserver = null;
 const previewLoadOptions = new WeakMap();
+const PREVIEW_LOAD_CONCURRENCY = 6;
+let previewLoadsInFlight = 0;
+const previewQueue = [];
+const queuedPreviewEntries = new Set();
 
 function previewUrlForEntry(entry, { cacheBust = false } = {}) {
   if (!entry) {
@@ -2656,7 +2660,7 @@ async function invalidateEntryPreview(entry, options = {}) {
 
 async function loadEntryPreview(entry, options = {}) {
   if (!entry || entry.previewLoading) {
-    return;
+    return entry?.previewLoadPromise || Promise.resolve();
   }
   const { cacheBust = false } = options;
   const forceCacheBust = Boolean(cacheBust || entry.previewForceCacheBust);
@@ -2676,31 +2680,67 @@ async function loadEntryPreview(entry, options = {}) {
     return;
   }
 
-  const image = new Image();
-  image.onload = () => {
-    if (entry.previewRequestId !== requestId) {
-      return;
-    }
-    entry.previewSrc = src;
-    entry.previewLoading = false;
-    entry.previewError = null;
-    updateEntryPreview(entry);
-  };
-  image.onerror = () => {
-    if (entry.previewRequestId !== requestId) {
-      return;
-    }
-    entry.previewError = 'Preview unavailable';
-    entry.previewLoading = false;
-    updateEntryPreview(entry);
-  };
+  entry.previewLoadPromise = new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      if (entry.previewRequestId === requestId) {
+        entry.previewSrc = src;
+        entry.previewLoading = false;
+        entry.previewError = null;
+        updateEntryPreview(entry);
+      }
+      resolve();
+    };
+    image.onerror = () => {
+      if (entry.previewRequestId === requestId) {
+        entry.previewError = 'Preview unavailable';
+        entry.previewLoading = false;
+        updateEntryPreview(entry);
+      }
+      resolve();
+    };
 
-  image.src = src;
+    image.src = src;
+  }).finally(() => {
+    entry.previewLoadPromise = null;
+  });
+
+  return entry.previewLoadPromise;
+}
+
+function processPreviewQueue() {
+  while (previewLoadsInFlight < PREVIEW_LOAD_CONCURRENCY && previewQueue.length > 0) {
+    const { entry, options } = previewQueue.shift();
+    if (!entry) {
+      continue;
+    }
+
+    queuedPreviewEntries.delete(entry.id);
+    if (entry.previewSrc || entry.previewLoading) {
+      continue;
+    }
+
+    previewLoadsInFlight += 1;
+    void loadEntryPreview(entry, options).finally(() => {
+      previewLoadsInFlight = Math.max(0, previewLoadsInFlight - 1);
+      processPreviewQueue();
+    });
+  }
+}
+
+function queueEntryPreview(entry, options = {}) {
+  if (!entry || entry.previewSrc || entry.previewLoading || queuedPreviewEntries.has(entry.id)) {
+    return;
+  }
+
+  queuedPreviewEntries.add(entry.id);
+  previewQueue.push({ entry, options });
+  processPreviewQueue();
 }
 
 function requestEntryPreviews(entries = state.entries) {
   entries.forEach((entry) => {
-    void loadEntryPreview(entry);
+    queueEntryPreview(entry);
   });
 }
 
