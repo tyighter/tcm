@@ -30,8 +30,9 @@ class _StubEpisode:
 
 
 class _StubShow:
-    def __init__(self, episodes):
+    def __init__(self, episodes, media_directory=None):
         self.episodes = {episode.episode_info.key: episode for episode in episodes}
+        self.media_directory = media_directory
 
 
 def _bind_preview_resolver():
@@ -94,6 +95,66 @@ def test_resolve_preview_path_matches_season_and_episode(monkeypatch, tmp_path) 
     )
 
     assert path == preview_file
+
+
+def test_resolve_preview_path_falls_back_to_existing_card_for_preferred_episode(
+    monkeypatch, tmp_path
+) -> None:
+    media_dir = tmp_path / "media"
+    season_dir = media_dir / "Season 2"
+    season_dir.mkdir(parents=True)
+    matching_card = season_dir / "Demo.S02E03.jpg"
+    matching_card.write_bytes(b"demo")
+
+    monkeypatch.setattr(
+        server,
+        "_load_show_for_preview",
+        lambda *_args, **_kwargs: _StubShow(
+            [
+                _StubEpisode(1, 1, tmp_path / "missing-1.png"),
+                _StubEpisode(2, 3, tmp_path / "missing-2.png"),
+            ],
+            media_directory=media_dir,
+        ),
+    )
+
+    handler = _bind_preview_resolver()
+
+    path = handler._resolve_preview_path(
+        series_name="Demo",
+        series_config={},
+        preview_episode_key=None,
+        season="2",
+        episode="3",
+    )
+
+    assert path == matching_card
+
+
+def test_resolve_preview_path_returns_none_when_no_existing_cards(monkeypatch, tmp_path) -> None:
+    media_dir = tmp_path / "media"
+    media_dir.mkdir()
+
+    monkeypatch.setattr(
+        server,
+        "_load_show_for_preview",
+        lambda *_args, **_kwargs: _StubShow(
+            [_StubEpisode(1, 1, tmp_path / "missing.png")],
+            media_directory=media_dir,
+        ),
+    )
+
+    handler = _bind_preview_resolver()
+
+    path = handler._resolve_preview_path(
+        series_name="Demo",
+        series_config={},
+        preview_episode_key="1-1",
+        season=None,
+        episode=None,
+    )
+
+    assert path is None
 
 
 def test_preview_from_existing_sources_sets_cache_timestamp(monkeypatch, tmp_path) -> None:

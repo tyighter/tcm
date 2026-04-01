@@ -28,6 +28,7 @@ from .card_type_images import (
 )
 from .config import AppContext, create_app_context, preference_setup_required
 from .options import build_card_type_extras, build_series_fields
+from .preview_cards import select_existing_card
 from .services import (
     ActionInProgressError,
     active_action_status,
@@ -702,6 +703,15 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     return destination
             except OSError:
                 return None
+
+        preferred_episode_key: str | None = preview_episode_key
+        if candidate_episode is not None:
+            episode_info = getattr(candidate_episode, "episode_info", None)
+            preferred_episode_key = getattr(episode_info, "key", preview_episode_key)
+
+        fallback = select_existing_card(show, preferred_episode_key)
+        if fallback is not None:
+            return fallback
 
         return None
 
