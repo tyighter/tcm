@@ -352,6 +352,29 @@ def test_hide_seasons_select_does_not_mark_entry_dirty_when_value_missing():
     assert result["hasHideSeasons"] is False
 
 
+def test_hide_seasons_select_defaults_to_false_when_value_missing():
+    result = _run_js_scenario(
+        """
+        globalThis.document = {
+          createElement: () => ({
+            options: [],
+            appendChild(option) { this.options.push(option); },
+            addEventListener() {},
+          }),
+        };
+
+        const entry = { name: 'Example Show', config: { card_type: 'standard' } };
+        const field = { id: 'seasons.hide', path: ['seasons', 'hide'] };
+        const select = hideSeasonsSelect(entry, field, undefined);
+        const selected = select.options.find((option) => option.selected)?.value || null;
+
+        return { selected };
+        """
+    )
+
+    assert result["selected"] == "false"
+
+
 def test_normalization_parity_preview_episode_keys_do_not_trigger_dirty():
     result = _run_js_scenario(
         """
