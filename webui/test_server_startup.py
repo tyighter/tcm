@@ -58,6 +58,7 @@ def test_startup_tasks_skip_when_tv_yaml_invalid(monkeypatch, caplog) -> None:
 def _build_handler(path: str, tv_manager: object) -> server.WebRequestHandler:
     handler = server.WebRequestHandler.__new__(server.WebRequestHandler)
     handler.path = path
+    handler.command = "GET"
     handler.tv_manager = tv_manager
     handler.context = SimpleNamespace(
         preference_parser=SimpleNamespace(use_tmdb=True, use_plex=True),
@@ -68,7 +69,10 @@ def _build_handler(path: str, tv_manager: object) -> server.WebRequestHandler:
 
     handler._headers = []  # type: ignore[attr-defined]
     handler.wfile = io.BytesIO()
-    handler.send_response = MethodType(lambda self, status: setattr(self, "status", status), handler)
+    handler.send_response = MethodType(
+        lambda self, status, _message=None: setattr(self, "status", status),
+        handler,
+    )
     handler.send_header = MethodType(
         lambda self, key, value: self._headers.append((key, value)), handler
     )
@@ -399,7 +403,17 @@ def test_api_config_rejects_hard_validation_errors() -> None:
 def test_api_preview_generates_card(monkeypatch) -> None:
     generated: dict[str, object] = {}
 
-    def _mock_generate(context, tv_manager, name, config, *, force, preview_episode_key, prefer_existing):
+    def _mock_generate(
+        context,
+        tv_manager,
+        name,
+        config,
+        *,
+        force,
+        preview_episode_key,
+        prefer_existing,
+        explicit_regenerate,
+    ):
         generated.update(
             {
                 "context": context,
@@ -409,6 +423,7 @@ def test_api_preview_generates_card(monkeypatch) -> None:
                 "force": force,
                 "preview_episode_key": preview_episode_key,
                 "prefer_existing": prefer_existing,
+                "explicit_regenerate": explicit_regenerate,
             }
         )
         return "image/png", base64.b64encode(b"demo").decode("ascii")
@@ -440,9 +455,10 @@ def test_api_preview_generates_card(monkeypatch) -> None:
     assert generated["preview_episode_key"] == "1-2"
     assert generated["force"] is True
     assert generated["prefer_existing"] is False
+    assert generated["explicit_regenerate"] is True
 
 
-def test_api_preview_static_falls_back_to_generated_preview(monkeypatch) -> None:
+def test_api_preview_static_returns_not_found_without_disk_preview(monkeypatch) -> None:
     handler = _build_handler("/api/preview/static?name=Demo%20Show", SimpleNamespace())
 
     monkeypatch.setattr(
@@ -452,32 +468,9 @@ def test_api_preview_static_falls_back_to_generated_preview(monkeypatch) -> None
     )
     monkeypatch.setattr(handler, "_resolve_preview_path", lambda **_kwargs: None)
 
-    generated: dict[str, object] = {}
-
-    def _mock_get_or_generate(context, tv_manager, name, config, *, force, preview_episode_key, prefer_existing):
-        generated.update(
-            {
-                "name": name,
-                "config": config,
-                "force": force,
-                "preview_episode_key": preview_episode_key,
-                "prefer_existing": prefer_existing,
-            }
-        )
-        return "image/png", base64.b64encode(b"demo-static").decode("ascii")
-
-    monkeypatch.setattr(server, "get_or_generate_preview", _mock_get_or_generate)
-
     handler.do_GET()
 
-    assert handler.status == HTTPStatus.OK
-    assert ("Content-Type", "image/png") in handler._headers
-    assert handler.wfile.getvalue() == b"demo-static"
-    assert generated["name"] == "Demo Show"
-    assert generated["config"] == {"library": "TV"}
-    assert generated["force"] is False
-    assert generated["preview_episode_key"] is None
-    assert generated["prefer_existing"] is True
+    assert handler.status == HTTPStatus.NOT_FOUND
 
 
 def test_api_convert_legacy_tv_yaml_returns_backup_and_config() -> None:

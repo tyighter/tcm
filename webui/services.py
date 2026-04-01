@@ -77,6 +77,7 @@ class PreviewPayload:
     mime: str
     data: str
     source_path: Path | None
+    destination_path: Path | None = None
     existing_source: bool = False
     cached_at: float | None = None
     source_mtime: float | None = None
@@ -1175,9 +1176,48 @@ def _preview_from_existing_sources(
         mime=mime,
         data=data,
         source_path=selected_card,
+        destination_path=selected_card,
         existing_source=True,
         cached_at=time.time(),
         source_mtime=_stat_mtime(selected_card),
+    )
+
+
+def _atomic_write_preview_bytes(destination: Path, data: bytes) -> None:
+    """Write preview bytes to destination atomically via rename."""
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = destination.with_name(f".{destination.name}.tmp-{time.time_ns()}")
+    try:
+        temp_path.write_bytes(data)
+        temp_path.replace(destination)
+    finally:
+        try:
+            if temp_path.exists():
+                temp_path.unlink()
+        except OSError:
+            pass
+
+
+def _write_preview_payload_to_destination(payload: PreviewPayload) -> PreviewPayload:
+    """Persist payload bytes to destination and return payload with refreshed metadata."""
+
+    destination = payload.destination_path
+    if destination is None:
+        return payload
+
+    preview_bytes = base64.b64decode(payload.data)
+    _atomic_write_preview_bytes(destination, preview_bytes)
+    written_mtime = _stat_mtime(destination)
+
+    return PreviewPayload(
+        mime=payload.mime,
+        data=payload.data,
+        source_path=destination,
+        destination_path=destination,
+        existing_source=payload.existing_source,
+        cached_at=time.time(),
+        source_mtime=written_mtime,
     )
 
 
@@ -1275,6 +1315,7 @@ def get_or_generate_preview(
     force: bool = False,
     preview_episode_key: str | None = None,
     prefer_existing: bool = True,
+    explicit_regenerate: bool = False,
 ) -> tuple[str, str]:
     """Return a cached preview or generate and cache a new one."""
 
@@ -1416,6 +1457,11 @@ def get_or_generate_preview(
             )
             raise
 
+        if force and explicit_regenerate:
+            payload = _write_preview_payload_to_destination(payload)
+            with _preview_cache_lock:
+                _preview_cache.pop(cache_key, None)
+
         with _preview_cache_lock:
             _preview_cache[cache_key] = payload
         _persist_preview_payload(cache_key, payload)
@@ -1551,6 +1597,7 @@ def generate_preview(
         mime=resolved_mime,
         data=base64.b64encode(data).decode("ascii"),
         source_path=destination,
+        destination_path=destination,
         cached_at=time.time(),
         source_mtime=_stat_mtime(destination),
     )

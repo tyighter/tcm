@@ -1604,6 +1604,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     force=True,
                     preview_episode_key=preview_episode_key,
                     prefer_existing=False,
+                    explicit_regenerate=True,
                 )
             except Exception as exc:  # pylint: disable=broad-except
                 logger.exception("Unable to generate preview for %s", show_name)
