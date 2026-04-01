@@ -2095,11 +2095,13 @@ function renderEntry(entry) {
   titleContainer.className = 'entry-title';
   titleContainer.append(titleInput, titleValidation);
 
+  const building = isSeriesBuilding(entry.name);
+
   const buildIndicator = document.createElement('span');
   buildIndicator.className = 'entry-build-indicator';
   buildIndicator.innerHTML =
     '<span class="entry-build-indicator__spinner" aria-hidden="true"></span><span>Building…</span>';
-  buildIndicator.hidden = !isSeriesBuilding(entry.name);
+  buildIndicator.hidden = !building;
 
   const titleRow = document.createElement('div');
   titleRow.className = 'entry-title-row';
@@ -2231,7 +2233,16 @@ function renderEntry(entry) {
 
   const previewActions = document.createElement('div');
   previewActions.className = 'entry-preview-actions';
-  previewActions.append(buildButton, manageButton);
+  if (building) {
+    const buildChip = document.createElement('span');
+    buildChip.className = 'entry-build-chip';
+    buildChip.setAttribute('aria-live', 'polite');
+    buildChip.innerHTML =
+      '<span class="entry-build-indicator__spinner" aria-hidden="true"></span><span>Building cards</span>';
+    previewActions.append(buildChip, manageButton);
+  } else {
+    previewActions.append(buildButton, manageButton);
+  }
 
   previewGroup.append(previewActions);
 

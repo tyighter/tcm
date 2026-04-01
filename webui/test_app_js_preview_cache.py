@@ -117,3 +117,17 @@ def test_request_entry_previews_eagerly_loads_all_entries():
     output = completed.stdout.strip().splitlines()[-1]
     data = json.loads(output)
     assert data == ["a", "b", "c"]
+
+
+def test_building_state_toggles_preview_action_control():
+    """Ensure renderEntry swaps build button for a non-clickable building chip."""
+    app_js_source = APP_JS_PATH.read_text(encoding="utf-8")
+
+    assert "const building = isSeriesBuilding(entry.name);" in app_js_source
+    assert "buildIndicator.hidden = !building;" in app_js_source
+    assert "if (building) {" in app_js_source
+    assert "buildChip.className = 'entry-build-chip';" in app_js_source
+    assert "buildChip.setAttribute('aria-live', 'polite');" in app_js_source
+    assert "<span>Building cards</span>" in app_js_source
+    assert "previewActions.append(buildChip, manageButton);" in app_js_source
+    assert "previewActions.append(buildButton, manageButton);" in app_js_source
