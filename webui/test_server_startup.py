@@ -277,6 +277,66 @@ def test_prewarm_preview_cache_respects_settings_toggle(monkeypatch) -> None:
     assert calls == []
 
 
+def test_prewarm_preview_cache_uses_saved_limit_when_env_unset(monkeypatch) -> None:
+    context = SimpleNamespace(preference_file=Path("/tmp/preferences.yml"))
+    tv_manager = SimpleNamespace(
+        as_payload=lambda: {
+            "series": [
+                {"name": "Demo A", "config": {}},
+                {"name": "Demo B", "config": {}},
+            ]
+        }
+    )
+    calls: list[str] = []
+
+    monkeypatch.delenv(server._PREWARM_ENABLED_ENV, raising=False)
+    monkeypatch.delenv(server._PREWARM_LIMIT_ENV, raising=False)
+    monkeypatch.setattr(
+        server,
+        "load_settings",
+        lambda *_args, **_kwargs: {"prewarm_previews": True, "prewarm_preview_limit": 1},
+    )
+    monkeypatch.setattr(
+        server,
+        "get_or_generate_preview",
+        lambda _context, _tv_manager, show_name, *_args, **_kwargs: calls.append(show_name),
+    )
+
+    server._prewarm_preview_cache(context, tv_manager)
+
+    assert calls == ["Demo A"]
+
+
+def test_prewarm_preview_cache_env_limit_overrides_saved_limit(monkeypatch) -> None:
+    context = SimpleNamespace(preference_file=Path("/tmp/preferences.yml"))
+    tv_manager = SimpleNamespace(
+        as_payload=lambda: {
+            "series": [
+                {"name": "Demo A", "config": {}},
+                {"name": "Demo B", "config": {}},
+            ]
+        }
+    )
+    calls: list[str] = []
+
+    monkeypatch.delenv(server._PREWARM_ENABLED_ENV, raising=False)
+    monkeypatch.setenv(server._PREWARM_LIMIT_ENV, "2")
+    monkeypatch.setattr(
+        server,
+        "load_settings",
+        lambda *_args, **_kwargs: {"prewarm_previews": True, "prewarm_preview_limit": 1},
+    )
+    monkeypatch.setattr(
+        server,
+        "get_or_generate_preview",
+        lambda _context, _tv_manager, show_name, *_args, **_kwargs: calls.append(show_name),
+    )
+
+    server._prewarm_preview_cache(context, tv_manager)
+
+    assert calls == ["Demo A", "Demo B"]
+
+
 def test_api_config_rejects_hard_validation_errors() -> None:
     class _RecordingTvManager:
         def __init__(self) -> None:
