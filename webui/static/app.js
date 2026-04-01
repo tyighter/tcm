@@ -7422,6 +7422,7 @@ function openNewEntryWizard(entry) {
   closeControl.addEventListener('click', () => removeEntry(entry));
 
   let selectedCardType = entry.config?.card_type || getDefaultCardType();
+  let previewFrame = null;
   let previewImage = null;
   let previewStatus = null;
   let previewRequest = 0;
@@ -7470,6 +7471,8 @@ function openNewEntryWizard(entry) {
 
   const regeneratePreview = async () => {
     const requestId = ++previewRequest;
+    previewFrame.classList.add('entry-preview--loading');
+    previewFrame.classList.remove('entry-preview--loaded', 'entry-preview--error');
     previewStatus.textContent = 'Saving changes and generating preview…';
     previewStatus.dataset.tone = 'muted';
     try {
@@ -7482,12 +7485,16 @@ function openNewEntryWizard(entry) {
       entry.previewError = null;
       updateEntryPreview(entry);
       previewImage.src = src;
+      previewFrame.classList.add('entry-preview--loaded');
+      previewFrame.classList.remove('entry-preview--loading', 'entry-preview--error');
       previewStatus.textContent = 'Preview updated.';
       previewStatus.dataset.tone = 'success';
     } catch (error) {
       if (requestId !== previewRequest) {
         return;
       }
+      previewFrame.classList.add('entry-preview--error');
+      previewFrame.classList.remove('entry-preview--loading');
       previewStatus.textContent = error.message || 'Preview unavailable';
       previewStatus.dataset.tone = 'warning';
       showToast(previewStatus.textContent, 'error');
@@ -7504,13 +7511,18 @@ function openNewEntryWizard(entry) {
     const title = document.createElement('h3');
     title.textContent = 'Preview';
 
-    const previewFrame = document.createElement('div');
+    previewFrame = document.createElement('div');
     previewFrame.className = 'entry-preview wizard-preview';
 
     previewImage = document.createElement('img');
     previewImage.className = 'entry-preview__image';
     previewImage.alt = `${entry.name} preview`;
-    previewFrame.appendChild(previewImage);
+
+    const previewPlaceholder = document.createElement('span');
+    previewPlaceholder.className = 'entry-preview__placeholder';
+    previewPlaceholder.textContent = 'Loading preview...';
+
+    previewFrame.append(previewImage, previewPlaceholder);
 
     previewStatus = document.createElement('p');
     previewStatus.className = 'helper-text';
