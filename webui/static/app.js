@@ -3318,6 +3318,9 @@ function csvInput(entry, field, value) {
 }
 
 function normalizeHideSeasonsValue(value) {
+  if (value === undefined || value === null || value === '') {
+    return 'false';
+  }
   if (value === 'auto') {
     return 'auto';
   }
