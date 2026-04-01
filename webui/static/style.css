@@ -1,20 +1,20 @@
 
 :root {
   color-scheme: dark;
-  --bg: #121212;
-  --panel: #1b1b1f;
-  --panel-strong: #141418;
+  --bg: #121317;
+  --panel: #1a1c21;
+  --panel-strong: #16181d;
   --surface-raised: #232327;
   --surface-muted: #1a1a1d;
-  --border: #2f2f35;
+  --border: #313640;
   --accent: #e5a00d;
   --accent-strong: #f7c245;
   --text: #f1f1f3;
   --muted: #b6b6bd;
   --danger: #ff7b72;
-  --shadow-sm: 0 4px 10px rgba(0, 0, 0, 0.32);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.42);
-  --shadow-lg: 0 18px 38px rgba(0, 0, 0, 0.56);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.32);
   font-family: 'Inter', 'Segoe UI', 'Roboto', system-ui, -apple-system, sans-serif;
 }
 
@@ -25,8 +25,7 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at 32% -10%, rgba(229, 160, 13, 0.14), transparent 34%),
-    linear-gradient(180deg, #17171b 0%, #141418 35%, #111114 100%);
+  background: var(--bg);
   color: var(--text);
 }
 
@@ -57,7 +56,7 @@ button {
   align-items: center;
   gap: 1rem;
   padding: 0.8rem 1.15rem;
-  background: linear-gradient(180deg, #151518, #111114);
+  background: var(--panel-strong);
   border: 1px solid var(--border);
   border-radius: 10px;
   position: sticky;
@@ -83,13 +82,12 @@ button {
   width: 46px;
   height: 46px;
   border-radius: 10px;
-  background: linear-gradient(135deg, rgba(229, 160, 13, 0.18), rgba(229, 160, 13, 0.36));
+  background: rgba(229, 160, 13, 0.14);
   color: var(--accent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 6px 18px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(229, 160, 13, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(229, 160, 13, 0.28);
 }
 
 .header-left h1 {
@@ -109,7 +107,7 @@ button {
   padding: 0.75rem 0.9rem;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: linear-gradient(180deg, rgba(35, 35, 39, 0.92), rgba(24, 24, 28, 0.96));
+  background: var(--panel);
   box-shadow: var(--shadow-sm);
   display: grid;
   gap: 0.45rem;
@@ -310,38 +308,38 @@ button {
   padding: 0.55rem 0.95rem;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: linear-gradient(180deg, #2a2a2f, #1f1f24);
+  background: #24272e;
   color: var(--text);
   cursor: pointer;
   transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--shadow-sm);
+  box-shadow: var(--shadow-sm);
   position: relative;
   overflow: hidden;
 }
 
 button.primary {
-  background: linear-gradient(180deg, #f0b228, var(--accent));
+  background: var(--accent);
   border-color: rgba(229, 160, 13, 0.72);
   color: #101114;
 }
 
 button.accent {
-  background: linear-gradient(180deg, rgba(229, 160, 13, 0.18), rgba(229, 160, 13, 0.1));
+  background: rgba(229, 160, 13, 0.14);
   color: var(--accent);
   border: 1px solid rgba(229, 160, 13, 0.35);
   font-weight: 700;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), var(--shadow-sm);
+  box-shadow: var(--shadow-sm);
 }
 
 button:hover {
   transform: translateY(-1px);
-  background: linear-gradient(180deg, #323238, #24242a);
+  background: #2d3139;
   box-shadow: var(--shadow-md);
   border-color: rgba(229, 160, 13, 0.3);
 }
 
 button.accent:hover {
-  background: linear-gradient(180deg, rgba(229, 160, 13, 0.2), rgba(246, 198, 74, 0.28));
+  background: rgba(229, 160, 13, 0.2);
 }
 
 button:focus-visible {
@@ -383,7 +381,7 @@ button:disabled:hover {
 }
 
 .entry {
-  background: linear-gradient(180deg, #1b1b20, #17171b);
+  background: var(--panel);
   border-radius: 10px;
   border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
@@ -413,7 +411,7 @@ button:disabled:hover {
   gap: 1rem;
   padding: 1.1rem 1.5rem;
   border-bottom: 1px solid #34343a;
-  background: linear-gradient(180deg, #202025, #18181c);
+  background: #20232a;
 }
 
 .entry-remove {
@@ -425,13 +423,13 @@ button:disabled:hover {
   padding: 0;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: linear-gradient(180deg, #182233, #111926);
+  background: #172131;
   color: var(--danger);
   border-color: rgba(255, 123, 114, 0.55);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), var(--shadow-sm);
+  box-shadow: var(--shadow-sm);
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   z-index: 2;
 }
@@ -442,8 +440,8 @@ button:disabled:hover {
 
 .entry-remove:hover {
   transform: translateY(-1px) scale(1.02);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), var(--shadow-md);
-  background: linear-gradient(180deg, #1b2638, #131c2a);
+  box-shadow: var(--shadow-md);
+  background: #1b2638;
 }
 
 .entry-remove:focus-visible {
@@ -505,7 +503,7 @@ button:disabled:hover {
   padding: 0.35rem 0.55rem;
   border-radius: 8px;
   border: 1px solid rgba(229, 160, 13, 0.45);
-  background: linear-gradient(180deg, rgba(229, 160, 13, 0.2), rgba(229, 160, 13, 0.1));
+  background: rgba(229, 160, 13, 0.14);
   color: var(--accent-strong);
   font-size: 0.88rem;
   font-weight: 600;
@@ -531,7 +529,7 @@ button:disabled:hover {
   font-size: 1.25rem;
   font-weight: 600;
   line-height: 1;
-  background: linear-gradient(180deg, #182233, #111926);
+  background: #172131;
   border: 1px solid var(--border);
   flex-shrink: 0;
   padding: 0;
