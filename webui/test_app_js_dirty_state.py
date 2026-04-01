@@ -253,6 +253,31 @@ def test_user_edit_after_load_marks_dirty():
     assert "Example Show: card_type" in result["dirtyTitle"]
 
 
+def test_fingerprint_match_stays_clean_even_if_entry_order_cache_drifts():
+    result = _run_js_scenario(
+        """
+        const payload = {
+          fingerprint: 'remote-abc',
+          libraries: { 'TV Shows': '/mnt/tv' },
+          series: [{ name: 'Example Show', config: { card_type: 'standard' } }],
+        };
+        state.libraries = payload.libraries;
+        state.entries = payload.series.map((entry) => ({ name: entry.name, config: { ...entry.config } }));
+        assignPersistedBaseline(payload, payload.fingerprint);
+        state.persistedBaselineEntryOrder = ['0:Drifted Name'];
+        refreshDirtyState();
+
+        return {
+          isDirty: state.isDirty,
+          dirtyHidden: dom.dirtyIndicator.hidden,
+        };
+        """
+    )
+
+    assert result["isDirty"] is False
+    assert result["dirtyHidden"] is True
+
+
 def test_external_persisted_fingerprint_change_reconciles_dirty_state():
     result = _run_js_scenario(
         """

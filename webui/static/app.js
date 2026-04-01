@@ -7400,15 +7400,6 @@ function computeDirtyState() {
     return state.entries.length > 0;
   }
 
-  const currentOrder = currentEntryOrderForDirtyCheck();
-  if (state.persistedBaselineEntryOrder.length !== currentOrder.length) {
-    return true;
-  }
-
-  if (state.persistedBaselineEntryOrder.some((id, index) => id !== currentOrder[index])) {
-    return true;
-  }
-
   const currentPayload = buildCurrentNormalizedPayload();
   const currentFingerprint = baselineFingerprintFromPayload(currentPayload);
   return currentFingerprint !== state.persistedBaselineFingerprint;
