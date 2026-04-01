@@ -654,3 +654,95 @@ def test_get_or_generate_preview_falls_back_to_existing_card_when_generation_has
 
     assert mime == "image/jpeg"
     assert base64.b64decode(data) == b"existing"
+
+
+def test_explicit_regenerate_writes_generated_preview_to_episode_destination(
+    monkeypatch, tmp_path
+) -> None:
+    services._preview_cache.clear()
+    destination = tmp_path / "Season 01" / "S01E02.jpg"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(b"old-preview")
+
+    generated_payload = services.PreviewPayload(
+        mime="image/jpeg",
+        data=base64.b64encode(b"new-preview").decode("ascii"),
+        source_path=tmp_path / "generated-temp.jpg",
+        destination_path=destination,
+        cached_at=time.time(),
+    )
+
+    monkeypatch.setattr(services, "_load_show_for_preview", lambda *_args, **_kwargs: SimpleNamespace())
+    monkeypatch.setattr(services, "_preview_from_existing_sources", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(services, "generate_preview", lambda *_args, **_kwargs: generated_payload)
+    monkeypatch.setattr(services, "_show_logger", lambda *_args, **_kwargs: None)
+
+    mime, data = services.get_or_generate_preview(
+        context=SimpleNamespace(),
+        tv_manager=SimpleNamespace(),
+        show_name="Demo Show",
+        series_config={"library": "TV"},
+        force=True,
+        preview_episode_key="1-2",
+        prefer_existing=False,
+        explicit_regenerate=True,
+    )
+
+    assert mime == "image/jpeg"
+    assert data == generated_payload.data
+    assert destination.read_bytes() == b"new-preview"
+
+
+def test_explicit_regenerate_updates_static_preview_path_without_regeneration(
+    monkeypatch, tmp_path
+) -> None:
+    destination = tmp_path / "card.jpg"
+    destination.write_bytes(b"old")
+
+    generated_payload = services.PreviewPayload(
+        mime="image/jpeg",
+        data=base64.b64encode(b"updated").decode("ascii"),
+        source_path=destination,
+        destination_path=destination,
+        cached_at=time.time(),
+    )
+    monkeypatch.setattr(services, "_load_show_for_preview", lambda *_args, **_kwargs: SimpleNamespace())
+    monkeypatch.setattr(services, "_preview_from_existing_sources", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(services, "generate_preview", lambda *_args, **_kwargs: generated_payload)
+    monkeypatch.setattr(services, "_show_logger", lambda *_args, **_kwargs: None)
+
+    services.get_or_generate_preview(
+        context=SimpleNamespace(),
+        tv_manager=SimpleNamespace(),
+        show_name="Demo Show",
+        series_config={"library": "TV"},
+        force=True,
+        preview_episode_key="1-2",
+        prefer_existing=False,
+        explicit_regenerate=True,
+    )
+
+    generate_calls: list[str] = []
+    monkeypatch.setattr(
+        server,
+        "_load_show_for_preview",
+        lambda *_args, **_kwargs: _StubShow([_StubEpisode(1, 2, destination)]),
+    )
+    monkeypatch.setattr(
+        services,
+        "get_or_generate_preview",
+        lambda *_args, **_kwargs: generate_calls.append("called"),
+    )
+
+    handler = _bind_preview_resolver()
+    resolved = handler._resolve_preview_path(
+        series_name="Demo Show",
+        series_config={},
+        preview_episode_key="1-2",
+        season=None,
+        episode=None,
+    )
+
+    assert resolved == destination
+    assert destination.read_bytes() == b"updated"
+    assert generate_calls == []
