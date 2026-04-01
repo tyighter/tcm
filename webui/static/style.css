@@ -495,6 +495,24 @@ button:disabled:hover {
   flex-shrink: 0;
 }
 
+.entry-build-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 30px;
+  min-width: 98px;
+  padding: 0.35rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid rgba(229, 160, 13, 0.45);
+  background: linear-gradient(180deg, rgba(229, 160, 13, 0.2), rgba(229, 160, 13, 0.1));
+  color: var(--accent-strong);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
 .entry-logo-wrapper {
   display: flex;
   flex-direction: row;
