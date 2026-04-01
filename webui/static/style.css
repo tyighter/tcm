@@ -687,6 +687,41 @@ button:disabled:hover {
   flex: 1;
 }
 
+.entry-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.entry-build-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(229, 160, 13, 0.45);
+  background: rgba(229, 160, 13, 0.12);
+  color: var(--accent-strong);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.entry-build-indicator__spinner {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  border: 2px solid rgba(247, 194, 69, 0.35);
+  border-top-color: var(--accent-strong);
+  animation: entry-build-spin 1s linear infinite;
+}
+
+@keyframes entry-build-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 
 .entry-header input[type="text"] {
   font-size: 1.1rem;

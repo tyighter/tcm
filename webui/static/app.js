@@ -14,6 +14,7 @@ const state = {
   logoCache: {},
   cardTypeExtras: {},
   logoBackgrounds: new Map(),
+  buildingSeries: {},
   services: {
     tmdbEnabled: true,
     plexEnabled: true,
@@ -70,6 +71,8 @@ document.body.appendChild(toastContainer);
 
 const CLIENT_LOG_ENDPOINT = '/api/client-log';
 const LOGO_BACKGROUND_STORAGE_KEY = 'tcm-logo-backgrounds';
+const BUILDING_SERIES_STORAGE_KEY = 'tcm-building-series';
+const BUILDING_SERIES_MAX_AGE_MS = 1000 * 60 * 60 * 6;
 const CACHE_DB_NAME = 'tcm-cache';
 const CACHE_DB_VERSION = 2;
 const CACHE_DB_OPEN_TIMEOUT_MS = 2000;
@@ -199,6 +202,81 @@ entryPreviewHoverElement.appendChild(entryPreviewHoverImage);
 document.body.appendChild(entryPreviewHoverElement);
 
 const pendingDestructiveActions = new Map();
+
+function normalizeBuildingSeriesName(name) {
+  return String(name || '').trim().toLowerCase();
+}
+
+function pruneStaleBuildingSeries(now = Date.now()) {
+  let changed = false;
+  state.buildingSeries = state.buildingSeries || {};
+  Object.entries(state.buildingSeries).forEach(([seriesName, timestamp]) => {
+    if (!seriesName || !Number.isFinite(timestamp) || now - timestamp > BUILDING_SERIES_MAX_AGE_MS) {
+      delete state.buildingSeries[seriesName];
+      changed = true;
+    }
+  });
+  return changed;
+}
+
+function persistBuildingSeriesState() {
+  try {
+    pruneStaleBuildingSeries();
+    localStorage.setItem(BUILDING_SERIES_STORAGE_KEY, JSON.stringify(state.buildingSeries || {}));
+  } catch (error) {
+    // Ignore storage issues.
+  }
+}
+
+function loadBuildingSeriesState() {
+  try {
+    const stored = localStorage.getItem(BUILDING_SERIES_STORAGE_KEY);
+    const parsed = stored ? JSON.parse(stored) : {};
+    state.buildingSeries =
+      parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch (error) {
+    state.buildingSeries = {};
+  }
+  if (pruneStaleBuildingSeries()) {
+    persistBuildingSeriesState();
+  }
+}
+
+function setSeriesBuildingState(seriesNames, isBuilding) {
+  const names = Array.isArray(seriesNames) ? seriesNames : [seriesNames];
+  state.buildingSeries = state.buildingSeries || {};
+  const timestamp = Date.now();
+  names.forEach((name) => {
+    const key = normalizeBuildingSeriesName(name);
+    if (!key) {
+      return;
+    }
+    if (isBuilding) {
+      state.buildingSeries[key] = timestamp;
+    } else {
+      delete state.buildingSeries[key];
+    }
+  });
+  persistBuildingSeriesState();
+}
+
+function isSeriesBuilding(name) {
+  const key = normalizeBuildingSeriesName(name);
+  if (!key) {
+    return false;
+  }
+  state.buildingSeries = state.buildingSeries || {};
+  const timestamp = state.buildingSeries[key];
+  if (!Number.isFinite(timestamp)) {
+    return false;
+  }
+  if (Date.now() - timestamp > BUILDING_SERIES_MAX_AGE_MS) {
+    delete state.buildingSeries[key];
+    persistBuildingSeriesState();
+    return false;
+  }
+  return true;
+}
 
 function makeValidationIssue(severity, message) {
   return { severity, message };
@@ -786,6 +864,7 @@ async function init() {
   try {
     await loadLogoCache();
     loadLogoBackgroundPreferences();
+    loadBuildingSeriesState();
     await loadMetadata();
     await loadSettings();
     await loadConfiguration();
@@ -1478,6 +1557,14 @@ function registerEvents() {
         {
           workingLabel: 'Building...',
           refresh: true,
+          onStart: () => {
+            setSeriesBuildingState(state.entries.map((entry) => entry.name), true);
+            renderEntries();
+          },
+          onFinish: () => {
+            setSeriesBuildingState(state.entries.map((entry) => entry.name), false);
+            renderEntries();
+          },
           onSuccess: () => {
             markOnboardingStepComplete('run_build');
             refreshEntryPreviews(undefined, { cacheBust: true });
@@ -1629,6 +1716,14 @@ function openEntryActionsModal(entry, entryPayload) {
               workingLabel: 'Fresh building...',
               refresh: false,
               payload: entryPayload(),
+              onStart: () => {
+                setSeriesBuildingState(entry.name, true);
+                renderEntries();
+              },
+              onFinish: () => {
+                setSeriesBuildingState(entry.name, false);
+                renderEntries();
+              },
               onSuccess: () => refreshEntryPreviews([entry], { cacheBust: true }),
             }
           ),
@@ -1984,6 +2079,7 @@ function renderEntry(entry) {
     const originalName = titleInput.dataset.originalName;
     if (originalName && originalName !== entry.name) {
       moveLogoBackgroundPreference(originalName, entry.name);
+      moveBuildingSeriesState(originalName, entry.name);
       syncLogoBackground();
       await Promise.all([
         evictSeriesPreviewCache(originalName),
@@ -1998,6 +2094,16 @@ function renderEntry(entry) {
   const titleContainer = document.createElement('div');
   titleContainer.className = 'entry-title';
   titleContainer.append(titleInput, titleValidation);
+
+  const buildIndicator = document.createElement('span');
+  buildIndicator.className = 'entry-build-indicator';
+  buildIndicator.innerHTML =
+    '<span class="entry-build-indicator__spinner" aria-hidden="true"></span><span>Building…</span>';
+  buildIndicator.hidden = !isSeriesBuilding(entry.name);
+
+  const titleRow = document.createElement('div');
+  titleRow.className = 'entry-title-row';
+  titleRow.append(titleContainer, buildIndicator);
   attachFieldValidation({
     input: titleInput,
     messageNode: titleValidation,
@@ -2006,7 +2112,7 @@ function renderEntry(entry) {
     validators: [validateYearSuffix],
   });
 
-  summaryBody.append(titleContainer, media);
+  summaryBody.append(titleRow, media);
   summary.append(toggleButton, summaryBody);
   syncToggleAppearance();
 
@@ -2026,6 +2132,14 @@ function renderEntry(entry) {
         workingLabel: 'Building...',
         refresh: false,
         payload: entryPayload(),
+        onStart: () => {
+          setSeriesBuildingState(entry.name, true);
+          renderEntries();
+        },
+        onFinish: () => {
+          setSeriesBuildingState(entry.name, false);
+          renderEntries();
+        },
         onSuccess: () => refreshEntryPreviews([entry], { cacheBust: true }),
       }
     )
@@ -2667,6 +2781,22 @@ function moveLogoBackgroundPreference(oldName, newName) {
   state.logoBackgrounds.delete(oldName);
   state.logoBackgrounds.set(newName, existing);
   persistLogoBackgroundPreferences();
+}
+
+function moveBuildingSeriesState(oldName, newName) {
+  const oldKey = normalizeBuildingSeriesName(oldName);
+  const newKey = normalizeBuildingSeriesName(newName);
+  if (!oldKey || !newKey || oldKey === newKey) {
+    return;
+  }
+  state.buildingSeries = state.buildingSeries || {};
+  const existing = state.buildingSeries[oldKey];
+  if (!Number.isFinite(existing)) {
+    return;
+  }
+  delete state.buildingSeries[oldKey];
+  state.buildingSeries[newKey] = existing;
+  persistBuildingSeriesState();
 }
 
 function renderFieldRow(entry, field, value) {
@@ -8324,7 +8454,7 @@ async function triggerServerAction(
   button,
   endpoint,
   successMessage,
-  { workingLabel = 'Working...', refresh = true, payload, onSuccess } = {}
+  { workingLabel = 'Working...', refresh = true, payload, onStart, onSuccess, onFinish } = {}
 ) {
   if (!button) {
     return;
@@ -8333,6 +8463,9 @@ async function triggerServerAction(
   const originalText = button.textContent;
   button.disabled = true;
   button.textContent = workingLabel;
+  if (typeof onStart === 'function') {
+    onStart();
+  }
 
   try {
     const requestOptions = { method: 'POST' };
@@ -8366,6 +8499,9 @@ async function triggerServerAction(
     console.error('Action request failed', { endpoint, payload, error });
     showToast(message, 'error');
   } finally {
+    if (typeof onFinish === 'function') {
+      onFinish();
+    }
     button.disabled = false;
     button.textContent = originalText;
   }
