@@ -31,6 +31,7 @@ from .config import AppContext, create_app_context, preference_setup_required
 from .options import build_card_type_extras, build_series_fields
 from .services import (
     ActionInProgressError,
+    active_action_status,
     backfill_episode_rating_keys,
     backfill_rating_keys,
     backfill_tmdb_ids,
@@ -49,6 +50,7 @@ from .services import (
     run_fresh_build_for_series,
     run_metadata_sync,
     revert_series_cards,
+    register_action_context,
     search_plex,
     _load_show_for_preview,
 )
@@ -811,7 +813,8 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         if context:
             logger.info("Running action: %s", context)
         try:
-            action()
+            with register_action_context(context):
+                action()
         except ActionInProgressError as exc:
             self._error(str(exc), status=HTTPStatus.CONFLICT)
             return
@@ -1276,6 +1279,10 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                     "tautulli": self._tautulli_connection_status(),
                 }
             )
+            return
+
+        if parsed.path == "/api/actions/status":
+            self._json_response(active_action_status())
             return
 
         if parsed.path == "/api/backups":
