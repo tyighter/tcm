@@ -73,8 +73,8 @@ def test_restore_cached_preview_executes():
     assert data["season"] == "2"
 
 
-def test_request_entry_previews_eagerly_loads_all_entries():
-    """Ensure previews are requested immediately instead of waiting for intersection."""
+def test_request_entry_previews_queues_all_entries():
+    """Ensure preview requests enqueue each entry for progressive loading."""
     node = _node_path()
     if not node:
         pytest.skip("node is required for preview request harness")
@@ -101,11 +101,11 @@ def test_request_entry_previews_eagerly_loads_all_entries():
 
     harness = f"""
     {function_source}
-    const loaded = [];
+    const queued = [];
     const state = {{ entries: [] }};
-    const loadEntryPreview = (entry) => loaded.push(entry.id);
+    const queueEntryPreview = (entry) => queued.push(entry.id);
     requestEntryPreviews([{{ id: "a" }}, {{ id: "b" }}, {{ id: "c" }}]);
-    console.log(JSON.stringify(loaded));
+    console.log(JSON.stringify(queued));
     """
 
     completed = subprocess.run(
