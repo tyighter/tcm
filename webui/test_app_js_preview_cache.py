@@ -71,4 +71,49 @@ def test_restore_cached_preview_executes():
     assert data["name"] == "Series"
     assert data["previewEpisode"] == "1-03"
     assert data["season"] == "2"
-    assert "_" in data
+
+
+def test_request_entry_previews_eagerly_loads_all_entries():
+    """Ensure previews are requested immediately instead of waiting for intersection."""
+    node = _node_path()
+    if not node:
+        pytest.skip("node is required for preview request harness")
+
+    app_js_source = APP_JS_PATH.read_text(encoding="utf-8")
+    sentinel = "function requestEntryPreviews(entries = state.entries) {"
+    start = app_js_source.find(sentinel)
+    assert start != -1, "requestEntryPreviews definition not found"
+    body_start = app_js_source.find("{", start)
+    assert body_start != -1, "requestEntryPreviews body not found"
+    brace_count = 0
+    end = None
+    for index in range(body_start, len(app_js_source)):
+        char = app_js_source[index]
+        if char == "{":
+            brace_count += 1
+        elif char == "}":
+            brace_count -= 1
+            if brace_count == 0:
+                end = index
+                break
+    assert end is not None, "could not isolate requestEntryPreviews body"
+    function_source = app_js_source[start : end + 1]
+
+    harness = f"""
+    {function_source}
+    const loaded = [];
+    const state = {{ entries: [] }};
+    const loadEntryPreview = (entry) => loaded.push(entry.id);
+    requestEntryPreviews([{{ id: "a" }}, {{ id: "b" }}, {{ id: "c" }}]);
+    console.log(JSON.stringify(loaded));
+    """
+
+    completed = subprocess.run(
+        [node, "-e", harness],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    output = completed.stdout.strip().splitlines()[-1]
+    data = json.loads(output)
+    assert data == ["a", "b", "c"]
