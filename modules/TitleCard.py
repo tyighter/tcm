@@ -2,7 +2,8 @@ from pathlib import Path
 from re import match, sub, IGNORECASE
 
 import inspect
-from typing import Any, Optional, TYPE_CHECKING, get_args, get_origin
+import types
+from typing import Any, Literal, Optional, TYPE_CHECKING, Union, get_args, get_origin
 
 from modules import global_objects
 from modules.BaseCardType import BaseCardType
@@ -414,22 +415,74 @@ class TitleCard:
             return None
 
         candidates: set[type] = set()
+        primitives = (int, float, bool)
+
+        def literal_candidate(value: Any) -> type | None:
+            if isinstance(value, bool):
+                return bool
+            if isinstance(value, int):
+                return int
+            if isinstance(value, float):
+                return float
+            return None
+
+        def collect(annotation: Any) -> tuple[bool, bool]:
+            """
+            Collect coercible primitive types.
+
+            Returns:
+                Tuple of ``(safe, contributed)``, where ``safe`` indicates the
+                annotation is unambiguously primitive-coercible, and
+                ``contributed`` indicates at least one primitive type was found.
+            """
+
+            if annotation is inspect._empty:
+                return True, False
+
+            if annotation in primitives:
+                candidates.add(annotation)
+                return True, True
+
+            origin = get_origin(annotation)
+            if origin is None:
+                return False, False
+
+            if origin in (types.UnionType, Union):
+                safe = True
+                contributed = False
+                for arg in get_args(annotation):
+                    if arg is type(None):
+                        continue
+                    arg_safe, arg_contributed = collect(arg)
+                    if arg_contributed:
+                        contributed = True
+                    if not arg_safe or not arg_contributed:
+                        safe = False
+                if not contributed:
+                    return False, False
+                return safe, True
+
+            if origin is Literal:
+                literal_types = set()
+                for value in get_args(annotation):
+                    candidate = literal_candidate(value)
+                    if candidate is None:
+                        return False, False
+                    literal_types.add(candidate)
+                if not literal_types:
+                    return False, False
+                candidates.update(literal_types)
+                return True, True
+
+            return False, False
 
         annotation = param.annotation
-        origin = get_origin(annotation)
-        args = get_args(annotation) if origin else ()
+        safe_annotation, _ = collect(annotation)
 
-        def add_candidate(type_: Any) -> None:
-            if type_ in (int, float, bool):
-                candidates.add(type_)
+        if not safe_annotation:
+            return None
 
-        if origin is not None:
-            for arg in args:
-                add_candidate(arg)
-        else:
-            add_candidate(annotation)
-
-        if not candidates and isinstance(param.default, (int, float, bool)):
+        if not candidates and annotation in (inspect._empty, Any) and isinstance(param.default, (int, float, bool)):
             candidates.add(type(param.default))
 
         if not candidates:
