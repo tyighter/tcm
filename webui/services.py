@@ -30,6 +30,10 @@ from modules.SeriesInfo import SeriesInfo
 from modules.TMDbInterface import TMDbInterface
 
 from .config import AppContext
+from .preview_cards import (
+    existing_card_path as _shared_existing_card_path,
+    select_existing_card as _shared_select_existing_card,
+)
 from .tv_data import TvYamlManager, _to_builtin, _to_commented
 from .user_settings import load_settings
 
@@ -1100,66 +1104,11 @@ def _load_show_for_preview(
 
 
 def _existing_card_path(show: Show, episode: Episode | None) -> Path | None:
-    if episode is None:
-        return None
-
-    if episode.destination is not None and episode.destination.exists():
-        return episode.destination
-
-    if not show.media_directory:
-        return None
-
-    search_roots: list[Path] = []
-    season_dir = Path(show.media_directory) / f"Season {episode.episode_info.season_number}"
-    search_roots.append(season_dir)
-    search_roots.append(Path(show.media_directory))
-
-    candidates: list[Path] = []
-    for root in search_roots:
-        try:
-            if not root.exists() or not root.is_dir():
-                continue
-        except OSError:
-            continue
-
-        for pattern in ("*.jpg", "*.jpeg", "*.png", "*.webp"):
-            candidates.extend(sorted(root.rglob(pattern)))
-
-    if not candidates:
-        return None
-
-    episode_pattern = re.compile(
-        rf"(?i)(s0*{episode.episode_info.season_number}e0*{episode.episode_info.episode_number}|"
-        rf"{episode.episode_info.season_number}x0*{episode.episode_info.episode_number})"
-    )
-
-    matching = [
-        candidate
-        for candidate in candidates
-        if episode_pattern.search(candidate.name)
-    ]
-
-    return (matching or candidates)[0]
+    return _shared_existing_card_path(show, episode)
 
 
 def _select_existing_card(show: Show, preferred_episode_key: str | None) -> Path | None:
-    preferred_episode = (
-        show.episodes.get(preferred_episode_key) if preferred_episode_key else None
-    )
-    preferred_card = _existing_card_path(show, preferred_episode)
-
-    available_cards = [
-        (episode, _existing_card_path(show, episode))
-        for episode in show.episodes.values()
-    ]
-    available_cards = [item for item in available_cards if item[1] is not None]
-
-    if preferred_card is not None:
-        return preferred_card
-    if available_cards:
-        _, selected_card = random.choice(available_cards)
-        return selected_card
-    return None
+    return _shared_select_existing_card(show, preferred_episode_key)
 
 
 def _preview_from_existing_sources(
