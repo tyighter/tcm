@@ -7426,6 +7426,8 @@ function openNewEntryWizard(entry) {
   let previewImage = null;
   let previewStatus = null;
   let previewRequest = 0;
+  let previewRequestsInFlight = 0;
+  let wizardActionButtons = [];
 
   const renderCardTypeStep = () => {
     modal.content.innerHTML = '';
@@ -7469,14 +7471,26 @@ function openNewEntryWizard(entry) {
     modal.footer.append(nextButton);
   };
 
+  const setPreviewLoadingState = (isLoading) => {
+    wizardActionButtons.forEach((button) => {
+      button.disabled = isLoading;
+    });
+    if (isLoading) {
+      previewFrame.classList.add('entry-preview--loading');
+      previewFrame.classList.remove('entry-preview--loaded', 'entry-preview--error');
+      previewStatus.innerHTML =
+        '<span class="entry-build-indicator__spinner" aria-hidden="true"></span><span>Generating preview…</span>';
+      previewStatus.dataset.tone = 'muted';
+      return;
+    }
+    previewFrame.classList.remove('entry-preview--loading');
+  };
+
   const regeneratePreview = async () => {
     const requestId = ++previewRequest;
-    previewFrame.classList.add('entry-preview--loading');
-    previewFrame.classList.remove('entry-preview--loaded', 'entry-preview--error');
-    previewStatus.textContent = 'Saving changes and generating preview…';
-    previewStatus.dataset.tone = 'muted';
+    previewRequestsInFlight += 1;
+    setPreviewLoadingState(true);
     try {
-      await saveConfiguration();
       const src = await fetchPreviewDataUrl(entry);
       if (requestId !== previewRequest) {
         return;
@@ -7486,7 +7500,7 @@ function openNewEntryWizard(entry) {
       updateEntryPreview(entry);
       previewImage.src = src;
       previewFrame.classList.add('entry-preview--loaded');
-      previewFrame.classList.remove('entry-preview--loading', 'entry-preview--error');
+      previewFrame.classList.remove('entry-preview--error');
       previewStatus.textContent = 'Preview updated.';
       previewStatus.dataset.tone = 'success';
     } catch (error) {
@@ -7494,10 +7508,15 @@ function openNewEntryWizard(entry) {
         return;
       }
       previewFrame.classList.add('entry-preview--error');
-      previewFrame.classList.remove('entry-preview--loading');
+      previewFrame.classList.remove('entry-preview--loaded');
       previewStatus.textContent = error.message || 'Preview unavailable';
       previewStatus.dataset.tone = 'warning';
       showToast(previewStatus.textContent, 'error');
+    } finally {
+      previewRequestsInFlight = Math.max(0, previewRequestsInFlight - 1);
+      if (previewRequestsInFlight === 0) {
+        setPreviewLoadingState(false);
+      }
     }
   };
 
@@ -7530,11 +7549,13 @@ function openNewEntryWizard(entry) {
     const actions = document.createElement('div');
     actions.className = 'modal-actions';
 
+    wizardActionButtons = [];
     const makeAction = (label, onClick) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.textContent = label;
       button.addEventListener('click', onClick);
+      wizardActionButtons.push(button);
       return button;
     };
 
@@ -7580,11 +7601,29 @@ function openNewEntryWizard(entry) {
     section.append(title, previewFrame, previewStatus, actions);
     modal.content.appendChild(section);
 
+    const saveAndDoneButton = document.createElement('button');
+    saveAndDoneButton.className = 'accent';
+    saveAndDoneButton.textContent = 'Save & Done';
+    saveAndDoneButton.addEventListener('click', async () => {
+      saveAndDoneButton.disabled = true;
+      previewStatus.textContent = 'Saving configuration…';
+      previewStatus.dataset.tone = 'muted';
+      try {
+        await saveConfiguration();
+        closeModal(modal.element);
+      } catch (error) {
+        previewStatus.textContent = error.message || 'Unable to save configuration';
+        previewStatus.dataset.tone = 'warning';
+      } finally {
+        saveAndDoneButton.disabled = false;
+      }
+    });
+
     const doneButton = document.createElement('button');
-    doneButton.className = 'accent';
-    doneButton.textContent = 'Done';
+    doneButton.textContent = 'Done (keep unsaved)';
     doneButton.addEventListener('click', () => closeModal(modal.element));
-    modal.footer.append(doneButton);
+    wizardActionButtons.push(saveAndDoneButton, doneButton);
+    modal.footer.append(saveAndDoneButton, doneButton);
 
     void regeneratePreview();
   };

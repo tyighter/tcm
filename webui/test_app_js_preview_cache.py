@@ -131,3 +131,33 @@ def test_building_state_toggles_preview_action_control():
     assert "<span>Building cards</span>" in app_js_source
     assert "previewActions.append(buildChip, manageButton);" in app_js_source
     assert "previewActions.append(buildButton, manageButton);" in app_js_source
+
+
+def test_wizard_preview_refresh_skips_save_configuration():
+    """Ensure new-entry wizard preview regeneration does not persist on each tweak."""
+    app_js_source = APP_JS_PATH.read_text(encoding="utf-8")
+
+    wizard_start = app_js_source.find("function openNewEntryWizard(entry) {")
+    assert wizard_start != -1, "openNewEntryWizard definition not found"
+    add_modal_start = app_js_source.find("function openAddEntryModal()", wizard_start)
+    assert add_modal_start != -1, "openAddEntryModal boundary not found"
+    wizard_source = app_js_source[wizard_start:add_modal_start]
+
+    assert "const src = await fetchPreviewDataUrl(entry);" in wizard_source
+    assert "await saveConfiguration();\n      const src = await fetchPreviewDataUrl(entry);" not in wizard_source
+
+
+def test_wizard_preview_loading_state_feedback_present():
+    """Ensure wizard preview refresh shows explicit loading progress and disables actions."""
+    app_js_source = APP_JS_PATH.read_text(encoding="utf-8")
+
+    wizard_start = app_js_source.find("function openNewEntryWizard(entry) {")
+    assert wizard_start != -1, "openNewEntryWizard definition not found"
+    add_modal_start = app_js_source.find("function openAddEntryModal()", wizard_start)
+    assert add_modal_start != -1, "openAddEntryModal boundary not found"
+    wizard_source = app_js_source[wizard_start:add_modal_start]
+
+    assert "wizardActionButtons.forEach((button) => {" in wizard_source
+    assert "button.disabled = isLoading;" in wizard_source
+    assert "entry-build-indicator__spinner" in wizard_source
+    assert "Generating preview…" in wizard_source
