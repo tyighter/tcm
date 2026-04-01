@@ -2167,15 +2167,9 @@ function renderEntry(entry) {
 
   const building = isSeriesBuilding(entry.name);
 
-  const buildIndicator = document.createElement('span');
-  buildIndicator.className = 'entry-build-indicator';
-  buildIndicator.innerHTML =
-    '<span class="entry-build-indicator__spinner" aria-hidden="true"></span><span>Building…</span>';
-  buildIndicator.hidden = !building;
-
   const titleRow = document.createElement('div');
   titleRow.className = 'entry-title-row';
-  titleRow.append(titleContainer, buildIndicator);
+  titleRow.append(titleContainer);
   attachFieldValidation({
     input: titleInput,
     messageNode: titleValidation,
