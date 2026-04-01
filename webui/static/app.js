@@ -2625,7 +2625,7 @@ async function loadEntryPreview(entry, options = {}) {
 
 function requestEntryPreviews(entries = state.entries) {
   entries.forEach((entry) => {
-    observeEntryPreview(entry);
+    void loadEntryPreview(entry);
   });
 }
 
