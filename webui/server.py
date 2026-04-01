@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import logging
@@ -1193,36 +1192,29 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 season=season,
                 episode=episode,
             )
-            if preview_path is None:
-                if preview_episode_key is None and season is not None and episode is not None:
-                    preview_episode_key = f"{season}-{episode}"
+            effective_episode = preview_episode_key or (
+                f"{season}-{episode}" if season is not None and episode is not None else "random"
+            )
+            preview_log = preview_logger()
 
-                try:
-                    mime, data = get_or_generate_preview(
-                        self.context,
-                        self.tv_manager,
+            if preview_path is not None:
+                if preview_log:
+                    preview_log.info(
+                        "Preview static decision | show=%s | episode=%s | decision=existing-disk-hit | path=%s",
                         series_name,
-                        series_config,
-                        force=False,
-                        preview_episode_key=preview_episode_key,
-                        prefer_existing=True,
+                        effective_episode,
+                        preview_path.as_posix(),
                     )
-                except Exception:
-                    logger.exception("Unable to generate static preview for %s", series_name)
-                    self.send_error(HTTPStatus.NOT_FOUND.value)
-                    return
-
-                try:
-                    self._serve_binary(base64.b64decode(data), mime)
-                except Exception:
-                    logger.exception(
-                        "Unable to decode generated static preview for %s",
-                        series_name,
-                    )
-                    self.send_error(HTTPStatus.NOT_FOUND.value)
+                self._serve_file(preview_path)
                 return
 
-            self._serve_file(preview_path)
+            if preview_log:
+                preview_log.info(
+                    "Preview static decision | show=%s | episode=%s | decision=missing-disk-no-generate",
+                    series_name,
+                    effective_episode,
+                )
+            self.send_error(HTTPStatus.NOT_FOUND.value)
             return
 
         if parsed.path == "/api/config":
